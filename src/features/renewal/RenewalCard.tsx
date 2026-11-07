@@ -107,8 +107,8 @@ export function RenewalCard({ portfolioId }: { portfolioId: number }): ReactNode
         <p className="eyebrow">續期</p>
         <h2>換一把新的 session key</h2>
         <p className="lead" style={{ fontSize: 13 }}>
-          後端用 master seed 派生新金鑰，這一頁負責**用 owner 錢包在鏈上安裝**它，再把結果記回 DB。
-          這是一筆真的鏈上交易（會花 gas）。
+          後端用 master seed 派生新金鑰，這一頁負責
+          <strong>用 owner 錢包在鏈上安裝</strong>它，再把結果記回 DB。這是一筆真的鏈上交易（會花 gas）。
         </p>
       </div>
 
