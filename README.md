@@ -166,3 +166,41 @@ bun -e 'import {formatUsdE8} from "./src/lib/format.ts"; console.log(formatUsdE8
 `GET /portfolios` 回的是 **`{ portfolios: [...] }`**，不是裸陣列。型別寫成 `Portfolio[]` 時
 TypeScript 不會有任何意見（`request<T>` 只是斷言），執行期卻會在 `.map` 爆掉、畫面空白。
 `lib/api.ts` 現在把 wire 形狀寫出來並在客戶端拆掉。
+
+
+---
+
+## UI/UX（沿用 bnb-agent-vaults 的設計稿）
+
+`src/styles/vendor/` 是從 `bnb-agent-vaults/web/app/` 複製過來的：`design.css`（設計系統，4506 行）、
+`fund-explore.css`（vaults 頁）、`fonts.css` + `fonts/`（自架字體）。**它們是純 CSS，沒有 Tailwind 指令。**
+
+載入順序在 `main.tsx` 是刻意的：先 vendor（tokens + 全域 reset + 既有元件規則），再我的
+`tokens/base/components.css` 覆蓋。反過來的話他們的 `button { background:none }` 會蓋掉我的元件。
+
+### Vaults（`/vaults`，首頁）
+
+兩區：**Live on this deployment**（真的投組，打 `/portfolios` + 並行 `/status`，可點進去看/執行）
+與 **Example funds**（9 個 mock 基金，來自 `src/data/mock-funds.ts`）。
+
+⚠ mock 基金**沒有**報酬率、回撤、走勢圖。來源站的那些數字是模擬回測的產物，而這個部署沒有那條資料管線；
+複製或自己編一個都會讓人以為那是真的績效。所以卡片右側顯示 `Risk` 與 `Rebalance period` ——
+兩者是 mock 定義本身的一部分。
+
+空倉投組（`totalUsdE8 === "0"`）顯示「尚未入金」而不是 `5000 bps`：那是 `drift.ts` 對 total = 0 的
+定義值，不是嚴重偏離。
+
+### Create fund（`/create`）
+
+只有**一種**策略：目標權重指數基金。設計稿的 Buy & hold / Stack / Pair grid 在我們的後端沒有對應的
+執行路徑，所以不假裝有。
+
+三步都是真的後端呼叫（第 1、3 步會上鏈）：
+```
+POST /strategies                  → strategy.id（鏡像到鏈上 Registry，實測 ~1.7s）
+POST /strategies/:id/versions     → v1（allocation.assets[].weightBps 必須剛好 10000，實測 ~3.1s）
+POST /portfolios { strategyId }   → portfolio.id（部署 smart account + 安裝 session key，實測 ~6.0s）
+```
+進度逐步顯示 —— 一個轉圈 30 秒什麼都不說的按鈕會讓人以為壞掉而重複按。
+
+權重用 **bps 累加**判斷是否 100%：`33.3 + 33.3 + 33.4` 在浮點裡不是 100。

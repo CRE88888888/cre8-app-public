@@ -288,6 +288,48 @@ export function postRebalance(token: string, id: number): Promise<RebalanceResul
   return request<RebalanceResult>(`/portfolios/${id}/rebalance`, { method: 'POST', token });
 }
 
+/** `GET /assets` — 可定價資產（create fund 的選單來源，不在前端寫死）。 */
+export type PriceableAsset = {
+  address: string;
+  symbol: string;
+  decimals: number;
+  /** true = 計價基準幣（USDT）。策略的每一條腿都是「資產 ↔ numeraire」。 */
+  isNumeraire: boolean;
+};
+
+export function getAssets(token: string): Promise<PriceableAsset[]> {
+  return request<{ assets: PriceableAsset[] }>('/assets', { token }).then((body) => body.assets);
+}
+
+/** 建立策略（名稱等）。後端會同時鏡像到鏈上 Registry。 */
+export function createStrategy(
+  token: string,
+  body: { name: string; description?: string; isPublic?: boolean },
+): Promise<{ id: number; [key: string]: unknown }> {
+  return request('/strategies', { method: 'POST', token, body });
+}
+
+/** 發一個版本：`allocation.assets[].weightBps` 必須剛好加總 10000。 */
+export function publishVersion(
+  token: string,
+  strategyId: number,
+  body: {
+    allocation: { assets: { address: string; weightBps: number }[] };
+    schedule: { kind: 'interval'; intervalSeconds: number };
+    changeLog?: string;
+  },
+): Promise<{ strategyId: number; version: number; [key: string]: unknown }> {
+  return request(`/strategies/${strategyId}/versions`, { method: 'POST', token, body });
+}
+
+/** 把策略 enroll 成一個投組（會部署 smart account、上鏈）。 */
+export function enrollPortfolio(
+  token: string,
+  strategyId: number,
+): Promise<{ id: number; [key: string]: unknown }> {
+  return request('/portfolios', { method: 'POST', token, body: { strategyId } });
+}
+
 /** 這個端點會掃 Transfer 日誌、讀池子、定價 —— 實測 2–3 秒，不是卡住。 */
 export function getPortfolioStatus(token: string, id: number): Promise<PortfolioStatus> {
   return request<PortfolioStatus>(`/portfolios/${id}/status`, { token });
