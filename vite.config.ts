@@ -18,6 +18,15 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
+      /**
+       * dev 私鑰模式專用：它沒有錢包 provider 可以借 transport，所以要有一個 RPC。
+       * 這裡轉到本機 anvil；用真實錢包連線時**完全不會**用到這條路。
+       */
+      '/rpc': {
+        target: 'http://127.0.0.1:8545',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/rpc/, ''),
+      },
     },
   },
 });

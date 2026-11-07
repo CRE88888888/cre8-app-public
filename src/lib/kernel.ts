@@ -1,0 +1,161 @@
+/**
+ * 續期用的 Kernel/UserOp 組裝。
+ *
+ * 續期這一筆是 **sudo（owner）簽名**的 UserOp：它做的事是「在鏈上安裝一組新的 session key 權限」。
+ * 所以簽名者必須是帳戶的 owner EOA —— 也就是剛登入的那個錢包。
+ *
+ * 兩個刻意的選擇：
+ * 1. **bundler 走後端的 relay**（`${VITE_API_BASE}/bundler`），不是 `params.bundlerUrl`。
+ *    `bundlerUrl` 是後端自己用的 alto 位址（127.0.0.1:3001），瀏覽器直接打會撞 CORS，而且那個位址
+ *    通常不對外。relay 讓前端只認識一個 origin。
+ *    ⚠ relay **要帶使用者的 session token**（`Authorization: Bearer`），而且只放行六個白名單方法
+ *    （`eth_sendUserOperation` / `eth_estimateUserOperationGas` / `eth_getUserOperationReceipt` /
+ *    `eth_getUserOperationByHash` / `eth_supportedEntryPoints` / `eth_chainId`）。
+ *    少了這個標頭就是 401 —— 這是踩過的坑。
+ * 2. **publicClient 優先用錢包自己的 provider**（那條鏈它已經連上了），只有在 dev 私鑰模式才退回
+ *    `VITE_RPC_URL`（dev 由 vite proxy 轉到 anvil）。這樣就不需要在瀏覽器裡散佈一個 RPC 端點。
+ */
+import {
+  createKernelAccount,
+  createKernelAccountClient,
+} from '@zerodev/sdk';
+import { KERNEL_V3_3 } from '@zerodev/sdk/constants';
+import type { GetKernelVersion } from '@zerodev/sdk/types';
+import { signerToEcdsaValidator } from '@zerodev/ecdsa-validator';
+import { createPublicClient, createWalletClient, custom, http } from 'viem';
+import type { Address, Chain, Hex, LocalAccount, PublicClient, WalletClient } from 'viem';
+
+const API_BASE: string = import.meta.env.VITE_API_BASE ?? '/api';
+
+/** BSC 主網。後端只支援 56，續期參數也一定帶 56。 */
+export const bsc = {
+  id: 56,
+  name: 'BNB Smart Chain',
+  nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
+  rpcUrls: { default: { http: ['https://bsc-dataseed.binance.org'] } },
+} as const satisfies Chain;
+
+/**
+ * EntryPoint v0.7 的位址。後端也會帶，但那是**字串**；這裡驗一次相等再交給 SDK，
+ * 免得 SDK 收到一個它認不得的型別卻只回一句看不懂的錯誤。
+ */
+const ENTRY_POINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
+
+/**
+ * SDK 要的是 **物件**（`{ address, version }`），不是位址字串。
+ *
+ * 踩過的坑：把 `params.entryPoint`（字串）直接傳進去，會得到
+ * `Error: Unsupported entry point version` —— 訊息完全沒提「你傳的是字串」。
+ */
+const ENTRY_POINT = { address: ENTRY_POINT_V07, version: '0.7' } as const;
+
+export function assertEntryPoint(value: string): void {
+  if (value.toLowerCase() !== ENTRY_POINT_V07.toLowerCase()) {
+    throw new Error(`後端給的 entryPoint 是 ${value}，這個前端只支援 v0.7（${ENTRY_POINT_V07}）`);
+  }
+}
+
+export type RenewalWallet =
+  | { kind: 'injected'; address: Address; provider: { request(args: { method: string; params?: unknown[] }): Promise<unknown> } }
+  | { kind: 'dev'; address: Address; account: LocalAccount };
+
+/**
+ * 讀鏈用的 client。錢包模式用錢包自己的 transport；dev 用 `VITE_RPC_URL`（預設 dev 的 `/rpc` proxy）。
+ */
+export function publicClientFor(wallet: RenewalWallet): PublicClient {
+  if (wallet.kind === 'injected') {
+    return createPublicClient({ chain: bsc, transport: custom(wallet.provider as never) });
+  }
+  const rpcUrl = import.meta.env.VITE_RPC_URL ?? (import.meta.env.DEV ? '/rpc' : undefined);
+  if (rpcUrl === undefined || rpcUrl === '') {
+    throw new Error(
+      'dev 私鑰模式需要一個 RPC：設 VITE_RPC_URL，或在 dev 用 vite 的 /rpc proxy（會轉到 127.0.0.1:8545）',
+    );
+  }
+  return createPublicClient({ chain: bsc, transport: http(rpcUrl) });
+}
+
+function signerFor(wallet: RenewalWallet): LocalAccount | WalletClient {
+  if (wallet.kind === 'dev') return wallet.account;
+  return createWalletClient({
+    account: wallet.address,
+    chain: bsc,
+    transport: custom(wallet.provider as never),
+  });
+}
+
+export type RenewalReceipt = {
+  userOpHash: Hex;
+  txHash: Hex;
+  success: boolean;
+  gasUsed: string | null;
+};
+
+/**
+ * 送出「安裝新權限」的 UserOp。
+ *
+ * `initConfig` 的每一筆都是**打給帳戶自己**的 calldata（`msg.sender == self` 才會被 Kernel 當成
+ * 自我呼叫），所以 `to` 一定是 `accountAddress`。
+ */
+export async function sendRenewalUserOp(args: {
+  wallet: RenewalWallet;
+  /** 使用者的 session token：relay 用它認人，也用它套方法白名單。 */
+  token: string;
+  accountAddress: Address;
+  entryPoint: string;
+  initConfig: readonly Hex[];
+  timeoutMs?: number;
+}): Promise<RenewalReceipt> {
+  assertEntryPoint(args.entryPoint);
+  const publicClient = publicClientFor(args.wallet);
+  const entryPoint = ENTRY_POINT as never;
+  const kernelVersion: GetKernelVersion<'0.7'> = KERNEL_V3_3;
+
+  // 位址**明確傳**：帳戶已經存在，它的位址不該取決於這一次跑出來的 init code。
+  const sudoAccount = await createKernelAccount(publicClient, {
+    address: args.accountAddress,
+    plugins: {
+      sudo: await signerToEcdsaValidator(publicClient, {
+        signer: signerFor(args.wallet) as never,
+        entryPoint,
+        kernelVersion,
+      }),
+    },
+    entryPoint,
+    kernelVersion,
+    useMetaFactory: true,
+  });
+
+  const accountClient = createKernelAccountClient({
+    account: sudoAccount,
+    chain: bsc,
+    client: publicClient,
+    bundlerTransport: http(`${API_BASE}/bundler`, {
+      // relay 是認證端點：沒有這個標頭會回 401 UNAUTHORIZED。
+      fetchOptions: { headers: { authorization: `Bearer ${args.token}` } },
+      // 估 gas ＋ 送 op ＋ 等 receipt，10 秒（viem 預設）不夠。
+      timeout: 60_000,
+    }),
+    userOperation: {
+      // alto 不提供 ZeroDev 的 zd_getUserOperationGasPrice，用節點 gas price（與 scripts 一致）。
+      estimateFeesPerGas: async () => {
+        const gasPrice = await publicClient.getGasPrice();
+        return { maxFeePerGas: gasPrice, maxPriorityFeePerGas: gasPrice };
+      },
+    },
+  });
+
+  const calls = args.initConfig.map((data) => ({ to: args.accountAddress, data, value: 0n }));
+  const userOpHash = await accountClient.sendUserOperation({ calls });
+  const receipt = await accountClient.waitForUserOperationReceipt({
+    hash: userOpHash,
+    timeout: args.timeoutMs ?? 180_000,
+  });
+
+  return {
+    userOpHash,
+    txHash: receipt.receipt.transactionHash,
+    success: receipt.success,
+    gasUsed: receipt.actualGasUsed?.toString() ?? null,
+  };
+}

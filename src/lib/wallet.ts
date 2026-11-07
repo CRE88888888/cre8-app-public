@@ -5,7 +5,7 @@
  * 不是使用者想連的那一個。6963 讓每個錢包自己廣播身分，dApp 列出清單讓使用者選。
  */
 import { privateKeyToAccount } from 'viem/accounts';
-import type { Hex } from 'viem';
+import type { Hex, LocalAccount } from 'viem';
 
 export type Eip1193Provider = {
   request(args: { method: string; params?: unknown[] }): Promise<unknown>;
@@ -103,6 +103,8 @@ function toHexMessage(message: string): Hex {
 export type DevSigner = {
   address: string;
   signMessage: (message: string) => Promise<string>;
+  /** 續期要用它當 sudo signer（Kernel 的 owner validator）。 */
+  account: LocalAccount;
 };
 
 /**
@@ -116,6 +118,7 @@ export function createDevSigner(privateKey: Hex): DevSigner {
   return {
     address: account.address,
     signMessage: (message: string) => account.signMessage({ message }),
+    account,
   };
 }
 

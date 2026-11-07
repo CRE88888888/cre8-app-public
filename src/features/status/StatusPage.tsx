@@ -7,6 +7,7 @@ import { formatBps, formatUsdE8, shortAddress, toneForBps } from '../../lib/form
 import { queryKeys } from '../../lib/query';
 import { useSession } from '../../store/session';
 import { Badge, ErrorNote, Note, Spinner } from '../../components/ui';
+import { RenewalCard } from '../renewal/RenewalCard';
 
 function SessionKeyNote({ report }: { report: SessionKeyReport }): ReactNode {
   // `usable === null` 只有在 `error === null` 時才可以讀成「沒有可用的 key」。
@@ -183,6 +184,8 @@ export function StatusPage(): ReactNode {
           <StatusBody status={query.data} />
         </div>
       )}
+
+      {valid ? <RenewalCard portfolioId={id} /> : null}
     </main>
   );
 }

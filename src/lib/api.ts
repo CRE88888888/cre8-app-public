@@ -118,10 +118,40 @@ export type PortfolioStatus = {
   sessionKey?: SessionKeyReport | null;
 };
 
+/** 續期：後端用 master seed 派生好的那把新 key（含要在鏈上執行的 install calldata）。 */
+export type RenewalParams = {
+  portfolioId: number;
+  strategyId: number;
+  chainId: number;
+  ownerAddress: string;
+  accountAddress: string;
+  executorAddress: string;
+  entryPoint: string;
+  kernelVersion: string;
+  sessionKeyAddress: string;
+  keyRef: string;
+  validUntil: number;
+  expiresAt: string;
+  permissionId: string;
+  policySnapshot: Record<string, unknown>;
+  /** 打給帳戶自己的 install calldata（`msg.sender == self`）。 */
+  initConfig: string[];
+  /** 後端自己用的 alto 位址。**前端不要用它**（CORS），走 `/api/bundler` relay。 */
+  bundlerUrl: string;
+};
+
+export type RenewalRecorded = {
+  ok: true;
+  recorded: { keyRef: string; permissionId: string };
+  /** true = 這一把之前就記過了（重送不是錯誤）。 */
+  duplicate?: true;
+};
+
 type RequestInitLite = {
   method?: 'GET' | 'POST';
   token?: string | null;
   body?: unknown;
+  signal?: AbortSignal;
 };
 
 async function request<T>(path: string, init: RequestInitLite = {}): Promise<T> {
@@ -134,6 +164,7 @@ async function request<T>(path: string, init: RequestInitLite = {}): Promise<T> 
     response = await fetch(`${BASE}${path}`, {
       method: init.method ?? 'GET',
       headers,
+      ...(init.signal === undefined ? {} : { signal: init.signal }),
       ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
     });
   } catch (cause) {
@@ -187,6 +218,20 @@ export type PortfolioList = { portfolios: Portfolio[] };
 
 export function getPortfolios(token: string): Promise<Portfolio[]> {
   return request<PortfolioList>('/portfolios', { token }).then((body) => body.portfolios);
+}
+
+/** 派生一把新的 session key 並回傳組 UserOp 所需的一切（後端不簽章、不上鏈、不寫 DB）。 */
+export function getRenewalParams(token: string, id: number, signal?: AbortSignal): Promise<RenewalParams> {
+  return request<RenewalParams>(`/portfolios/${id}/renewal-params`, { token, signal });
+}
+
+/** 回報續期 UserOp 已上鏈，後端記進 `session_keys`（鏈才是權威）。 */
+export function postRenewalResult(
+  token: string,
+  id: number,
+  body: { keyRef: string; permissionId: string; validUntil: number; policySnapshot: Record<string, unknown> },
+): Promise<RenewalRecorded> {
+  return request<RenewalRecorded>(`/portfolios/${id}/renewal-result`, { method: 'POST', token, body });
 }
 
 /** 這個端點會掃 Transfer 日誌、讀池子、定價 —— 實測 2–3 秒，不是卡住。 */

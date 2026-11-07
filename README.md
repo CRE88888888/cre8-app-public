@@ -61,11 +61,53 @@ bun run build
 
 ## 這一版做到哪裡
 
-已完成一條完整的線：**登入 → 投組列表 → 漂移明細**。
+已完成的兩條線：
+
+1. **登入 → 投組列表 → 漂移明細**
+2. **續期**：`GET /renewal-params` → 用 owner 錢包送 sudo UserOp → `POST /renewal-result`
+
+續期的 UI 刻意分成「先看要簽什麼 → 勾選確認 → 才送出」：它花 gas，而且會改變鏈上權限。
 
 還沒做（下一個 slice）：
-- 續期流程（`GET /renewal-params` → 組 UserOp → `POST /renewal-result`）
 - 再平衡確認與送出（`POST /portfolios/:id/rebalance`，後端預設 **403 `OPERATOR_REBALANCE_DISABLED`**）
+
+## 續期走的路
+
+```
+GET /api/portfolios/:id/renewal-params     後端派生新 key（不簽章、不上鏈、不寫 DB）
+  ↓ initConfig（每筆都是打給「帳戶自己」的 calldata）
+owner 錢包簽 sudo UserOp                     createKernelAccount + signerToEcdsaValidator
+  ↓ bundlerTransport = /api/bundler          ⚠ 必須帶 Authorization: Bearer <token>
+alto（經後端 relay）                         白名單六個方法
+  ↓ receipt
+POST /api/portfolios/:id/renewal-result     後端記進 session_keys
+```
+
+實測（用這支 app 自己的 `lib/api.ts` + `lib/kernel.ts`）：
+
+```
+續期前 pid 0xb357c054 installed true
+新 key m/44'/60'/0'/0/24806719 | pid 0xc87a3d81 | calldata 2 筆
+上鏈 success | gasUsed 552381
+記回 DB pid 0xc87a3d81
+續期後 configured 0xc87a3d81 installed true → 排程器會用 0xc87a3d81
+```
+
+### 兩個整合陷阱（都踩過）
+
+**① `/api/bundler` 是認證端點。**
+少了 `Authorization: Bearer <token>` 就是 401；而且它只放行六個白名單方法。`kernel.ts` 用
+`http(url, { fetchOptions: { headers } })` 帶標頭，並把 timeout 拉到 60 秒（viem 預設 10 秒不夠
+估 gas + 送 op + 等 receipt）。
+
+**② SDK 的 `entryPoint` 要物件，不是位址字串。**
+
+```ts
+{ address, version: '0.7' }   // ✓
+'0x0000000071727De22E5E9d8BAf0edAc6f37da032'   // ✗ → Error: Unsupported entry point version
+```
+
+訊息完全沒提「你傳的是字串」。`kernel.ts` 現在把物件寫成常數，並先驗後端給的位址與它相等。
 
 ## 兩個刻意的顯示決定
 
