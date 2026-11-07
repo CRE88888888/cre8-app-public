@@ -1,26 +1,23 @@
+import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 /**
- * 後端目前完全沒有 CORS 標頭（backend/src/server.ts 的 sendJson 只設 content-type 等），
- * 所以瀏覽器直接打 :8081 會被 preflight 擋掉。dev server 用 `/api` → backend 的 proxy，
- * 讓所有請求變成 same-origin。/api 這個前綴會在轉發前被剝掉。
- * 換後端位址：CRE8_BACKEND_URL=http://127.0.0.1:8080 bun run dev
+ * Dev proxy：前端一律打 `/api/...`，由 Vite 轉到後端。
+ *
+ * 這樣做的理由不是方便，是**同源**：後端只開了自己的 CORS 白名單，而 session token 走
+ * `Authorization` 標頭 —— 用相對路徑就完全不必處理 CORS 與 preflight。
+ * 部署時由反向代理做同一件事（`/api` → backend），前端不必改任何一行。
  */
-const backendTarget = process.env.CRE8_BACKEND_URL ?? 'http://127.0.0.1:8081';
-
 export default defineConfig({
+  plugins: [react()],
   server: {
     port: 5173,
     proxy: {
       '/api': {
-        target: backendTarget,
+        target: 'http://127.0.0.1:8081',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
     },
-  },
-  build: {
-    target: 'es2022',
-    sourcemap: true,
   },
 });

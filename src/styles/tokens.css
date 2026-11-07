@@ -1,0 +1,46 @@
+/*
+ * Design tokens。值直接取自 bnb-agent-vaults 的 app 頁（`app/design.css` 與各 *.module.css），
+ * 刻意不引入 Tailwind：這個 app 只有幾頁，純 CSS + token 比 utility class 好讀。
+ */
+:root {
+  /* 底色與表面 */
+  --bg: #b7cdde;
+  --bg-2: #c6d7e4;
+  --card: #eef3f7;
+  --white: #ffffff;
+
+  /* 文字 */
+  --ink: #16222d;
+  --ink-2: #2b4254;
+  --muted: #5b7186;
+  --gold: #4e6a7f;
+
+  /* 線與邊框 */
+  --line: #b7cdde;
+  --hair: rgba(22, 34, 45, 0.14);
+  --hair-2: rgba(22, 34, 45, 0.3);
+
+  /* 語意色 */
+  --pos: #1f7a55;
+  --neg: #b23b3b;
+  --warn: #8a5a1f;
+
+  /* 字體：Geist/Archivo 沒自帶就在系統字體上退回，不引入第三方 stylesheet */
+  --sans: 'Geist', 'Archivo', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC',
+    'Helvetica Neue', Arial, sans-serif;
+  --mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* 圓角與間距 */
+  --r: 16px;
+  --r-sm: 10px;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+
+  --shadow: 0 1px 2px rgba(22, 34, 45, 0.06), 0 8px 24px rgba(22, 34, 45, 0.06);
+  --maxw: 1120px;
+}
