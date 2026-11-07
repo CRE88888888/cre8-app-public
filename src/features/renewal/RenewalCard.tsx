@@ -107,8 +107,9 @@ export function RenewalCard({ portfolioId }: { portfolioId: number }): ReactNode
         <p className="eyebrow">Renewal</p>
         <h2>Install a new session key</h2>
         <p className="lead" style={{ fontSize: 13 }}>
-          The backend derives a new key from the master seed; this page
-          <strong>installs it on-chain with your owner wallet</strong> and records the result. It is a real on-chain transaction (gas applies).
+          The backend derives a new key from the master seed; this page{' '}
+          <strong>installs it on-chain with your owner wallet</strong> and records the result. It is a real on-chain
+          transaction (gas applies).
         </p>
       </div>
 

@@ -70,7 +70,7 @@ function StatusBody({ status }: { status: PortfolioStatus }): ReactNode {
           <strong>{status.drift.grossDriftBps} bps</strong>
           <span className="muted">
             {' '}
-            / threshold {status.drift.thresholdBps} bps / needs rebalance:
+            / threshold {status.drift.thresholdBps} bps / needs rebalance:{' '}
           </span>
           <span className={needs ? 'neg' : 'pos'}>{needs ? 'yes' : 'no'}</span>
         </dd>
@@ -175,7 +175,7 @@ export function StatusPage(): ReactNode {
 
       {query.error !== null && query.error !== undefined ? (
         <Note>
-          <strong>When the status cannot be read, this page shows no drift numbers at all.</strong>
+          <strong>When the status cannot be read, this page shows no drift numbers at all.</strong>{' '}
           Deliberate: a plausible-looking "0 drift, no rebalance needed" is far more dangerous than an error message.
         </Note>
       ) : null}
