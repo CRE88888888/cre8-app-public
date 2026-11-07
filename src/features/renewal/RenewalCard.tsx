@@ -11,6 +11,7 @@ import { queryKeys } from '../../lib/query';
 import { useSession } from '../../store/session';
 import { useWallet } from '../../store/wallet';
 import { ErrorNote, Note } from '../../components/ui';
+import { WalletConnect } from '../../components/WalletConnect';
 
 type Phase = 'idle' | 'params' | 'sending' | 'recording' | 'done';
 
@@ -112,7 +113,15 @@ export function RenewalCard({ portfolioId }: { portfolioId: number }): ReactNode
       </div>
 
       {renewalWallet === null ? (
-        <Note tone="warn">先連線錢包 —— 續期要 owner 簽名。</Note>
+        // 重新整理後 session 還在、錢包卻掉了（provider 不能序列化）。這裡直接給重連入口 ——
+        // 只寫一句「先連線錢包」等於把使用者困住：他已經登入了，沒有別的地方可以連。
+        <>
+          <Note tone="warn">
+            錢包連線不跨重新整理（provider 不是可序列化的資料），所以要在這裡重連一次才能簽名。
+            你的登入狀態還在，不用重新登入。
+          </Note>
+          <WalletConnect />
+        </>
       ) : ownerMatches ? null : (
         <Note tone="bad">
           目前連線的錢包 <span className="mono">{renewalWallet.address}</span> 不是這個帳戶的 owner

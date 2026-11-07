@@ -59,6 +59,10 @@ bun run build
 **為什麼是 sessionStorage 不是 localStorage**：這支 app 會動錢，token 的曝險窗口應該跟「這個分頁開著」
 一樣長。重新整理不用重簽，關掉分頁就清掉。
 
+**錢包連線不跨重新整理**（`provider` 不是可序列化的資料，而把私鑰或 provider 寫進儲存是把鑰匙放在
+瀏覽器裡）。所以重新整理後會是「已登入、錢包未連」——TopBar 會顯示 `錢包未連`，續期卡與登入頁都提供
+就地重連（`components/WalletConnect.tsx`）。**不用登出重來。**
+
 ## 這一版做到哪裡
 
 已完成的兩條線：
