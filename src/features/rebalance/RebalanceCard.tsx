@@ -106,7 +106,16 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
         <dd className="mono">#{status.block}（這份判定的觀測點）</dd>
       </dl>
 
-      {disabledReason === null ? null : <Note tone="warn">{disabledReason}</Note>}
+      {disabledReason === null ? null : (
+        <>
+          <Note tone="warn">{disabledReason}</Note>
+          {/* 沒有需要動的時候刻意不跑 dry-run：它要讀鏈、估價、算 impact（實測 2–3 秒）。
+              寫出來是因為「什麼都沒發生」與「壞掉了」在畫面上長得一樣。 */}
+          <p className="muted" style={{ margin: 0, fontSize: 12 }}>
+            沒有跑 dry-run —— 只有真的需要再平衡時才會分析（省一次 2–3 秒的讀鏈）。
+          </p>
+        </>
+      )}
 
       {/* 預覽：按下去之前就知道會發生什麼 */}
       {disabledReason === null ? (
