@@ -1,12 +1,12 @@
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
-import { ApiError, postRebalance } from '../../lib/api';
+import { ApiError, getRebalancePlan, postRebalance } from '../../lib/api';
 import type { PortfolioStatus, RebalanceResult } from '../../lib/api';
 import { formatBps, formatUsdE8, shortAddress } from '../../lib/format';
 import { queryKeys } from '../../lib/query';
 import { useSession } from '../../store/session';
-import { ErrorNote, Note } from '../../components/ui';
+import { Badge, ErrorNote, Note, Spinner } from '../../components/ui';
 
 /**
  * 再平衡：真的用 session key 送一筆鏈上交易。
@@ -30,6 +30,20 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
   const needs = status.drift.needsRebalance;
   const blocked = status.blocked.length > 0;
 
+  /**
+   * 送出前的 dry-run 預覽。**這是這個卡片最重要的一塊**：使用者按下去之前就該知道
+   * 「這一輪不會動、以及為什麼」（例如市場偏離 TWAP 讓 impact 預算做不了事）。
+   *
+   * 只在「真的需要再平衡而且沒被 blocked」時抓 —— 其餘情況卡片已經自己說明了，不必再花 2–3 秒讀鏈。
+   */
+  const plan = useQuery({
+    queryKey: queryKeys.plan(token, status.portfolioId),
+    queryFn: () => getRebalancePlan(token as string, status.portfolioId),
+    enabled: token !== null && needs && !blocked,
+  });
+  const planOutcome = plan.data?.outcome ?? null;
+  const canRun = planOutcome === 'ready';
+
   const run = useCallback(async () => {
     if (token === null) return;
     setError(null);
@@ -43,6 +57,8 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.status(token, status.portfolioId) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token) }),
+        // 這一輪做過之後，下一次的預覽一定不同（持倉變了）。
+        queryClient.invalidateQueries({ queryKey: queryKeys.plan(token, status.portfolioId) }),
       ]);
     } catch (cause) {
       setError(cause);
@@ -92,6 +108,60 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
 
       {disabledReason === null ? null : <Note tone="warn">{disabledReason}</Note>}
 
+      {/* 預覽：按下去之前就知道會發生什麼 */}
+      {disabledReason === null ? (
+        <div className="stack" style={{ gap: 8 }}>
+          <div className="row" style={{ justifyContent: 'space-between' }}>
+            <span className="muted" style={{ fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+              這一輪會做什麼
+            </span>
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              disabled={plan.isFetching}
+              onClick={() => void plan.refetch()}
+            >
+              {plan.isFetching ? '分析中…' : '重新分析'}
+            </button>
+          </div>
+
+          {plan.isPending ? (
+            <div className="row">
+              <Spinner />
+              <span className="muted" style={{ fontSize: 13 }}>
+                跑一次 dry-run（讀鏈、估價、算 impact；實測 2–3 秒）
+              </span>
+            </div>
+          ) : plan.error !== null && plan.error !== undefined ? (
+            <ErrorNote error={plan.error} />
+          ) : plan.data === undefined ? null : plan.data.outcome === 'ready' ? (
+            <Note>
+              <div className="row" style={{ gap: 8 }}>
+                <Badge tone="ok">會送出 {plan.data.steps.length} 個 step</Badge>
+              </div>
+              <div style={{ marginTop: 6 }}>{plan.data.reason}</div>
+            </Note>
+          ) : plan.data.outcome === 'noop' ? (
+            <Note tone="warn">
+              <div className="row" style={{ gap: 8 }}>
+                <Badge tone="warn">這一輪不會動</Badge>
+                <span className="muted" style={{ fontSize: 12 }}>
+                  不是錯誤：後端算過之後認為送出去沒有意義
+                </span>
+              </div>
+              <div style={{ marginTop: 6 }}>{plan.data.reason}</div>
+            </Note>
+          ) : (
+            <Note tone="bad">
+              <div className="row" style={{ gap: 8 }}>
+                <Badge tone="bad">被擋下</Badge>
+              </div>
+              <div style={{ marginTop: 6 }}>{plan.data.reason}</div>
+            </Note>
+          )}
+        </div>
+      ) : null}
+
       {disabledReason === null ? (
         <>
           <label className="row" style={{ gap: 8, fontSize: 13 }}>
@@ -108,10 +178,10 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
               type="button"
               className="btn btn--primary"
               style={{ maxWidth: 260 }}
-              disabled={!confirmed || busy}
+              disabled={!confirmed || busy || !canRun}
               onClick={() => void run()}
             >
-              {busy ? '規劃並送出…（實測十幾秒）' : '確認執行'}
+              {busy ? '送出並等待 receipt…' : canRun ? '確認執行' : '這一輪不會動（見上方說明）'}
             </button>
             {busy ? <span className="muted" style={{ fontSize: 12 }}>後端要規劃、估 gas、送 op、等 receipt</span> : null}
           </div>

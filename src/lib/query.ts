@@ -22,4 +22,5 @@ export const queryClient = new QueryClient({
 export const queryKeys = {
   portfolios: (token: string | null) => ['portfolios', token ?? 'anonymous'] as const,
   status: (token: string | null, id: number) => ['portfolio-status', token ?? 'anonymous', id] as const,
+  plan: (token: string | null, id: number) => ['rebalance-plan', token ?? 'anonymous', id] as const,
 };

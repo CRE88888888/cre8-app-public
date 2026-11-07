@@ -266,6 +266,24 @@ export type RebalanceResult = {
   steps: RebalanceStep[];
 };
 
+/**
+ * `GET /portfolios/:id/plan` —— **dry-run** 預覽：這一輪會做什麼、不會做什麼、以及為什麼。
+ *
+ * 慢（實測 2–3 秒：要讀鏈、估價、算 impact），但它回答的是「現在按下去會怎樣」——
+ * 而那正是使用者在按下按鈕之前唯一需要知道的事。唯讀，不受 `ENABLE_OPERATOR_REBALANCE` 限制。
+ */
+export type RebalancePlanPreview = {
+  portfolioId: number;
+  outcome: 'ready' | 'noop' | 'blocked';
+  /** 排程器寫的那一句話，原文。 */
+  reason: string;
+  steps: RebalanceStep[];
+};
+
+export function getRebalancePlan(token: string, id: number): Promise<RebalancePlanPreview> {
+  return request<RebalancePlanPreview>(`/portfolios/${id}/plan`, { token });
+}
+
 export function postRebalance(token: string, id: number): Promise<RebalanceResult> {
   return request<RebalanceResult>(`/portfolios/${id}/rebalance`, { method: 'POST', token });
 }
