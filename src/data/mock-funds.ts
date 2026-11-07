@@ -24,6 +24,14 @@ export type MockFund = {
   name: string;
   symbol: string;
   thesis: string;
+  /** 卡片上的短句（設計稿 `FUND_ART.subtitle`）；比 `thesis` 短，`thesis` 留給展開後的說明。 */
+  subtitle: string;
+  /** 設計稿 `FUND_ART.type`，例如 `Stocks + Crypto`。 */
+  kind: string;
+  /** `public/logos/people/<portrait>.jpg`。沒有的基金用 `mark` 當縮寫。 */
+  portrait?: string;
+  /** `fund-mark` 的文字（設計稿的 marks：M7 / AI / CL / MA / TR）。 */
+  mark: string;
   risk: 'High' | 'Medium' | 'Low';
   /** 再平衡節奏；`none` = 不自動再平衡。 */
   rebalance: 'monthly' | 'drift' | 'none';
@@ -34,6 +42,9 @@ export type MockFund = {
 export const MOCK_FUNDS: MockFund[] = [
   {
     slug: 'mag7',
+    subtitle: 'Seven companies. One portfolio.',
+    kind: 'Stocks',
+    mark: 'M7',
     name: 'Mag7',
     symbol: 'M7',
     thesis: 'Seven technology leaders, in equal target weights.',
@@ -51,6 +62,9 @@ export const MOCK_FUNDS: MockFund[] = [
   },
   {
     slug: 'ai-buildout',
+    subtitle: 'Chips, data centers and power.',
+    kind: 'Stocks',
+    mark: 'AI',
     name: 'AI Buildout',
     symbol: 'AIB',
     thesis: 'The physical buildout of AI: chips, memory, data centers and power.',
@@ -69,6 +83,9 @@ export const MOCK_FUNDS: MockFund[] = [
   },
   {
     slug: 'multi-asset-balanced',
+    subtitle: 'Stocks, Treasuries, gold and Bitcoin.',
+    kind: 'Multi-asset',
+    mark: 'MA',
     name: 'Multi-Asset Balanced',
     symbol: 'MAB',
     thesis: 'US equities, Treasuries, gold and Bitcoin in one allocation.',
@@ -85,6 +102,9 @@ export const MOCK_FUNDS: MockFund[] = [
   },
   {
     slug: 'crypto-leaders',
+    subtitle: 'Ten assets. One crypto core.',
+    kind: 'Crypto',
+    mark: 'CL',
     name: 'Crypto Leaders',
     symbol: 'CR10',
     thesis: 'Ten major crypto assets, with Bitcoin and Ethereum at the core.',
@@ -105,6 +125,9 @@ export const MOCK_FUNDS: MockFund[] = [
   },
   {
     slug: 'treasury-reserve',
+    subtitle: 'Short-term first. Room across maturities.',
+    kind: 'RWA',
+    mark: 'TR',
     name: 'Treasury Reserve',
     symbol: 'UST',
     thesis: 'Short-term US Treasuries, with smaller medium- and long-term allocations.',
@@ -118,6 +141,10 @@ export const MOCK_FUNDS: MockFund[] = [
   },
   {
     slug: 'elon-universe',
+    subtitle: 'Tesla, SpaceX and crypto.',
+    kind: 'Stocks + Crypto',
+    portrait: 'elon',
+    mark: 'ELON',
     name: 'Elon Universe',
     symbol: 'ELON',
     thesis: 'Tesla and SpaceX, alongside Bitcoin, Dogecoin and Ethereum.',
@@ -133,6 +160,10 @@ export const MOCK_FUNDS: MockFund[] = [
   },
   {
     slug: 'pelosi-disclosed-equity',
+    subtitle: 'A selection from household disclosures.',
+    kind: 'Stocks',
+    portrait: 'pelosi',
+    mark: 'PDE',
     name: 'Pelosi Disclosed Equity',
     symbol: 'PDE',
     thesis: 'A ten-stock selection from publicly disclosed Pelosi household equity transactions.',
@@ -153,6 +184,10 @@ export const MOCK_FUNDS: MockFund[] = [
   },
   {
     slug: 'berkshire-disclosed-equities',
+    subtitle: 'Inside a disclosed equity portfolio.',
+    kind: 'Stocks',
+    portrait: 'buffett',
+    mark: 'BDE',
     name: 'Berkshire Disclosed Equities',
     symbol: 'BDE',
     thesis: "A mixed-issuer basket drawn from Berkshire's disclosed equity portfolio.",
@@ -173,6 +208,10 @@ export const MOCK_FUNDS: MockFund[] = [
   },
   {
     slug: 'trump-universe',
+    subtitle: 'Disclosed equities and related assets.',
+    kind: 'Stocks + Crypto',
+    portrait: 'trump',
+    mark: 'TRMP',
     name: 'Trump Universe',
     symbol: 'TRMP',
     thesis: 'A public-disclosure equity selection with DJT and a planned WLFI allocation.',

@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ApiError, createStrategy, enrollPortfolio, getAssets, publishVersion } from '../../lib/api';
 import type { PriceableAsset } from '../../lib/api';
 import { queryKeys } from '../../lib/query';
+import { useBodyClass } from '../../lib/use-body-class';
 import { useSession } from '../../store/session';
 import { ErrorNote, Note, Spinner } from '../../components/ui';
 
@@ -34,6 +35,8 @@ const STEP_LABEL: Record<Exclude<Step, 'idle' | 'done'>, string> = {
  * 一個轉圈 30 秒、什麼都不說的按鈕會讓人以為壞掉而重複按。
  */
 export function CreateFundPage(): ReactNode {
+  // 設計稿的 create 頁有自己的 body class（`.create-page { background: var(--panel) }`）。
+  useBodyClass('create-page');
   const token = useSession((state) => state.token);
   const navigate = useNavigate();
   const queryClient = useQueryClient();

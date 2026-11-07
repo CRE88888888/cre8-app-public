@@ -6,15 +6,12 @@ import { getPortfolioStatus, getPortfolios } from '../../lib/api';
 import type { Portfolio, PortfolioStatus } from '../../lib/api';
 import { formatUsdE8, shortAddress } from '../../lib/format';
 import { queryKeys } from '../../lib/query';
+import { useBodyClass } from '../../lib/use-body-class';
 import { useSession } from '../../store/session';
 import { MOCK_FUNDS } from '../../data/mock-funds';
 import type { MockFund } from '../../data/mock-funds';
 import { Badge, Spinner } from '../../components/ui';
 
-/** 三個字的縮寫，給 `fund-mark` 用（沒有 symbol 圖示時的替代）。 */
-function markOf(fund: MockFund): string {
-  return fund.symbol;
-}
 
 function RebalanceLabel({ value }: { value: MockFund['rebalance'] }): ReactNode {
   return <>{value === 'none' ? '不自動' : value === 'drift' ? '偏離觸發' : '每月'}</>;
@@ -37,9 +34,10 @@ function AllocationDetails({ fund }: { fund: MockFund }): ReactNode {
         </div>
         <div>
           <h4>Strategy</h4>
+          <p>{fund.thesis}</p>
           <p>
-            目標權重再平衡：偏離門檻時，把超配的資產換成低配的（每條腿都是「資產 ↔ USDT」）。
-            風險等級 {fund.risk}。
+            目標權重再平衡（每條腿都是「資產 ↔ USDT」）。風險等級 {fund.risk}，再平衡節奏{' '}
+            <RebalanceLabel value={fund.rebalance} />。
           </p>
         </div>
       </div>
@@ -54,14 +52,20 @@ function MockFundRow({ fund }: { fund: MockFund }): ReactNode {
     <article className="fund-row">
       <div className="fund-row-link" style={{ cursor: 'default' }}>
         <div className="fund-row-identity">
-          <span className="fund-mark">{markOf(fund)}</span>
+          <span className="fund-mark">
+            {fund.portrait === undefined ? (
+              fund.mark
+            ) : (
+              <img className="fund-portrait" src={`/logos/people/${fund.portrait}.jpg`} alt="" loading="lazy" />
+            )}
+          </span>
           <div>
             <h3>{fund.name}</h3>
             <span className="fund-row-meta">
-              Indexed fund
+              {fund.kind}
               <span className="fund-row-creator">範例</span>
             </span>
-            <p className="fund-row-thesis">{fund.thesis}</p>
+            <p className="fund-row-thesis">{fund.subtitle}</p>
           </div>
         </div>
 
@@ -169,6 +173,7 @@ function LiveRow({ portfolio, status }: { portfolio: Portfolio; status: Portfoli
 }
 
 export function VaultsPage(): ReactNode {
+  useBodyClass('vault-directory', 'fund-explore');
   const token = useSession((state) => state.token);
   const [query, setQuery] = useState('');
 
