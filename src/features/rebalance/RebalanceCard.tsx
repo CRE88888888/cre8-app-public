@@ -123,6 +123,13 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
           <div className="row" style={{ justifyContent: 'space-between' }}>
             <span className="muted" style={{ fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
               這一輪會做什麼
+              {/* 分析時間要看得見：市場會動，一份 5 分鐘前的分析與現在可能結論不同。
+                  沒有時間戳時，「預覽說不會動、結果卻是 executed」看起來像 bug。 */}
+              {plan.dataUpdatedAt === 0 ? null : (
+                <span style={{ marginLeft: 8, letterSpacing: 0, textTransform: 'none' }}>
+                  分析於 {new Date(plan.dataUpdatedAt).toLocaleTimeString('zh-TW', { hour12: false })}
+                </span>
+              )}
             </span>
             <button
               type="button"
@@ -214,7 +221,17 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
         <div className="stack">
           <div className="spread">
             <h3 style={{ fontSize: 15 }}>
-              結果 · <span className={`badge ${outcomeTone === 'ok' ? 'badge--ok' : outcomeTone === 'warn' ? 'badge--warn' : 'badge--bad'}`}>{result.outcome}</span>
+              結果 ·{' '}
+              <span
+                className={`badge ${outcomeTone === 'ok' ? 'badge--ok' : outcomeTone === 'warn' ? 'badge--warn' : 'badge--bad'}`}
+              >
+                {result.outcome}
+              </span>
+              {/* 「這是剛剛那一次執行的結果」——上面的預覽是**現在**的分析，兩者時間點不同。
+                  沒有這行時，一個已完成的 executed 結果旁邊掛著「這一輪不會動」看起來自相矛盾。 */}
+              <span className="muted" style={{ marginLeft: 8, fontSize: 12, fontWeight: 400 }}>
+                這是已送出那一次的結果；上方預覽是現在的分析
+              </span>
             </h3>
             {result.swapExecuted === null ? null : (
               <span className="muted mono" style={{ fontSize: 12 }}>
