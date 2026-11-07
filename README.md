@@ -72,8 +72,29 @@ bun run build
 
 續期的 UI 刻意分成「先看要簽什麼 → 勾選確認 → 才送出」：它花 gas，而且會改變鏈上權限。
 
-還沒做（下一個 slice）：
-- 再平衡確認與送出（`POST /portfolios/:id/rebalance`，後端預設 **403 `OPERATOR_REBALANCE_DISABLED`**）
+3. **再平衡**：確認 → `POST /portfolios/:id/rebalance` → 結果（outcome / SwapExecuted / steps）
+
+### 再平衡的三個設計
+
+**① 前端不猜要換什麼。** 規劃在後端（DB 價格 + 鏈上報價 + impact 上限 + 不改善就不送的守衛），
+回應裡的 `steps` 才是真的送出去的參數。在畫面上先顯示一份「預計」等於給一個會被推翻的承諾。
+
+**② `403 OPERATOR_REBALANCE_DISABLED` 不當成權限錯誤。** 那是部署層的開關：
+後端沒帶 `ENABLE_OPERATOR_REBALANCE=true` 時這支端點**不存在**。卡片會直接說清楚，
+不是丟一句「403 Forbidden」讓人去查 token。
+
+**③ 結果照原文顯示。** `reason` 是排程器寫的那一句（含哪一層沒過），前端不改寫成「失敗」。
+`noop` 與 `blocked` 都是**正確的結果**，不是錯誤 —— 例如「漂移 595 bps 不比現在的 595 低，
+送出去只是付 gas」。
+
+實測（兩條路徑都驗過）：
+
+```
+flag off → HTTP 403 code=OPERATOR_REBALANCE_DISABLED
+flag on  → 200 {portfolioId, outcome, reason, txHash, userOpHash,
+                swapExecuted, expectedSwaps, gasUsed, steps}
+           對 #5（漂移 0）→ noop，不動錢、不燒 gas
+```
 
 ## 續期走的路
 

@@ -7,6 +7,7 @@ import { formatBps, formatUsdE8, shortAddress, toneForBps } from '../../lib/form
 import { queryKeys } from '../../lib/query';
 import { useSession } from '../../store/session';
 import { Badge, ErrorNote, Note, Spinner } from '../../components/ui';
+import { RebalanceCard } from '../rebalance/RebalanceCard';
 import { RenewalCard } from '../renewal/RenewalCard';
 
 function SessionKeyNote({ report }: { report: SessionKeyReport }): ReactNode {
@@ -184,6 +185,9 @@ export function StatusPage(): ReactNode {
           <StatusBody status={query.data} />
         </div>
       )}
+
+      {/* 順序刻意：先「現在執行」再「換 key」。使用者多是為了讓投組回到目標而來。 */}
+      {query.data === undefined ? null : <RebalanceCard status={query.data} />}
 
       {valid ? <RenewalCard portfolioId={id} /> : null}
     </main>

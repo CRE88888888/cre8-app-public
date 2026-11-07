@@ -234,6 +234,42 @@ export function postRenewalResult(
   return request<RenewalRecorded>(`/portfolios/${id}/renewal-result`, { method: 'POST', token, body });
 }
 
+/**
+ * `POST /portfolios/:id/rebalance` —— **operator 端點**：真的用 session key 送一筆鏈上交易。
+ *
+ * 規劃（要換什麼、換多少）由後端決定，前端不知道也不該猜：回應裡的 `steps` 才是這一輪實際送的參數。
+ *
+ * ⚠ 後端預設**關閉**（fail-closed）：回 403 `OPERATOR_REBALANCE_DISABLED`，要開得在後端帶
+ * `ENABLE_OPERATOR_REBALANCE=true`。那個 403 不是「權限不足」，是「這個部署沒打算讓人手動觸發」。
+ */
+export type RebalanceOutcome = 'executed' | 'noop' | 'blocked' | 'reverted' | 'failed';
+
+export type RebalanceStep = {
+  tokenIn: string;
+  tokenOut: string;
+  amountIn: string;
+  amountOutMin: string;
+};
+
+export type RebalanceResult = {
+  portfolioId: number;
+  outcome: RebalanceOutcome;
+  /** 排程器寫的那一句話（含哪一層沒過）。**原文照回**，不改寫成「失敗」。 */
+  reason: string;
+  txHash: string | null;
+  userOpHash: string | null;
+  /** receipt 裡 executor 發出的 `SwapExecuted` 筆數。null = 有 tx 但讀不到 receipt。 */
+  swapExecuted: number | null;
+  /** 這一輪規劃了幾個 step（＝應該有幾筆 SwapExecuted）。 */
+  expectedSwaps: number;
+  gasUsed: string | null;
+  steps: RebalanceStep[];
+};
+
+export function postRebalance(token: string, id: number): Promise<RebalanceResult> {
+  return request<RebalanceResult>(`/portfolios/${id}/rebalance`, { method: 'POST', token });
+}
+
 /** 這個端點會掃 Transfer 日誌、讀池子、定價 —— 實測 2–3 秒，不是卡住。 */
 export function getPortfolioStatus(token: string, id: number): Promise<PortfolioStatus> {
   return request<PortfolioStatus>(`/portfolios/${id}/status`, { token });
