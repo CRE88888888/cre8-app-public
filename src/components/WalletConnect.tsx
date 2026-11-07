@@ -56,7 +56,7 @@ export function WalletConnect({ note }: { note?: ReactNode }): ReactNode {
   const connectInjected = useCallback(async (detail: ProviderDetail) => {
     setError(null);
     try {
-      setBusy(`連線 ${detail.info.name}…`);
+      setBusy(`Connecting ${detail.info.name}…`);
       const address = await connectProvider(detail.provider);
       const chainId = await chainIdOf(detail.provider).catch(() => null);
       useWallet.getState().connectInjected({ address, rdns: detail.info.rdns, provider: detail.provider });
@@ -65,7 +65,7 @@ export function WalletConnect({ note }: { note?: ReactNode }): ReactNode {
           new ApiError(
             0,
             'WRONG_CHAIN',
-            `錢包在 chain ${chainId}，這個後端是 BSC 56。連線本身沒問題，但請確認你知道自己在哪條鏈上。`,
+            `Wallet is on chain ${chainId}; this backend serves BSC 56. The connection itself is fine — just be aware which chain you are on.`,
           ),
         );
       }
@@ -79,7 +79,7 @@ export function WalletConnect({ note }: { note?: ReactNode }): ReactNode {
   const connectDev = useCallback(() => {
     setError(null);
     if (!isLikelyPrivateKey(devKey)) {
-      setError(new ApiError(0, 'BAD_DEV_KEY', '私鑰格式不對：需要 0x 加 64 個 hex'));
+      setError(new ApiError(0, 'BAD_DEV_KEY', 'Bad private key: expected 0x followed by 64 hex characters'));
       return;
     }
     useWallet.getState().connectDev(createDevSigner(devKey.trim() as `0x${string}`));
@@ -91,15 +91,15 @@ export function WalletConnect({ note }: { note?: ReactNode }): ReactNode {
 
       {wallet.address === null ? null : (
         <div className="row">
-          <span className="muted">已連線</span>
+          <span className="muted">Connected</span>
           <span className="mono" title={wallet.address}>
             {shortAddress(wallet.address)}
           </span>
           <Badge tone={wallet.kind === 'dev' ? 'warn' : 'ok'}>
-            {wallet.kind === 'dev' ? 'dev 私鑰' : (wallet.rdns ?? 'injected')}
+            {wallet.kind === 'dev' ? 'dev key' : (wallet.rdns ?? 'injected')}
           </Badge>
           <button type="button" className="btn btn--ghost btn--sm" onClick={() => wallet.disconnect()}>
-            中斷連線
+            Disconnect
           </button>
         </div>
       )}
@@ -108,20 +108,20 @@ export function WalletConnect({ note }: { note?: ReactNode }): ReactNode {
         <>
           <div className="spread">
             <span className="muted" style={{ fontSize: 13 }}>
-              偵測到的錢包
+              Detected wallets
             </span>
             <button type="button" className="btn btn--ghost btn--sm" onClick={refresh} disabled={busy !== null}>
-              重新偵測
+              Rescan
             </button>
           </div>
 
           {discovering ? (
             <div className="row">
-              <Spinner /> <span className="muted">偵測 EIP-6963 錢包…</span>
+              <Spinner /> <span className="muted">Detecting EIP-6963 wallets…</span>
             </div>
           ) : providers.length === 0 ? (
             <Note tone="warn">
-              沒有偵測到錢包。EIP-6963 需要瀏覽器擴充功能主動廣播；如果錢包已安裝卻沒出現，重新整理這一頁再試。
+              No wallet detected. EIP-6963 requires the extension to announce itself; if one is installed but missing, reload this page.
             </Note>
           ) : (
             <div className="row">
@@ -145,10 +145,10 @@ export function WalletConnect({ note }: { note?: ReactNode }): ReactNode {
           {import.meta.env.DEV ? (
             <details>
               <summary className="muted" style={{ cursor: 'pointer', fontSize: 13 }}>
-                dev 私鑰連線（只在 dev build 出現）
+                Connect with a dev private key (dev build only)
               </summary>
               <div className="stack" style={{ marginTop: 12 }}>
-                <Field label="私鑰" hint={`本機 anvil 的 #3：${DEV_KEY_HINT.slice(0, 10)}…`}>
+                <Field label="Private key" hint={`Local anvil #3: ${DEV_KEY_HINT.slice(0, 10)}…`}>
                   <input
                     type="password"
                     value={devKey}
@@ -158,10 +158,10 @@ export function WalletConnect({ note }: { note?: ReactNode }): ReactNode {
                 </Field>
                 <div className="row">
                   <button type="button" className="btn" disabled={busy !== null} onClick={connectDev}>
-                    用私鑰連線
+                    Connect with key
                   </button>
                   <button type="button" className="btn btn--ghost btn--sm" onClick={() => setDevKey(DEV_KEY_HINT)}>
-                    填入 anvil #3
+                    Fill anvil #3
                   </button>
                 </div>
               </div>

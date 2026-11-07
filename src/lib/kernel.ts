@@ -51,7 +51,7 @@ const ENTRY_POINT = { address: ENTRY_POINT_V07, version: '0.7' } as const;
 
 export function assertEntryPoint(value: string): void {
   if (value.toLowerCase() !== ENTRY_POINT_V07.toLowerCase()) {
-    throw new Error(`後端給的 entryPoint 是 ${value}，這個前端只支援 v0.7（${ENTRY_POINT_V07}）`);
+    throw new Error(`The backend returned entryPoint ${value}; this front end only supports v0.7 (${ENTRY_POINT_V07})`);
   }
 }
 
@@ -69,7 +69,7 @@ export function publicClientFor(wallet: RenewalWallet): PublicClient {
   const rpcUrl = import.meta.env.VITE_RPC_URL ?? (import.meta.env.DEV ? '/rpc' : undefined);
   if (rpcUrl === undefined || rpcUrl === '') {
     throw new Error(
-      'dev 私鑰模式需要一個 RPC：設 VITE_RPC_URL，或在 dev 用 vite 的 /rpc proxy（會轉到 127.0.0.1:8545）',
+      'Dev private-key mode needs an RPC: set VITE_RPC_URL, or use the vite /rpc proxy in dev (it targets 127.0.0.1:8545)',
     );
   }
   return createPublicClient({ chain: bsc, transport: http(rpcUrl) });

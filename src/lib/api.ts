@@ -63,6 +63,8 @@ export type Portfolio = {
   id: number;
   userId: string;
   strategyId: number;
+  /** `strategies.name`（使用者取的基金名）。null = 這一列沒有 join 到策略，前端退回顯示 id。 */
+  strategyName: string | null;
   version: number;
   scheduleState: string;
   createdAt: string;
@@ -169,7 +171,7 @@ async function request<T>(path: string, init: RequestInitLite = {}): Promise<T> 
     });
   } catch (cause) {
     // fetch 只有在**網路層**失敗時才會 throw；後端的錯誤一律是帶 status 的回應。
-    throw new ApiError(0, 'NETWORK', `連不到後端：${cause instanceof Error ? cause.message : String(cause)}`);
+    throw new ApiError(0, 'NETWORK', `Cannot reach the backend: ${cause instanceof Error ? cause.message : String(cause)}`);
   }
 
   const text = await response.text();

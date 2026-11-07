@@ -15,17 +15,17 @@ function SessionKeyNote({ report }: { report: SessionKeyReport }): ReactNode {
   if (report.error !== null) {
     return (
       <Note tone="warn">
-        session key：讀不到安裝狀態（{report.error}）—— <strong>這不等於「沒有可用的 key」</strong>。
+        Session key: cannot read install state ({report.error}) — <strong>this does not mean there is no usable key</strong>.
       </Note>
     );
   }
   if (report.configured === null) {
-    return <Note tone="bad">這個投組在 DB 裡沒有任何 session key 紀錄。</Note>;
+    return <Note tone="bad">This portfolio has no session key recorded in the database.</Note>;
   }
   if (report.configured.installed) {
     return (
       <div className="row">
-        <Badge tone="ok">已安裝</Badge>
+        <Badge tone="ok">Installed</Badge>
         <span className="mono">{report.configured.permissionId}</span>
         <span className="muted mono">{report.configured.keyRef}</span>
       </div>
@@ -33,12 +33,12 @@ function SessionKeyNote({ report }: { report: SessionKeyReport }): ReactNode {
   }
   return (
     <Note tone="warn">
-      DB 記的 key <span className="mono">{report.configured.permissionId}</span> <strong>鏈上沒有安裝</strong>
+      The key the database records <span className="mono">{report.configured.permissionId}</span> is <strong>not installed on-chain</strong>
       {report.usable === null ? (
-        <>，而且沒有任何已安裝的 active key → 再平衡會被擋（不是「剛好在等時機」）。</>
+        <>, and no installed active key exists → rebalancing will be blocked (this is not "waiting for the right moment").</>
       ) : (
         <>
-          ；實際會用的是 <span className="mono">{report.usable.permissionId}</span>
+          ; the one actually used is <span className="mono">{report.usable.permissionId}</span>
           <span className="muted mono">（{report.usable.keyRef}）</span>。
         </>
       )}
@@ -51,9 +51,9 @@ function StatusBody({ status }: { status: PortfolioStatus }): ReactNode {
   return (
     <div className="stack">
       <div className="spread">
-        <h2>投組狀態 · #{status.portfolioId}</h2>
+        <h2>Portfolio #{status.portfolioId}</h2>
         <div className="row">
-          <Badge tone={status.complete ? 'ok' : 'warn'}>{status.complete ? '完整' : '部分'}</Badge>
+          <Badge tone={status.complete ? 'ok' : 'warn'}>{status.complete ? 'Complete' : 'Partial'}</Badge>
           <span className="muted mono">block #{status.block}</span>
         </div>
       </div>
@@ -63,22 +63,22 @@ function StatusBody({ status }: { status: PortfolioStatus }): ReactNode {
         <dd className="mono" title={status.account}>
           {shortAddress(status.account, 8, 6)}
         </dd>
-        <dt>總價值</dt>
+        <dt>Total value</dt>
         <dd>{formatUsdE8(status.totalUsdE8)}</dd>
         <dt>gross drift</dt>
         <dd>
           <strong>{status.drift.grossDriftBps} bps</strong>
           <span className="muted">
             {' '}
-            / 門檻 {status.drift.thresholdBps} bps / 需要再平衡：
+            / threshold {status.drift.thresholdBps} bps / needs rebalance:
           </span>
-          <span className={needs ? 'neg' : 'pos'}>{needs ? '是' : '否'}</span>
+          <span className={needs ? 'neg' : 'pos'}>{needs ? 'yes' : 'no'}</span>
         </dd>
       </dl>
 
       {status.complete ? null : (
         <Note tone="warn">
-          有持倉沒有價格（<code>complete = false</code>），所以上面的漂移是<strong>部分結果</strong>，不是全部。
+          Some holdings have no price (<code>complete = false</code>), so the drift above is a <strong>partial</strong> result.
         </Note>
       )}
 
@@ -86,10 +86,10 @@ function StatusBody({ status }: { status: PortfolioStatus }): ReactNode {
         <thead>
           <tr>
             <th>symbol</th>
-            <th className="num">目標 bps</th>
-            <th className="num">現況 bps</th>
-            <th className="num">差額</th>
-            <th className="num">USD 價值</th>
+            <th className="num">Target bps</th>
+            <th className="num">Current bps</th>
+            <th className="num">Delta</th>
+            <th className="num">USD value</th>
           </tr>
         </thead>
         <tbody>
@@ -107,7 +107,7 @@ function StatusBody({ status }: { status: PortfolioStatus }): ReactNode {
 
       {status.blocked.length === 0 ? null : (
         <Note tone="bad">
-          <strong>被擋下的部位（{status.blocked.length}）</strong>
+          <strong>Blocked legs ({status.blocked.length})</strong>
           <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
             {status.blocked.slice(0, 5).map((entry, index) => (
               <li key={index} className="mono" style={{ fontSize: 12 }}>
@@ -146,7 +146,7 @@ export function StatusPage(): ReactNode {
     <main className="page stack">
       <div className="spread">
         <Link className="btn btn--ghost btn--sm" to="/">
-          ← 回列表
+          ← Back to funds
         </Link>
         <button
           type="button"
@@ -154,19 +154,19 @@ export function StatusPage(): ReactNode {
           disabled={query.isFetching || !valid}
           onClick={() => void query.refetch()}
         >
-          {query.isFetching ? '重新載入…' : '重新載入狀態'}
+          {query.isFetching ? 'Reloading…' : 'Reload status'}
         </button>
       </div>
 
-      {!valid ? <Note tone="bad">portfolio id 不是正整數：{params.id ?? '(空)'}</Note> : null}
+      {!valid ? <Note tone="bad">portfolio id is not a positive integer: {params.id ?? '(empty)'}</Note> : null}
 
       {query.isPending && valid ? (
         <div className="card stack">
           <div className="row">
-            <Spinner /> <span>讀取中…</span>
+            <Spinner /> <span>Loading…</span>
           </div>
           <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-            後端要掃 Transfer 日誌、讀池子、定價 —— 實測 2–3 秒，不是卡住。
+            The backend scans Transfer logs, reads pools and prices them — 2–3 seconds in practice, not a hang.
           </p>
         </div>
       ) : null}
@@ -175,8 +175,8 @@ export function StatusPage(): ReactNode {
 
       {query.error !== null && query.error !== undefined ? (
         <Note>
-          <strong>讀不到狀態時，這一頁不會顯示任何漂移數字。</strong>
-          刻意的：一個看起來正常的「漂移 0、不需要再平衡」比一個錯誤訊息危險得多。
+          <strong>When the status cannot be read, this page shows no drift numbers at all.</strong>
+          Deliberate: a plausible-looking "0 drift, no rebalance needed" is far more dangerous than an error message.
         </Note>
       ) : null}
 

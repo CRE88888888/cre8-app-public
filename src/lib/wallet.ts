@@ -69,13 +69,13 @@ export function knownProviders(): ProviderDetail[] {
 export async function connectProvider(provider: Eip1193Provider): Promise<string> {
   const accounts = await provider.request({ method: 'eth_requestAccounts' });
   const first = Array.isArray(accounts) ? accounts[0] : undefined;
-  if (typeof first !== 'string') throw new Error('錢包沒有回傳帳號（使用者可能取消了連線）');
+  if (typeof first !== 'string') throw new Error('The wallet returned no account (the user may have cancelled the connection)');
   return first;
 }
 
 export async function chainIdOf(provider: Eip1193Provider): Promise<number> {
   const raw = await provider.request({ method: 'eth_chainId' });
-  if (typeof raw !== 'string') throw new Error('eth_chainId 回傳了非字串');
+  if (typeof raw !== 'string') throw new Error('eth_chainId did not return a string');
   return Number.parseInt(raw, 16);
 }
 
@@ -89,7 +89,7 @@ export async function signWithProvider(
     method: 'personal_sign',
     params: [toHexMessage(message), address],
   });
-  if (typeof signature !== 'string') throw new Error('錢包沒有回傳簽名');
+  if (typeof signature !== 'string') throw new Error('The wallet returned no signature');
   return signature;
 }
 

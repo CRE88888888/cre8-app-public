@@ -237,7 +237,7 @@ export function assertMockFundsConsistent(funds: readonly MockFund[] = MOCK_FUND
   for (const fund of funds) {
     const total = fund.holdings.reduce((sum, holding) => sum + holding.weightBps, 0);
     if (total !== 10_000) {
-      throw new Error(`mock fund ${fund.slug} 的權重總和是 ${total} bps，不是 10000`);
+      throw new Error(`mock fund ${fund.slug} weights sum to ${total} bps, not 10000`);
     }
   }
 }

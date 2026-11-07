@@ -68,9 +68,9 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
   }, [queryClient, status.portfolioId, token]);
 
   const disabledReason = blocked
-    ? `有 ${status.blocked.length} 個部位被擋下 —— 先處理 blocked 再手動觸發（不然排程器會在送出前自己擋掉）`
+    ? `${status.blocked.length} legs are blocked — resolve those before triggering manually (the scheduler would refuse them anyway)`
     : !needs
-      ? `漂移 ${status.drift.grossDriftBps} bps 未達門檻 ${status.drift.thresholdBps} bps，這一輪不需要動`
+      ? `Drift ${status.drift.grossDriftBps} bps is below the ${status.drift.thresholdBps} bps threshold — nothing to do this round`
       : null;
 
   const outcomeTone =
@@ -85,25 +85,26 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
   return (
     <section className="card stack">
       <div>
-        <p className="eyebrow">再平衡</p>
-        <h2>現在執行一輪</h2>
+        <p className="eyebrow">Rebalance</p>
+        <h2>Run a round now</h2>
         <p className="lead" style={{ fontSize: 13 }}>
-          由後端規劃（價格、衝擊上限、避免空轉的守衛）並用 <strong>session key</strong> 送出。
-          你不會在錢包裡看到簽名視窗 —— 簽的是 session key，不是 owner。
+          The backend plans it (prices, impact budget, the no-op guard) and sends it with the{' '}
+          <strong>session key</strong>. No signature prompt appears in your wallet — it is the session key signing,
+          not the owner.
         </p>
       </div>
 
       <dl className="kv">
-        <dt>漂移</dt>
+        <dt>Drift</dt>
         <dd>
           <strong>{status.drift.grossDriftBps} bps</strong>
-          <span className="muted"> / 門檻 {status.drift.thresholdBps} bps · 最大單一差 </span>
+          <span className="muted"> / threshold {status.drift.thresholdBps} bps · largest single delta </span>
           {formatBps(status.drift.maxAbsDeltaBps)}
         </dd>
-        <dt>總價值</dt>
+        <dt>Total value</dt>
         <dd>{formatUsdE8(status.totalUsdE8)}</dd>
         <dt>block</dt>
-        <dd className="mono">#{status.block}（這份判定的觀測點）</dd>
+        <dd className="mono">#{status.block} (observation point)</dd>
       </dl>
 
       {disabledReason === null ? null : (
@@ -112,7 +113,7 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
           {/* 沒有需要動的時候刻意不跑 dry-run：它要讀鏈、估價、算 impact（實測 2–3 秒）。
               寫出來是因為「什麼都沒發生」與「壞掉了」在畫面上長得一樣。 */}
           <p className="muted" style={{ margin: 0, fontSize: 12 }}>
-            沒有跑 dry-run —— 只有真的需要再平衡時才會分析（省一次 2–3 秒的讀鏈）。
+            No dry-run was made — it only runs when a rebalance is actually needed, to save a 2–3 second chain read.
           </p>
         </>
       )}
@@ -122,12 +123,12 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
         <div className="stack" style={{ gap: 8 }}>
           <div className="row" style={{ justifyContent: 'space-between' }}>
             <span className="muted" style={{ fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-              這一輪會做什麼
+              What this round would do
               {/* 分析時間要看得見：市場會動，一份 5 分鐘前的分析與現在可能結論不同。
                   沒有時間戳時，「預覽說不會動、結果卻是 executed」看起來像 bug。 */}
               {plan.dataUpdatedAt === 0 ? null : (
                 <span style={{ marginLeft: 8, letterSpacing: 0, textTransform: 'none' }}>
-                  分析於 {new Date(plan.dataUpdatedAt).toLocaleTimeString('zh-TW', { hour12: false })}
+                  analysed at {new Date(plan.dataUpdatedAt).toLocaleTimeString('en-GB', { hour12: false })}
                 </span>
               )}
             </span>
@@ -137,7 +138,7 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
               disabled={plan.isFetching}
               onClick={() => void plan.refetch()}
             >
-              {plan.isFetching ? '分析中…' : '重新分析'}
+              {plan.isFetching ? 'Analysing…' : 'Re-analyse'}
             </button>
           </div>
 
@@ -145,7 +146,7 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
             <div className="row">
               <Spinner />
               <span className="muted" style={{ fontSize: 13 }}>
-                跑一次 dry-run（讀鏈、估價、算 impact；實測 2–3 秒）
+                Running a dry-run (reads chain, prices, computes impact; 2–3s in practice)
               </span>
             </div>
           ) : plan.error !== null && plan.error !== undefined ? (
@@ -153,16 +154,16 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
           ) : plan.data === undefined ? null : plan.data.outcome === 'ready' ? (
             <Note>
               <div className="row" style={{ gap: 8 }}>
-                <Badge tone="ok">會送出 {plan.data.steps.length} 個 step</Badge>
+                <Badge tone="ok">Would send {plan.data.steps.length} step(s)</Badge>
               </div>
               <div style={{ marginTop: 6 }}>{plan.data.reason}</div>
             </Note>
           ) : plan.data.outcome === 'noop' ? (
             <Note tone="warn">
               <div className="row" style={{ gap: 8 }}>
-                <Badge tone="warn">這一輪不會動</Badge>
+                <Badge tone="warn">Nothing would happen</Badge>
                 <span className="muted" style={{ fontSize: 12 }}>
-                  不是錯誤：後端算過之後認為送出去沒有意義
+                  Not an error: the backend computed that sending would be pointless
                 </span>
               </div>
               <div style={{ marginTop: 6 }}>{plan.data.reason}</div>
@@ -170,7 +171,7 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
           ) : (
             <Note tone="bad">
               <div className="row" style={{ gap: 8 }}>
-                <Badge tone="bad">被擋下</Badge>
+                <Badge tone="bad">Blocked</Badge>
               </div>
               <div style={{ marginTop: 6 }}>{plan.data.reason}</div>
             </Note>
@@ -187,7 +188,7 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
               disabled={busy}
               onChange={(event) => setConfirmed(event.target.checked)}
             />
-            我知道這會用 session key 送出鏈上交易、動到投組裡的錢，而且 gas 由帳戶支付
+            I understand this sends an on-chain transaction with the session key, moves the fund's money, and the account pays gas
           </label>
           <div className="row">
             <button
@@ -197,21 +198,21 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
               disabled={!confirmed || busy || !canRun}
               onClick={() => void run()}
             >
-              {busy ? '送出並等待 receipt…' : canRun ? '確認執行' : '這一輪不會動（見上方說明）'}
+              {busy ? 'Sending and waiting for the receipt…' : canRun ? 'Confirm and send' : 'Nothing to do (see above)'}
             </button>
-            {busy ? <span className="muted" style={{ fontSize: 12 }}>後端要規劃、估 gas、送 op、等 receipt</span> : null}
+            {busy ? <span className="muted" style={{ fontSize: 12 }}>The backend plans, estimates gas, sends the op and waits for the receipt</span> : null}
           </div>
         </>
       ) : null}
 
       {error instanceof ApiError && error.code === 'OPERATOR_REBALANCE_DISABLED' ? (
         <Note tone="bad">
-          <strong>後端沒開這個端點（不是權限問題）</strong>
+          <strong>The backend has this endpoint switched off (not a permission problem)</strong>
           <div style={{ marginTop: 6 }}>
-            這是 operator 端點：它能用 session key 動錢，所以預設 fail-closed。要在後端啟動時帶上
-            <code className="mono"> ENABLE_OPERATOR_REBALANCE=true</code>，端點才會存在。
+            This is an operator endpoint: it can move money with the session key, so it fails closed by default. Start the backend with
+            <code className="mono">ENABLE_OPERATOR_REBALANCE=true</code> for the endpoint to exist at all.
           </div>
-          <div style={{ marginTop: 6, opacity: 0.8 }}>後端原文：{error.message}</div>
+          <div style={{ marginTop: 6, opacity: 0.8 }}>Backend said: {error.message}</div>
         </Note>
       ) : (
         <ErrorNote error={error} />
@@ -221,7 +222,7 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
         <div className="stack">
           <div className="spread">
             <h3 style={{ fontSize: 15 }}>
-              結果 ·{' '}
+              Result ·{' '}
               <span
                 className={`badge ${outcomeTone === 'ok' ? 'badge--ok' : outcomeTone === 'warn' ? 'badge--warn' : 'badge--bad'}`}
               >
@@ -230,7 +231,7 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
               {/* 「這是剛剛那一次執行的結果」——上面的預覽是**現在**的分析，兩者時間點不同。
                   沒有這行時，一個已完成的 executed 結果旁邊掛著「這一輪不會動」看起來自相矛盾。 */}
               <span className="muted" style={{ marginLeft: 8, fontSize: 12, fontWeight: 400 }}>
-                這是已送出那一次的結果；上方預覽是現在的分析
+                this is the round that was sent; the preview above is the current analysis
               </span>
             </h3>
             {result.swapExecuted === null ? null : (
@@ -295,8 +296,8 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
           )}
 
           <Note>
-            想看這一輪到底讓持倉變成什麼樣？狀態頁上方重新載入即可 —— 後端在送出前後各留了一張快照
-            （`phase = before / after`），差額就是這一輪做了什麼。
+            Want to see what this round actually did to the holdings? Reload the status above — the backend keeps a
+            snapshot before and after every round (<code>phase = before / after</code>); the difference is what happened.
           </Note>
         </div>
       )}

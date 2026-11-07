@@ -52,11 +52,11 @@ function ConnectWalletButton(): ReactNode {
     <div className="row" style={{ gap: 8 }}>
       {error === null ? null : (
         <span className="neg" style={{ fontSize: 12 }} title={error}>
-          連線失敗
+          Connect failed
         </span>
       )}
       <button type="button" className="btn btn--sm" disabled={busy} onClick={() => void connect()}>
-        {busy ? '偵測錢包…' : 'Connect wallet'}
+        {busy ? 'Detecting…' : 'Connect wallet'}
       </button>
     </div>
   );
@@ -94,7 +94,7 @@ export function TopBar(): ReactNode {
         </div>
 
         <div className="row" style={{ gap: 12 }}>
-          {walletAddress === null ? (
+          {token !== null ? null : walletAddress === null ? (
             <ConnectWalletButton />
           ) : (
             <span className="mono" style={{ fontSize: 13 }} title={walletAddress}>
@@ -104,7 +104,7 @@ export function TopBar(): ReactNode {
 
           {address === null ? null : (
             <>
-              <Badge tone={token === null ? 'warn' : 'ok'}>{token === null ? '未登入' : '已登入'}</Badge>
+              <Badge tone={token === null ? 'warn' : 'ok'}>{token === null ? 'No token' : 'Signed in'}</Badge>
               <button
                 type="button"
                 className="btn btn--ghost btn--sm"
@@ -114,7 +114,7 @@ export function TopBar(): ReactNode {
                   navigate('/login');
                 }}
               >
-                登出
+                Sign out
               </button>
             </>
           )}

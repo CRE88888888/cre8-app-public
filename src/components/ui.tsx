@@ -15,7 +15,7 @@ export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: R
 }
 
 export function Spinner(): ReactNode {
-  return <span className="spinner" role="status" aria-label="載入中" />;
+  return <span className="spinner" role="status" aria-label="Loading" />;
 }
 
 export function Note({
@@ -39,16 +39,16 @@ export function ErrorNote({ error }: { error: unknown }): ReactNode {
   if (error instanceof ApiError) {
     const detail =
       error.status === 0
-        ? '後端連不上（服務沒開或 proxy 沒設對）'
+        ? 'Cannot reach the backend (service down, or the proxy is misconfigured).'
         : error.status === 401
-          ? 'token 失效或沒有帶上 —— 請重新登入'
+          ? 'Session token missing or expired — sign in again.'
           : error.status === 403
-            ? '後端拒絕：這是權限或開關問題，不是一般錯誤'
+            ? 'The backend refused: this is a permission or feature-flag decision, not a generic error.'
             : error.status === 404
-              ? '找不到（portfolio id 或路徑不對）'
+              ? 'Not found (wrong portfolio id or path).'
               : error.status === 503
-                ? '後端暫時無法回答（可能是 RPC 或 DB 讀不到）'
-                : '後端回報錯誤';
+                ? 'The backend cannot answer right now (RPC or database read failed).'
+                : 'The backend reported an error.';
     return (
       <Note tone="bad">
         <strong>
@@ -62,12 +62,19 @@ export function ErrorNote({ error }: { error: unknown }): ReactNode {
 
   return (
     <Note tone="bad">
-      <strong>未預期的錯誤</strong>
+      <strong>Unexpected error</strong>
       <div style={{ marginTop: 6 }}>{error instanceof Error ? error.message : String(error)}</div>
     </Note>
   );
 }
 
+/**
+ * 一個欄位。結構刻意照設計稿：`<label class="field"><span>標籤</span> 控制項 <small>提示</small></label>`。
+ *
+ * 設計稿的規則是 `.field > span`（標籤、粗體）與 `.field > small`（提示、灰色）。
+ * 用 `<div><label>…` 的寫法會讓提示被 `> span` 抓去當標籤 —— 實際看到的症狀是「提示變成粗體標題、
+ * 輸入框被推到右邊」。
+ */
 export function Field({
   label,
   hint,
@@ -78,10 +85,10 @@ export function Field({
   children: ReactNode;
 }): ReactNode {
   return (
-    <div className="field">
-      <label>{label}</label>
+    <label className="field">
+      <span>{label}</span>
       {children}
-      {hint === undefined ? null : <span className="field__hint">{hint}</span>}
-    </div>
+      {hint === undefined ? null : <small>{hint}</small>}
+    </label>
   );
 }

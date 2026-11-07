@@ -9,33 +9,33 @@ import { useBodyClass } from '../../lib/use-body-class';
 import { useSession } from '../../store/session';
 import { ErrorNote, Note, Spinner } from '../../components/ui';
 
-/** 再平衡節奏的選項。後端要求 `intervalSeconds >= MIN_INTERVAL_SECONDS`（60），一小時是最短的合理值。 */
+/** Rebalance cadence. The backend requires `intervalSeconds >= 60`; one hour is the shortest sensible cadence. */
 const INTERVALS = [
-  { label: '每小時', seconds: 3600 },
-  { label: '每 6 小時', seconds: 21_600 },
-  { label: '每天', seconds: 86_400 },
+  { label: 'Hourly', seconds: 3600 },
+  { label: 'Every 6h', seconds: 21_600 },
+  { label: 'Daily', seconds: 86_400 },
 ] as const;
 
 type Step = 'idle' | 'creating-strategy' | 'publishing-version' | 'enrolling' | 'done';
 
 const STEP_LABEL: Record<Exclude<Step, 'idle' | 'done'>, string> = {
-  'creating-strategy': '建立策略（含鏈上 Registry 鏡像）…',
-  'publishing-version': '發佈版本（資產權重 + 排程）…',
-  enrolling: '部署 smart account（enroll）…',
+  'creating-strategy': 'Creating the strategy (mirrors to the on-chain registry)…',
+  'publishing-version': 'Publishing the version (weights + schedule)…',
+  enrolling: 'Deploying the smart account (enroll)…',
 };
 
 /**
- * Create fund —— **只有一種策略：目標權重指數基金**。
+ * Create fund — **one strategy only: a target-weight index fund**.
  *
- * 設計稿的 builder 有 Buy & hold、Stack、Pair grid 等範本；那些在我們的後端沒有對應的執行路徑，
- * 所以這裡不假裝有。畫面只做一件事：把「資產 + 權重 + 再平衡節奏」變成
- * `strategy` → `version` → `portfolio` 三個真的資源。
+ * The design mock offers Buy & hold, Stack and Pair grid templates. Our backend has no execution path for
+ * them, so this page does not pretend otherwise: it turns "assets + weights + cadence" into
+ * `strategy` → `version` → `portfolio`, three real resources.
  *
- * 三步是**真的三次後端呼叫**（第 1、3 步會上鏈），所以進度要逐步顯示 ——
- * 一個轉圈 30 秒、什麼都不說的按鈕會讓人以為壞掉而重複按。
+ * Steps 1 and 3 send on-chain transactions, so progress is shown step by step — a spinner that says
+ * nothing for 30 seconds makes people press the button again.
  */
 export function CreateFundPage(): ReactNode {
-  // 設計稿的 create 頁有自己的 body class（`.create-page { background: var(--panel) }`）。
+  // The design's create page carries its own body class (`.create-page { background: var(--panel) }`).
   useBodyClass('create-page');
   const token = useSession((state) => state.token);
   const navigate = useNavigate();
@@ -56,11 +56,8 @@ export function CreateFundPage(): ReactNode {
     staleTime: 60_000,
   });
 
-  const selected = useMemo(
-    () => Object.entries(weights).filter(([, percent]) => percent > 0),
-    [weights],
-  );
-  /** 用 bps 累加而不是浮點百分比：`33.3 + 33.3 + 33.4` 在浮點裡不是 100。 */
+  const selected = useMemo(() => Object.entries(weights).filter(([, percent]) => percent > 0), [weights]);
+  /** Accumulate in bps, not floating percentages: `33.3 + 33.3 + 33.4` is not 100 in binary floating point. */
   const totalBps = selected.reduce((sum, [, percent]) => sum + Math.round(percent * 100), 0);
   const valid = name.trim().length > 0 && totalBps === 10_000;
   const busy = step !== 'idle' && step !== 'done';
@@ -117,7 +114,8 @@ export function CreateFundPage(): ReactNode {
       <main className="page stack">
         <h1>Create a fund</h1>
         <Note tone="warn">
-          建立基金會在你的錢包名下寫入策略並部署 smart account，需要先<Link to="/login">登入</Link>。
+          Creating a fund writes a strategy under your wallet and deploys a smart account.{' '}
+          <Link to="/login">Sign in</Link> first.
         </Note>
       </main>
     );
@@ -129,60 +127,60 @@ export function CreateFundPage(): ReactNode {
         <p className="eyebrow">Create</p>
         <h1>Create a fund</h1>
         <p className="lead">
-          一種策略：<strong>目標權重指數基金</strong>。你決定持倉與權重，排程器在偏離門檻時把超配的換成低配的
-          （每條腿都是「資產 ↔ USDT」）。
+          One strategy: a <strong>target-weight index fund</strong>. You pick the holdings and weights; the scheduler
+          swaps what is overweight into what is underweight (every leg is <em>asset ↔ USDT</em>).
         </p>
       </div>
 
       <section className="card stack">
-        <h2>1 · 名稱</h2>
-        <div className="field">
-          <label htmlFor="fund-name">基金名稱</label>
+        <h2>1 · Name</h2>
+        <label className="field">
+          <span>Fund name</span>
           <input
             id="fund-name"
             value={name}
             maxLength={120}
-            placeholder="例如：BNB 生態平衡"
+            placeholder="e.g. BNB Ecosystem Balanced"
             onChange={(event) => setName(event.target.value)}
           />
-          <span className="field__hint">顯示在 vaults 列表上。</span>
-        </div>
-        <div className="field">
-          <label htmlFor="fund-desc">說明（選填）</label>
+          <small>Shown on the vaults list.</small>
+        </label>
+        <label className="field">
+          <span>Description (optional)</span>
           <input
             id="fund-desc"
             value={description}
             maxLength={500}
-            placeholder="這個基金的主張，一句話"
+            placeholder="The thesis, in one line"
             onChange={(event) => setDescription(event.target.value)}
           />
-        </div>
+        </label>
       </section>
 
       <section className="card stack">
         <div className="spread">
-          <h2>2 · 持倉與權重</h2>
+          <h2>2 · Holdings and weights</h2>
           <span className={totalBps === 10_000 ? 'pos mono' : 'neg mono'} style={{ fontSize: 13 }}>
-            合計 {(totalBps / 100).toFixed(2)}%
+            Total {(totalBps / 100).toFixed(2)}%
           </span>
         </div>
 
         {assets.isPending ? (
           <div className="row">
-            <Spinner /> <span className="muted">讀取可定價資產…</span>
+            <Spinner /> <span className="muted">Loading priceable assets…</span>
           </div>
         ) : assets.error !== null && assets.error !== undefined ? (
           <ErrorNote error={assets.error} />
         ) : assets.data === undefined ? null : assets.data.length === 0 ? (
-          <Note tone="warn">`priceable_assets` 是空的 —— 先有人把代幣加進去才能建立基金。</Note>
+          <Note tone="warn">`priceable_assets` is empty — someone has to add tokens before a fund can be created.</Note>
         ) : (
           <table className="table">
             <thead>
               <tr>
-                <th>選</th>
-                <th>代號</th>
-                <th>地址</th>
-                <th className="num">權重 %</th>
+                <th>Pick</th>
+                <th>Ticker</th>
+                <th>Address</th>
+                <th className="num">Weight %</th>
               </tr>
             </thead>
             <tbody>
@@ -194,7 +192,7 @@ export function CreateFundPage(): ReactNode {
                       <input
                         type="checkbox"
                         checked={isOn}
-                        aria-label={`選 ${asset.symbol}`}
+                        aria-label={`Select ${asset.symbol}`}
                         onChange={() => toggle(asset)}
                       />
                     </td>
@@ -203,7 +201,7 @@ export function CreateFundPage(): ReactNode {
                       {asset.isNumeraire ? (
                         <span className="muted" style={{ fontSize: 11 }}>
                           {' '}
-                          計價基準
+                          numeraire
                         </span>
                       ) : null}
                     </td>
@@ -237,13 +235,13 @@ export function CreateFundPage(): ReactNode {
 
         {totalBps !== 10_000 && selected.length > 0 ? (
           <Note tone="warn">
-            權重必須剛好 100%（後端要求權重加總 10000 bps）。目前 {totalBps} bps。
+            Weights must add up to exactly 100% (the backend requires 10000 bps). Currently {totalBps} bps.
           </Note>
         ) : null}
       </section>
 
       <section className="card stack">
-        <h2>3 · 再平衡節奏</h2>
+        <h2>3 · Rebalance cadence</h2>
         <div className="row">
           {INTERVALS.map((option) => (
             <button
@@ -257,18 +255,25 @@ export function CreateFundPage(): ReactNode {
           ))}
         </div>
         <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-          排程器以這個間隔檢查漂移；超過門檻才動作，且每個 step 受 impact 預算限制。
+          The scheduler checks drift on this cadence; it only trades past the threshold, and every step is bounded by
+          the impact budget.
         </p>
       </section>
 
       <section className="card stack">
-        <h2>4 · 建立</h2>
+        <h2>4 · Create</h2>
         <dl className="kv">
-          <dt>策略名稱</dt>
-          <dd>{name.trim() === '' ? '（未填）' : name.trim()}</dd>
-          <dt>持倉</dt>
-          <dd>{selected.length === 0 ? '（未選）' : selected.map(([address]) => assets.data?.find((a) => a.address === address)?.symbol ?? address).join(' · ')}</dd>
-          <dt>節奏</dt>
+          <dt>Strategy name</dt>
+          <dd>{name.trim() === '' ? '(empty)' : name.trim()}</dd>
+          <dt>Holdings</dt>
+          <dd>
+            {selected.length === 0
+              ? '(none selected)'
+              : selected
+                  .map(([address]) => assets.data?.find((asset) => asset.address === address)?.symbol ?? address)
+                  .join(' · ')}
+          </dd>
+          <dt>Cadence</dt>
           <dd>{INTERVALS.find((option) => option.seconds === intervalSeconds)?.label ?? `${intervalSeconds}s`}</dd>
         </dl>
 
@@ -278,31 +283,32 @@ export function CreateFundPage(): ReactNode {
               <Spinner /> <strong>{STEP_LABEL[step]}</strong>
             </div>
             <p className="muted" style={{ margin: '8px 0 0', fontSize: 13 }}>
-              第 1 步會把策略鏡像到鏈上 Registry、第 3 步會部署 smart account —— 這兩步要花 gas 與時間，
-              不是卡住。
+              Step 1 mirrors the strategy to the on-chain registry and step 3 deploys the smart account — both cost gas
+              and take time. This is not stuck.
             </p>
           </Note>
         ) : null}
 
         <div className="row">
           <button type="button" className="btn btn--primary" disabled={!valid || busy} onClick={() => void submit()}>
-            {busy ? '建立中…' : '建立基金'}
+            {busy ? 'Creating…' : 'Create fund'}
           </button>
-          {valid ? null : <span className="muted" style={{ fontSize: 12 }}>名稱與 100% 權重都填好才能建立</span>}
+          {valid ? null : <span className="muted" style={{ fontSize: 12 }}>Needs a name and exactly 100% in weights</span>}
         </div>
 
         <ErrorNote error={error} />
         {error instanceof ApiError && error.code === 'CHAIN_NOT_CONFIGURED' ? (
           <Note tone="warn">
-            後端沒有設定鏈（`RPC_URL` / `OPERATOR_PRIVATE_KEY`）。建立策略要鏡像到鏈上 Registry，缺設定時會擋在這裡。
+            The backend has no chain configured (`RPC_URL` / `OPERATOR_PRIVATE_KEY`). Creating a strategy mirrors it to
+            the on-chain registry, so it fails here without that.
           </Note>
         ) : null}
 
         {created === null ? null : (
           <Note>
-            <strong>建立完成</strong>
+            <strong>Created</strong>
             <div style={{ marginTop: 6 }}>
-              策略 #{created.strategyId} · 投組 #{created.portfolioId}
+              Strategy #{created.strategyId} · portfolio #{created.portfolioId}
             </div>
             <div className="row" style={{ marginTop: 10 }}>
               <button
@@ -310,10 +316,10 @@ export function CreateFundPage(): ReactNode {
                 className="btn btn--sm"
                 onClick={() => navigate(`/portfolios/${created.portfolioId}`)}
               >
-                看這個投組
+                Open the portfolio
               </button>
               <Link className="btn btn--sm btn--ghost" to="/vaults">
-                回 vaults
+                Back to vaults
               </Link>
             </div>
           </Note>

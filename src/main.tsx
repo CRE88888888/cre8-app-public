@@ -1,3 +1,5 @@
+// ⚠ 必須是第一個 import：它要在任何 store 模組求值之前塞好 sessionStorage（見 dev-session.ts）。
+import './dev-session';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -14,7 +16,7 @@ import './styles/base.css';
 import './styles/components.css';
 
 const container = document.getElementById('root');
-if (container === null) throw new Error('#root 不存在：index.html 被改動了');
+if (container === null) throw new Error('#root is missing: index.html was modified');
 
 createRoot(container).render(
   <StrictMode>

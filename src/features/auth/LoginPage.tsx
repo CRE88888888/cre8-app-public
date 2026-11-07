@@ -28,7 +28,7 @@ export function LoginPage(): ReactNode {
     if (wallet.address === null) return;
     setError(null);
     try {
-      setBusy('取得 challenge…');
+      setBusy('Fetching challenge…');
       const challenge = await postNonce();
 
       const message = createSiweMessage({
@@ -43,17 +43,17 @@ export function LoginPage(): ReactNode {
         expirationTime: new Date(challenge.expiresAt),
       });
 
-      setBusy('在錢包裡簽名…');
+      setBusy('Signing in your wallet…');
       const signature =
         wallet.kind === 'dev' && wallet.devSigner !== null
           ? await wallet.devSigner.signMessage(message)
           : wallet.provider === null
             ? (() => {
-                throw new Error('錢包連線掉了，請重新連線');
+                throw new Error('Wallet connection was lost — reconnect.');
               })()
             : await signWithProvider(wallet.provider, wallet.address, message);
 
-      setBusy('換 token…');
+      setBusy('Exchanging for a token…');
       const credentials = await postLogin(message, signature);
       setSession({ token: credentials.token, expiresAt: credentials.expiresAt, address: wallet.address });
       navigate(nextPath, { replace: true });
@@ -70,29 +70,29 @@ export function LoginPage(): ReactNode {
   return (
     <main className="page stack">
       <div>
-        <p className="eyebrow">登入</p>
+        <p className="eyebrow">Sign in</p>
         <h1>CRE8 ATP</h1>
         <p className="lead">
-          session key 的權限在鏈上，登入只是為了讓後端知道「你是這個帳戶的擁有者」。簽名用 EIP-4361（SIWE），
-          內容包含 domain、chainId 與一次性 nonce。
+          Session-key permissions live on-chain; signing in just tells the backend you own this account. The signature is EIP-4361 (SIWE),
+          carrying the domain, chainId and a single-use nonce.
         </p>
       </div>
 
       <section className="card stack">
         <div>
-          <p className="eyebrow">步驟 1</p>
-          <h2>連線錢包</h2>
+          <p className="eyebrow">Step 1</p>
+          <h2>Connect a wallet</h2>
         </div>
         <WalletConnect />
       </section>
 
       <section className="card stack">
         <div>
-          <p className="eyebrow">步驟 2</p>
-          <h2>SIWE 登入</h2>
+          <p className="eyebrow">Step 2</p>
+          <h2>Sign in with SIWE</h2>
         </div>
         <button type="button" className="btn btn--primary" disabled={!canSign} onClick={() => void signIn()}>
-          {busy ?? (wallet.address === null ? '先連線錢包' : '簽名並登入')}
+          {busy ?? (wallet.address === null ? 'Connect a wallet first' : 'Sign in')}
         </button>
         {busy === null ? null : (
           <div className="row">
@@ -100,7 +100,7 @@ export function LoginPage(): ReactNode {
           </div>
         )}
         {wallet.address === null ? (
-          <Note>登入狀態會存在 sessionStorage；錢包連線不會跨重新整理（provider 不是可序列化的資料）。</Note>
+          <Note>The session is kept in sessionStorage; the wallet connection does not survive a reload (a provider is not serialisable).</Note>
         ) : null}
         <ErrorNote error={error} />
       </section>

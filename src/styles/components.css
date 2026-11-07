@@ -116,9 +116,15 @@
   gap: 6px;
 }
 
-.field > label {
+/* 設計稿的欄位用 `> span` 當標籤、`> small` 當提示（見 components/ui.tsx 的 Field）。 */
+.field > span {
   font-size: 13px;
   color: var(--ink-2);
+}
+
+.field > small {
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .field input,
