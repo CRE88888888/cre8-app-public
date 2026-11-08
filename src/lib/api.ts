@@ -340,3 +340,21 @@ export function enrollPortfolio(token: string, strategyId: number): Promise<Port
 export function getPortfolioStatus(token: string, id: number): Promise<PortfolioStatus> {
   return request<PortfolioStatus>(`/portfolios/${id}/status`, { token });
 }
+
+/** 這個投組最近的執行紀錄（含前後快照的漂移與總值）。 */
+export function getPortfolioActivity(token: string, portfolioId: number): Promise<{ activity: PortfolioActivity[] }> {
+  return request(`/portfolios/${portfolioId}/activity`, { token });
+}
+
+export type PortfolioActivity = {
+  id: number;
+  state: string;
+  txHash: string | null;
+  userOpHash: string | null;
+  attempts: number;
+  createdAt: string;
+  driftBeforeBps: number | null;
+  driftAfterBps: number | null;
+  usdBeforeE8: string | null;
+  usdAfterE8: string | null;
+};

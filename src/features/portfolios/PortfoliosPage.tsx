@@ -1,105 +1,247 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { getPortfolios } from '../../lib/api';
-import { formatDateTime, shortAddress } from '../../lib/format';
+import { getPortfolioActivity, getPortfolioStatus, getPortfolios } from '../../lib/api';
+import type { PortfolioActivity } from '../../lib/api';
+import { formatUsdE8, shortAddress } from '../../lib/format';
 import { queryKeys } from '../../lib/query';
+import { useBodyClass } from '../../lib/use-body-class';
 import { useSession } from '../../store/session';
-import { Badge, ErrorNote, Note, Spinner } from '../../components/ui';
+import { useWallet } from '../../store/wallet';
+import { Badge, ErrorNote, Spinner } from '../../components/ui';
+import { SignInButton } from '../../components/WalletMenu';
 
+/**
+ * 投組頁。照參考站 `portfolio.html` 的區塊順序：
+ * `Portfolio` → `Your funds` → `Activity`，資料換成我們真的擁有的東西。
+ *
+ * 參考站是「一個錢包持有多檔基金的 shares」；我們的模型是「一個錢包持有多個 portfolio，
+ * 每個 portfolio 是一個策略的實例」。所以：
+ *   Your funds      = 這個錢包的 portfolio 清單（總值、漂移、帳戶）
+ *   Activity        = 各投組的執行紀錄合併，新到舊（含前後快照的漂移）
+ *   點進去看細節    = `/portfolios/:id`（持倉、目標、再平衡、session key、approve）
+ */
 export function PortfoliosPage(): ReactNode {
+  useBodyClass('portfolio-page', 'fund-explore');
   const token = useSession((state) => state.token);
+  const sessionAddress = useSession((state) => state.address);
+  const walletAddress = useWallet((state) => state.address);
 
-  const query = useQuery({
+  const portfolios = useQuery({
     queryKey: queryKeys.portfolios(token),
     queryFn: () => getPortfolios(token as string),
     enabled: token !== null,
   });
 
+  const ids = (portfolios.data ?? []).map((portfolio) => portfolio.id);
+
+  const statuses = useQueries({
+    queries: ids.map((id) => ({
+      queryKey: queryKeys.status(token, id),
+      queryFn: () => getPortfolioStatus(token as string, id),
+      enabled: token !== null,
+    })),
+  });
+
+  const activities = useQueries({
+    queries: ids.map((id) => ({
+      queryKey: ['activity', token, id],
+      queryFn: () => getPortfolioActivity(token as string, id),
+      enabled: token !== null,
+    })),
+  });
+
+  const address = sessionAddress ?? walletAddress;
+  const totalUsdE8 = statuses.reduce((sum, row) => sum + BigInt(row.data?.totalUsdE8 ?? '0'), 0n);
+
+  // 合併所有投組的執行紀錄，新到舊。`portfolioId` 要留著才知道是哪一檔。
+  const merged: { portfolioId: number; entry: PortfolioActivity }[] = activities.flatMap((row, index) => {
+    const portfolioId = ids[index];
+    if (portfolioId === undefined) return [];
+    return (row.data?.activity ?? []).map((entry) => ({ portfolioId, entry }));
+  });
+  merged.sort((left, right) => right.entry.id - left.entry.id);
+
+  const nameOf = new Map((portfolios.data ?? []).map((portfolio) => [portfolio.id, portfolio.strategyName]));
+
   return (
-    <main className="page stack">
-      <div className="spread">
+    <main className="explore-wrap">
+      <header className="explore-heading">
         <div>
-          <p className="eyebrow">Portfolios</p>
-          <h1>Your portfolios</h1>
+          <h1>
+            Portfolio<span>.</span>
+          </h1>
+          <p>
+            {address === null ? (
+              <>
+                <SignInButton /> to see the funds this wallet owns.
+              </>
+            ) : (
+              <>
+                Signed in as <span className="mono">{shortAddress(address)}</span> — every fund below is a smart
+                account this wallet owns.
+              </>
+            )}
+          </p>
         </div>
-        <button
-          type="button"
-          className="btn btn--sm"
-          disabled={query.isFetching}
-          onClick={() => void query.refetch()}
-        >
-          {query.isFetching ? 'Reloading…' : 'Reload'}
-        </button>
-      </div>
-
-      <ErrorNote error={query.error} />
-
-      {query.isPending ? (
-        <div className="row">
-          <Spinner /> <span className="muted">Loading…</span>
+        <div className="explore-heading-actions">
+          <Link className="btn" to="/create">
+            Create a fund <span aria-hidden="true">↗</span>
+          </Link>
         </div>
-      ) : query.data === undefined ? null : query.data.length === 0 ? (
-        <div className="card empty">This account has no portfolios yet</div>
+      </header>
+
+      {token === null ? (
+        <div className="directory-empty">
+          <strong>Not signed in</strong>
+          <p>
+            Connect a wallet and sign in with SIWE. <SignInButton /> opens the wallet menu in the header.
+          </p>
+        </div>
       ) : (
-        <div className="card">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>id</th>
-                <th>Strategy</th>
-                <th>smart account</th>
-                <th>gas</th>
-                <th>Session key expires</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {query.data.map((portfolio) => {
-                const account = portfolio.smartAccounts[0];
-                const key = portfolio.sessionKey;
-                return (
-                  <tr key={portfolio.id}>
-                    <td className="num">{portfolio.id}</td>
-                    <td>
-                      {portfolio.strategyId} / v{portfolio.version}
-                    </td>
-                    <td className="mono" title={account?.address}>
-                      {account === undefined ? '—' : shortAddress(account.address)}
-                      {account === undefined ? null : (
-                        <>
-                          {' '}
-                          <span className="muted">(chain {account.chainId})</span>
-                        </>
-                      )}
-                    </td>
-                    <td>
-                      {portfolio.gas?.ready === true ? (
-                        <Badge tone="ok">ready</Badge>
-                      ) : (
-                        <Badge tone="warn">Low</Badge>
-                      )}
-                    </td>
-                    <td className="mono">
-                      {key === null ? <span className="muted">No key</span> : formatDateTime(key.expiresAt)}
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
-                      <Link className="btn btn--sm" to={`/portfolios/${portfolio.id}`}>
-                        Open
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+        <>
+          <ErrorNote error={portfolios.error} />
 
-      <Note>
-        Opening a fund scans Transfer logs, reads pools and prices them — <strong>2–3 seconds in practice</strong>, not a
-        hang.
-      </Note>
+          <section className="explore-collection" aria-label="Your funds">
+            <header>
+              <div>
+                <h2>
+                  Your funds<span>{ids.length}</span>
+                </h2>
+                <p>
+                  Total value <strong>{formatUsdE8(totalUsdE8.toString())}</strong> across {ids.length} smart
+                  account{ids.length === 1 ? '' : 's'}.
+                </p>
+              </div>
+            </header>
+
+            {portfolios.isPending ? (
+              <div className="fund-list-loading">
+                <Spinner /> <span className="muted">Loading portfolios…</span>
+              </div>
+            ) : ids.length === 0 ? (
+              <div className="directory-empty">
+                <strong>No funds yet</strong>
+                <p>
+                  This wallet owns no portfolios. <Link to="/create">Create one</Link>.
+                </p>
+              </div>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Fund</th>
+                    <th>Account</th>
+                    <th className="num">Value</th>
+                    <th className="num">Drift</th>
+                    <th>State</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {ids.map((id, index) => {
+                    const status = statuses[index]?.data;
+                    const empty = status !== undefined && status.totalUsdE8 === '0';
+                    const needs = status?.drift.needsRebalance ?? false;
+                    return (
+                      <tr key={id}>
+                        <td>
+                          <Link to={`/portfolios/${id}`}>{nameOf.get(id) ?? `Strategy ${id}`}</Link>
+                        </td>
+                        <td className="mono muted" style={{ fontSize: 12 }}>
+                          {status === undefined ? '—' : shortAddress(status.account)}
+                        </td>
+                        <td className="num">{status === undefined ? '—' : formatUsdE8(status.totalUsdE8 ?? '0')}</td>
+                        <td className={`num ${needs ? 'neg' : 'pos'}`}>
+                          {status === undefined ? '—' : empty ? 'empty' : `${status.drift.grossDriftBps} bps`}
+                        </td>
+                        <td>
+                          {status === undefined ? (
+                            <span className="muted">—</span>
+                          ) : empty ? (
+                            <Badge tone="warn">Needs funding</Badge>
+                          ) : needs ? (
+                            <Badge tone="bad">Rebalance due</Badge>
+                          ) : (
+                            <Badge tone="ok">Aligned</Badge>
+                          )}
+                        </td>
+                        <td>
+                          <Link to={`/portfolios/${id}`}>Open →</Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </section>
+
+          <section className="explore-collection" aria-label="Activity">
+            <header>
+              <div>
+                <h2>
+                  Activity<span>{merged.length}</span>
+                </h2>
+                <p>
+                  Every round that reached the chain, with the drift measured before and after it (from the
+                  snapshots the scheduler writes).
+                </p>
+              </div>
+            </header>
+
+            {merged.length === 0 ? (
+              <div className="directory-empty">
+                <strong>No activity yet</strong>
+                <p>Nothing has been executed for these funds. Open one and press Re-analyse to see what a round would do.</p>
+              </div>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Fund</th>
+                    <th>When</th>
+                    <th>State</th>
+                    <th className="num">Drift</th>
+                    <th className="num">Value</th>
+                    <th>Transaction</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {merged.slice(0, 20).map(({ portfolioId, entry }) => (
+                    <tr key={`${portfolioId}-${entry.id}`}>
+                      <td>
+                        <Link to={`/portfolios/${portfolioId}`}>{nameOf.get(portfolioId) ?? `#${portfolioId}`}</Link>
+                      </td>
+                      <td className="muted" style={{ fontSize: 12 }}>
+                        {new Date(entry.createdAt).toLocaleString('en-GB', { hour12: false })}
+                      </td>
+                      <td>
+                        <Badge tone={entry.state === 'confirmed' ? 'ok' : entry.state === 'failed' ? 'bad' : 'warn'}>
+                          {entry.state}
+                        </Badge>
+                      </td>
+                      <td className="num mono" style={{ fontSize: 12 }}>
+                        {entry.driftBeforeBps === null || entry.driftAfterBps === null
+                          ? '—'
+                          : `${entry.driftBeforeBps} → ${entry.driftAfterBps} bps`}
+                      </td>
+                      <td className="num mono" style={{ fontSize: 12 }}>
+                        {entry.usdBeforeE8 === null || entry.usdAfterE8 === null
+                          ? '—'
+                          : `${formatUsdE8(entry.usdBeforeE8)} → ${formatUsdE8(entry.usdAfterE8)}`}
+                      </td>
+                      <td className="mono muted" style={{ fontSize: 11 }}>
+                        {entry.txHash === null ? '—' : `${entry.txHash.slice(0, 10)}…${entry.txHash.slice(-6)}`}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+        </>
+      )}
     </main>
   );
 }
