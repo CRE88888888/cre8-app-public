@@ -93,9 +93,9 @@ export type StatusHolding = {
 
 export type SessionKeyReport = {
   /** DB 記的最新那把（＝`GET /portfolios` 顯示的那把）。**可能沒安裝在鏈上。** */
-  configured: { permissionId: string; keyRef: string; installed: boolean } | null;
+  configured: { permissionId: string; keyRef: string; installed: boolean; expiresAt: string | null; status: string | null } | null;
   /** 排程器實際會用的那把（由新到舊逐把驗 `permissionConfig().signer`）。 */
-  usable: { permissionId: string; keyRef: string } | null;
+  usable: { permissionId: string; keyRef: string; expiresAt: string | null; status: string | null } | null;
   /** 讀不到安裝狀態時的錯誤。`usable === null` **只有在 `error === null`** 時才可以讀成「沒有可用的 key」。 */
   error: string | null;
 };

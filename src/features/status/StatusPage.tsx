@@ -98,6 +98,20 @@ function GasRow({ status, portfolioId }: { status: PortfolioStatus; portfolioId:
   );
 }
 
+/** 「還有幾天到期」——負數代表已過期。`null` = 沒有可解析的到期日。 */
+function daysUntil(iso: string | null): number | null {
+  if (iso === null) return null;
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return null;
+  return Math.floor((ms - Date.now()) / 86_400_000);
+}
+
+function expiryTone(days: number | null): string {
+  if (days === null) return 'muted';
+  if (days < 30) return days < 7 ? 'neg' : 'warn';
+  return 'pos';
+}
+
 function SessionKeyNote({ report }: { report: SessionKeyReport }): ReactNode {
   // `usable === null` 只有在 `error === null` 時才可以讀成「沒有可用的 key」。
   if (report.error !== null) {
@@ -110,27 +124,55 @@ function SessionKeyNote({ report }: { report: SessionKeyReport }): ReactNode {
   if (report.configured === null) {
     return <Note tone="bad">This portfolio has no session key recorded in the database.</Note>;
   }
-  if (report.configured.installed) {
-    return (
-      <div className="row">
-        <Badge tone="ok">Installed</Badge>
-        <span className="mono">{report.configured.permissionId}</span>
-        <span className="muted mono">{report.configured.keyRef}</span>
-      </div>
-    );
-  }
+
+  // 排程器**實際會用**的那一把（可能不是 DB 最新那把）—— 到期日要以它為準。
+  const active = report.usable ?? report.configured;
+  const days = daysUntil(active.expiresAt);
+  const when =
+    days === null
+      ? 'expiry unknown'
+      : days < 0
+        ? `expired ${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} ago — this fund cannot rebalance until it is renewed`
+        : `expires in ${days} day${days === 1 ? '' : 's'}`;
+
   return (
-    <Note tone="warn">
-      The key the database records <span className="mono">{report.configured.permissionId}</span> is <strong>not installed on-chain</strong>
-      {report.usable === null ? (
-        <>, and no installed active key exists → rebalancing will be blocked (this is not "waiting for the right moment").</>
-      ) : (
-        <>
-          ; the one actually used is <span className="mono">{report.usable.permissionId}</span>
-          <span className="muted mono">（{report.usable.keyRef}）</span>。
-        </>
-      )}
-    </Note>
+    <div className="stack" style={{ gap: 6 }}>
+      <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Badge tone={report.configured.installed ? 'ok' : 'warn'}>
+          {report.configured.installed ? 'Installed' : 'Not installed'}
+        </Badge>
+        {/* 使用者需要的只有這一件事：還有多久、要不要續期。 */}
+        <span className={expiryTone(days)}>{when}</span>
+        {days !== null && days < 30 ? (
+          <span className="muted" style={{ fontSize: 12 }}>
+            — renew below before it lapses (only your wallet can sign that; the backend cannot)
+          </span>
+        ) : null}
+      </div>
+
+      {/* 內部識別碼收起來：它們是維運用來對帳的，對使用者沒有意義；
+          而 keyRef 長得像派生路徑，出現在畫面上只會讓人以為 seed 洩漏了。 */}
+      <details>
+        <summary className="muted" style={{ fontSize: 12, cursor: 'pointer' }}>
+          technical details
+        </summary>
+        <div className="stack" style={{ gap: 4, marginTop: 6 }}>
+          <div className="mono muted" style={{ fontSize: 11 }}>
+            permissionId {report.configured.permissionId} · keyRef {report.configured.keyRef} · db status{' '}
+            {report.configured.status ?? 'unknown'}
+          </div>
+          <div className="mono muted" style={{ fontSize: 11 }}>
+            scheduler uses {active.permissionId} ({active.keyRef})
+            {active.permissionId !== report.configured.permissionId ? ' — not the newest row in the database' : ''}
+          </div>
+          {active.expiresAt === null ? null : (
+            <div className="mono muted" style={{ fontSize: 11 }}>
+              expires_at {active.expiresAt}
+            </div>
+          )}
+        </div>
+      </details>
+    </div>
   );
 }
 
