@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError, createStrategy, enrollPortfolio, getAssets, publishVersion } from '../../lib/api';
@@ -46,6 +46,14 @@ export function CreateFundPage(): ReactNode {
   const [weights, setWeights] = useState<Record<string, number>>({});
   const [intervalSeconds, setIntervalSeconds] = useState<number>(3600);
   const [step, setStep] = useState<Step>('idle');
+  /**
+   * 同步的「已有請求在飛」旗標。
+   *
+   * `step` 是 React state，要等到下一次 render 才會反映；**連點兩下會在兩次 render 之間送出兩個請求** ——
+   * 實際發生過：13 秒內建立了兩個一模一樣的策略與帳戶（#1599、#1600），各鏡像到鏈上、各部署一個
+   * smart account。`useRef` 的值是同步寫入的，所以第二下點擊進不來。
+   */
+  const inFlight = useRef(false);
   const [error, setError] = useState<unknown>(null);
   const [created, setCreated] = useState<{ strategyId: number; portfolioId: number } | null>(null);
 
@@ -73,6 +81,9 @@ export function CreateFundPage(): ReactNode {
 
   const submit = async (): Promise<void> => {
     if (token === null || !valid) return;
+    // 同步守衛：連點的第二下會在這裡被擋掉（state 還沒 re-render，按鈕也還沒 disabled）。
+    if (inFlight.current) return;
+    inFlight.current = true;
     setError(null);
     setCreated(null);
     try {
@@ -106,6 +117,8 @@ export function CreateFundPage(): ReactNode {
     } catch (cause) {
       setError(cause);
       setStep('idle');
+    } finally {
+      inFlight.current = false;
     }
   };
 
