@@ -297,6 +297,11 @@ export type PriceableAsset = {
   decimals: number;
   /** true = 計價基準幣（USDT）。策略的每一條腿都是「資產 ↔ numeraire」。 */
   isNumeraire: boolean;
+  /**
+   * executor 的 oracle router 有沒有為它註冊 per-pair oracle。
+   * `false` = 合約會 revert `OracleNotSet`，買不進去也賣不掉；`null` = 查不到（未知）。
+   */
+  tradable: boolean | null;
 };
 
 export function getAssets(token: string): Promise<PriceableAsset[]> {

@@ -192,6 +192,7 @@ export function CreateFundPage(): ReactNode {
               <tr>
                 <th>Pick</th>
                 <th>Ticker</th>
+                <th>Tradable</th>
                 <th>Address</th>
                 <th className="num">Weight %</th>
               </tr>
@@ -199,12 +200,16 @@ export function CreateFundPage(): ReactNode {
             <tbody>
               {assets.data.map((asset) => {
                 const isOn = weights[asset.address] !== undefined;
+                // `tradable === false` = router 沒有這個資產的 oracle：選了會建出一個永遠執行不了的策略
+                // （第一次再平衡才以 OracleNotSet 失敗）。null = 查不到，允許但標示未知。
+                const blocked = asset.tradable === false;
                 return (
                   <tr key={asset.address}>
                     <td>
                       <input
                         type="checkbox"
                         checked={isOn}
+                        disabled={blocked}
                         aria-label={`Select ${asset.symbol}`}
                         onChange={() => toggle(asset)}
                       />
@@ -217,6 +222,21 @@ export function CreateFundPage(): ReactNode {
                           numeraire
                         </span>
                       ) : null}
+                    </td>
+                    <td>
+                      {asset.tradable === true ? (
+                        <span className="pos" style={{ fontSize: 12 }}>
+                          yes
+                        </span>
+                      ) : asset.tradable === false ? (
+                        <span className="neg" style={{ fontSize: 12 }} title="the router has no oracle for this asset: swaps would revert OracleNotSet">
+                          no oracle
+                        </span>
+                      ) : (
+                        <span className="muted" style={{ fontSize: 12 }}>
+                          unknown
+                        </span>
+                      )}
                     </td>
                     <td className="mono muted" style={{ fontSize: 12 }}>
                       {asset.address.slice(0, 10)}…{asset.address.slice(-6)}
@@ -245,6 +265,14 @@ export function CreateFundPage(): ReactNode {
             </tbody>
           </table>
         )}
+
+        {assets.data !== undefined && assets.data.some((asset) => asset.tradable === false) ? (
+          <Note tone="warn">
+            Assets marked <strong>no oracle</strong> cannot be bought or sold yet: the executor&apos;s oracle router has no
+            per-pair oracle for them, so a swap would revert <code>OracleNotSet</code>. They are disabled here rather than
+            letting you build a fund that can never execute.
+          </Note>
+        ) : null}
 
         {totalBps !== 10_000 && selected.length > 0 ? (
           <Note tone="warn">
