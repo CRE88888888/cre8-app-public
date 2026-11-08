@@ -2,7 +2,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ApiError, createStrategy, enrollPortfolio, getAssets, publishVersion } from '../../lib/api';
+import { ApiError, createStrategy, enrollPortfolio, getAssets, getPortfolioStatus, publishVersion } from '../../lib/api';
+import { approveCalldata, sendGasTopUp, sendSudoCalls } from '../../lib/kernel';
+import type { RenewalWallet } from '../../lib/kernel';
+import { useWallet } from '../../store/wallet';
 import type { PriceableAsset } from '../../lib/api';
 import { queryKeys } from '../../lib/query';
 import { useBodyClass } from '../../lib/use-body-class';
@@ -16,12 +19,21 @@ const INTERVALS = [
   { label: 'Daily', seconds: 86_400 },
 ] as const;
 
-type Step = 'idle' | 'creating-strategy' | 'publishing-version' | 'enrolling' | 'done';
+type Step =
+  | 'idle'
+  | 'creating-strategy'
+  | 'publishing-version'
+  | 'enrolling'
+  | 'topping-up-gas'
+  | 'approving'
+  | 'done';
 
 const STEP_LABEL: Record<Exclude<Step, 'idle' | 'done'>, string> = {
   'creating-strategy': 'Creating the strategy (mirrors to the on-chain registry)…',
   'publishing-version': 'Publishing the version (weights + schedule)…',
   enrolling: 'Deploying the smart account (enroll)…',
+  'topping-up-gas': 'Sending gas to the new account…',
+  approving: 'Signing the approval (one wallet signature)…',
 };
 
 /**
@@ -38,8 +50,16 @@ export function CreateFundPage(): ReactNode {
   // The design's create page carries its own body class (`.create-page { background: var(--panel) }`).
   useBodyClass('create-page');
   const token = useSession((state) => state.token);
+  const walletState = useWallet();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  const renewalWallet: RenewalWallet | null =
+    walletState.kind === 'injected' && walletState.provider !== null && walletState.address !== null
+      ? { kind: 'injected', address: walletState.address as `0x${string}`, provider: walletState.provider }
+      : walletState.kind === 'dev' && walletState.devSigner !== null
+        ? { kind: 'dev', address: walletState.devSigner.address as `0x${string}`, account: walletState.devSigner.account }
+        : null;
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -56,6 +76,7 @@ export function CreateFundPage(): ReactNode {
   const inFlight = useRef(false);
   const [error, setError] = useState<unknown>(null);
   const [created, setCreated] = useState<{ strategyId: number; portfolioId: number } | null>(null);
+  const [approval, setApproval] = useState<{ tx: string | null; error: unknown } | null>(null);
 
   const assets = useQuery({
     queryKey: ['assets', token],
@@ -107,6 +128,46 @@ export function CreateFundPage(): ReactNode {
 
       setStep('enrolling');
       const portfolio = await enrollPortfolio(token, strategy.id);
+
+      /**
+       * 建立完就**順手把 approve 做完**，這樣「決定好資產與策略」之後只需要一次錢包簽名，
+       * 而不是事後還要記得去按一次 Approve。
+       *
+       * 兩件事依序發生，而且都會出現在進度上：
+       *   1. 帳戶沒有 BNB 時先轉 gas（approve 那筆 op 由帳戶自己付 gas）
+       *   2. owner 簽一筆 sudo UserOp，對每個策略資產 approve 給 executor
+       *
+       * 失敗不讓建立失敗 —— 投組已經上鏈了。錯誤會留在畫面上，Allowance 卡片可以重試。
+       */
+      let approval: { tx: string | null; error: unknown } = { tx: null, error: null };
+      if (renewalWallet !== null) {
+        try {
+          const status = await getPortfolioStatus(token, portfolio.id);
+          const executor = status.executorAddress;
+          if (executor !== null) {
+            const shortfall = BigInt(portfolio.gas?.shortfallWei ?? '0');
+            if (shortfall > 0n) {
+              setStep('topping-up-gas');
+              await sendGasTopUp({ wallet: renewalWallet, to: status.account as `0x${string}`, valueWei: shortfall });
+            }
+            setStep('approving');
+            const receipt = await sendSudoCalls({
+              wallet: renewalWallet,
+              token,
+              accountAddress: status.account as `0x${string}`,
+              calls: status.targets.map((target) => ({
+                to: target.asset as `0x${string}`,
+                data: approveCalldata(executor as `0x${string}`),
+                value: 0n,
+              })),
+            });
+            approval = { tx: receipt.txHash, error: null };
+          }
+        } catch (cause) {
+          approval = { tx: null, error: cause };
+        }
+      }
+      setApproval(approval);
 
       setCreated({ strategyId: strategy.id, portfolioId: portfolio.id });
       setStep('done');
@@ -351,6 +412,20 @@ export function CreateFundPage(): ReactNode {
             <div style={{ marginTop: 6 }}>
               Strategy #{created.strategyId} · portfolio #{created.portfolioId}
             </div>
+            {approval === null ? null : approval.error !== null ? (
+              <div style={{ marginTop: 8 }}>
+                <Note tone="warn">
+                  Fund created, but the approval did not go through. The account cannot rebalance until it is
+                  approved — open the portfolio and use the Allowance section to retry.
+                </Note>
+                <ErrorNote error={approval.error} />
+              </div>
+            ) : (
+              <div style={{ marginTop: 8, fontSize: 13 }}>
+                Assets approved for the executor{' '}
+                <span className="mono">({approval.tx?.slice(0, 12)}…)</span>
+              </div>
+            )}
             <div className="row" style={{ marginTop: 10 }}>
               <button
                 type="button"

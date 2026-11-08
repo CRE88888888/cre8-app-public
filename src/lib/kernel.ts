@@ -231,3 +231,30 @@ export async function readAllowance(args: {
     args: [args.owner, args.spender],
   })) as bigint;
 }
+
+/**
+ * 從 owner 錢包送 BNB 到某個位址（給新帳戶付 UserOp 的 gas）。
+ *
+ * 為什麼需要它：新帳戶部署時 operator 付 gas，但**之後**每一筆 UserOp（approve、再平衡）都由帳戶自己付。
+ * 帳戶沒有 BNB 時，approve 這筆 op 會因為付不出 gas 而失敗 —— 而錯誤訊息不會提到「沒錢」。
+ */
+export async function sendGasTopUp(args: {
+  wallet: RenewalWallet;
+  to: Address;
+  valueWei: bigint;
+}): Promise<Hex> {
+  if (args.wallet.kind === 'dev') {
+    const rpcUrl = import.meta.env.VITE_RPC_URL ?? (import.meta.env.DEV ? '/rpc' : undefined);
+    if (rpcUrl === undefined || rpcUrl === '') {
+      throw new Error('dev 私鑰模式需要一個 RPC 才能送交易：設 VITE_RPC_URL（dev 預設 /rpc）');
+    }
+    const client = createWalletClient({ account: args.wallet.account, chain: bsc, transport: http(rpcUrl) });
+    return client.sendTransaction({ to: args.to, value: args.valueWei, chain: bsc });
+  }
+  const client = createWalletClient({
+    account: args.wallet.address,
+    chain: bsc,
+    transport: custom(args.wallet.provider as never),
+  });
+  return client.sendTransaction({ to: args.to, value: args.valueWei, chain: bsc });
+}

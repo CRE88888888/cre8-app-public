@@ -332,11 +332,8 @@ export function publishVersion(
 }
 
 /** 把策略 enroll 成一個投組（會部署 smart account、上鏈）。 */
-export function enrollPortfolio(
-  token: string,
-  strategyId: number,
-): Promise<{ id: number; [key: string]: unknown }> {
-  return request('/portfolios', { method: 'POST', token, body: { strategyId } });
+export function enrollPortfolio(token: string, strategyId: number): Promise<Portfolio> {
+  return request<Portfolio>('/portfolios', { method: 'POST', token, body: { strategyId } });
 }
 
 /** 這個端點會掃 Transfer 日誌、讀池子、定價 —— 實測 2–3 秒，不是卡住。 */
