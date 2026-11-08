@@ -136,7 +136,13 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
               type="button"
               className="btn btn--ghost btn--sm"
               disabled={plan.isFetching}
-              onClick={() => void plan.refetch()}
+              onClick={() => {
+                // 兩個都要重抓。只重算 plan 會留下一個舊的 status（總值、漂移、block 都是 10 秒快取），
+                // 實際看到的症狀是「總值 $0.00 / drift 5000」旁邊掛著一份剛算好的 ready 計畫 ——
+                // 看起來像系統自相矛盾，其實只是兩個查詢的新鮮度不同。
+                void plan.refetch();
+                void queryClient.invalidateQueries({ queryKey: queryKeys.status(token, status.portfolioId) });
+              }}
             >
               {plan.isFetching ? 'Analysing…' : 'Re-analyse'}
             </button>
