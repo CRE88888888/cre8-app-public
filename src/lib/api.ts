@@ -102,6 +102,8 @@ export type SessionKeyReport = {
 
 export type PortfolioStatus = {
   portfolioId: number;
+  /** executor 位址（approve 的 spender）。null = 這個部署沒設 EXECUTOR_ADDRESS。 */
+  executorAddress: string | null;
   account: string;
   block: string;
   totalUsdE8: string;

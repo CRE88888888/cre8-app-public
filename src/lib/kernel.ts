@@ -22,7 +22,7 @@ import {
 import { KERNEL_V3_3 } from '@zerodev/sdk/constants';
 import type { GetKernelVersion } from '@zerodev/sdk/types';
 import { signerToEcdsaValidator } from '@zerodev/ecdsa-validator';
-import { createPublicClient, createWalletClient, custom, http } from 'viem';
+import { createPublicClient, createWalletClient, custom, encodeFunctionData, http } from 'viem';
 import type { Address, Chain, Hex, LocalAccount, PublicClient, WalletClient } from 'viem';
 
 const API_BASE: string = import.meta.env.VITE_API_BASE ?? '/api';
@@ -97,16 +97,19 @@ export type RenewalReceipt = {
  * `initConfig` 的每一筆都是**打給帳戶自己**的 calldata（`msg.sender == self` 才會被 Kernel 當成
  * 自我呼叫），所以 `to` 一定是 `accountAddress`。
  */
-export async function sendRenewalUserOp(args: {
+/**
+ * 用 owner 錢包送一筆 sudo UserOp，`calls` 原樣執行。
+ *
+ * 續期（安裝權限）與 approve 都是「帳戶自己做的事、需要 owner 簽名」，差別只在 calls 的內容 ——
+ * 所以組裝與送出只有這一份。
+ */
+export async function sendSudoCalls(args: {
   wallet: RenewalWallet;
-  /** 使用者的 session token：relay 用它認人，也用它套方法白名單。 */
   token: string;
   accountAddress: Address;
-  entryPoint: string;
-  initConfig: readonly Hex[];
+  calls: readonly { to: Address; data: Hex; value: bigint }[];
   timeoutMs?: number;
 }): Promise<RenewalReceipt> {
-  assertEntryPoint(args.entryPoint);
   const publicClient = publicClientFor(args.wallet);
   const entryPoint = ENTRY_POINT as never;
   const kernelVersion: GetKernelVersion<'0.7'> = KERNEL_V3_3;
@@ -145,8 +148,7 @@ export async function sendRenewalUserOp(args: {
     },
   });
 
-  const calls = args.initConfig.map((data) => ({ to: args.accountAddress, data, value: 0n }));
-  const userOpHash = await accountClient.sendUserOperation({ calls });
+  const userOpHash = await accountClient.sendUserOperation({ calls: args.calls });
   const receipt = await accountClient.waitForUserOperationReceipt({
     hash: userOpHash,
     timeout: args.timeoutMs ?? 180_000,
@@ -158,4 +160,74 @@ export async function sendRenewalUserOp(args: {
     success: receipt.success,
     gasUsed: receipt.actualGasUsed?.toString() ?? null,
   };
+}
+
+/**
+ * 續期：把 `initConfig` 的每一筆當成一個 call（`to` 是帳戶自己 —— `msg.sender == self`）。
+ *
+ * 包在 `sendSudoCalls` 外面只是為了留住「續期」這個名字，行為完全一樣。
+ */
+export async function sendRenewalUserOp(args: {
+  wallet: RenewalWallet;
+  token: string;
+  accountAddress: Address;
+  entryPoint: string;
+  initConfig: readonly Hex[];
+  timeoutMs?: number;
+}): Promise<RenewalReceipt> {
+  assertEntryPoint(args.entryPoint);
+  return sendSudoCalls({
+    wallet: args.wallet,
+    token: args.token,
+    accountAddress: args.accountAddress,
+    calls: args.initConfig.map((data) => ({ to: args.accountAddress, data, value: 0n })),
+    ...(args.timeoutMs === undefined ? {} : { timeoutMs: args.timeoutMs }),
+  });
+}
+
+/** ERC-20 `approve` 的 calldata（`uint256(2**256-1)` = 無限額度）。 */
+export function approveCalldata(spender: Address): Hex {
+  return encodeFunctionData({
+    abi: [
+      {
+        type: 'function',
+        name: 'approve',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'spender', type: 'address' },
+          { name: 'amount', type: 'uint256' },
+        ],
+        outputs: [{ name: '', type: 'bool' }],
+      },
+    ] as const,
+    functionName: 'approve',
+    args: [spender, (1n << 256n) - 1n],
+  });
+}
+
+/** 帳戶對 spender 的 ERC-20 allowance。 */
+export async function readAllowance(args: {
+  wallet: RenewalWallet;
+  token: Address;
+  owner: Address;
+  spender: Address;
+}): Promise<bigint> {
+  const client = publicClientFor(args.wallet);
+  return (await client.readContract({
+    address: args.token,
+    abi: [
+      {
+        type: 'function',
+        name: 'allowance',
+        stateMutability: 'view',
+        inputs: [
+          { name: 'owner', type: 'address' },
+          { name: 'spender', type: 'address' },
+        ],
+        outputs: [{ name: '', type: 'uint256' }],
+      },
+    ] as const,
+    functionName: 'allowance',
+    args: [args.owner, args.spender],
+  })) as bigint;
 }

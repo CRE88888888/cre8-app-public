@@ -1,7 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
+import type { Address } from 'viem';
 import { ApiError, getRebalancePlan, postRebalance } from '../../lib/api';
+import { approveCalldata, readAllowance, sendSudoCalls } from '../../lib/kernel';
+import type { RenewalWallet } from '../../lib/kernel';
+import { useWallet } from '../../store/wallet';
 import type { PortfolioStatus, RebalanceResult } from '../../lib/api';
 import { formatBps, formatUsdE8, shortAddress } from '../../lib/format';
 import { queryKeys } from '../../lib/query';
@@ -30,12 +34,6 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
   const needs = status.drift.needsRebalance;
   const blocked = status.blocked.length > 0;
 
-  /**
-   * 送出前的 dry-run 預覽。**這是這個卡片最重要的一塊**：使用者按下去之前就該知道
-   * 「這一輪不會動、以及為什麼」（例如市場偏離 TWAP 讓 impact 預算做不了事）。
-   *
-   * 只在「真的需要再平衡而且沒被 blocked」時抓 —— 其餘情況卡片已經自己說明了，不必再花 2–3 秒讀鏈。
-   */
   const plan = useQuery({
     queryKey: queryKeys.plan(token, status.portfolioId),
     queryFn: () => getRebalancePlan(token as string, status.portfolioId),
@@ -43,6 +41,86 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
   });
   const planOutcome = plan.data?.outcome ?? null;
   const canRun = planOutcome === 'ready';
+
+  const walletState = useWallet();
+  /**
+   * allowance 是**新投組最常見的卡點**：`AtpExecutor` 用 `safeTransferFrom` 從帳戶拉幣，而
+   * `POST /portfolios` 不會開、session key 也開不了（CallPolicy 只白名單 executeRebalance）。
+   * 所以這裡讓 owner 錢包直接簽一筆 sudo UserOp 開下去 —— 這是唯一合法的簽名者。
+   */
+  const renewalWallet: RenewalWallet | null =
+    walletState.kind === 'injected' && walletState.provider !== null && walletState.address !== null
+      ? { kind: 'injected', address: walletState.address as Address, provider: walletState.provider }
+      : walletState.kind === 'dev' && walletState.devSigner !== null
+        ? { kind: 'dev', address: walletState.devSigner.address as Address, account: walletState.devSigner.account }
+        : null;
+
+  const [allowances, setAllowances] = useState<{ symbol: string; token: string; allowance: bigint }[] | null>(null);
+  const [approving, setApproving] = useState(false);
+  const [approveError, setApproveError] = useState<unknown>(null);
+  const [approveTx, setApproveTx] = useState<string | null>(null);
+
+  const executor = status.executorAddress;
+  const probeAllowances = useCallback(async () => {
+    if (renewalWallet === null || executor === null) return;
+    setApproveError(null);
+    try {
+      const rows = await Promise.all(
+        status.targets.map(async (target) => ({
+          symbol: target.symbol,
+          token: target.asset,
+          allowance:
+            target.asset.toLowerCase() === executor.toLowerCase()
+              ? 0n
+              : await readAllowance({
+                  wallet: renewalWallet,
+                  token: target.asset as Address,
+                  owner: status.account as Address,
+                  spender: executor as Address,
+                }),
+        })),
+      );
+      setAllowances(rows);
+    } catch (cause) {
+      setApproveError(cause);
+    }
+  }, [executor, renewalWallet, status.account, status.targets]);
+
+  const doApprove = useCallback(async () => {
+    if (renewalWallet === null || executor === null || token === null) return;
+    setApproving(true);
+    setApproveError(null);
+    try {
+      const receipt = await sendSudoCalls({
+        wallet: renewalWallet,
+        token,
+        accountAddress: status.account as Address,
+        calls: status.targets
+          // 只 approve 策略裡的代幣；numeraire 也是策略資產，所以照樣要開（它就是要被拉走的那個）。
+          .map((target) => ({
+            to: target.asset as Address,
+            data: approveCalldata(executor as Address),
+            value: 0n,
+          })),
+      });
+      setApproveTx(receipt.txHash);
+      await probeAllowances();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.status(token, status.portfolioId) });
+      await plan.refetch();
+    } catch (cause) {
+      setApproveError(cause);
+    } finally {
+      setApproving(false);
+    }
+  }, [executor, plan, probeAllowances, queryClient, renewalWallet, status.account, status.portfolioId, status.targets, token]);
+
+  /**
+   * 送出前的 dry-run 預覽。**這是這個卡片最重要的一塊**：使用者按下去之前就該知道
+   * 「這一輪不會動、以及為什麼」（例如市場偏離 TWAP 讓 impact 預算做不了事）。
+   *
+   * 只在「真的需要再平衡而且沒被 blocked」時抓 —— 其餘情況卡片已經自己說明了，不必再花 2–3 秒讀鏈。
+   */
+
 
   const run = useCallback(async () => {
     if (token === null) return;
@@ -116,6 +194,80 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
             No dry-run was made — it only runs when a rebalance is actually needed, to save a 2–3 second chain read.
           </p>
         </>
+      )}
+
+      {/* allowance：新投組最常見的卡點。owner 錢包簽一筆 sudo UserOp 就能解決。 */}
+      {executor === null ? null : (
+        <div className="stack" style={{ gap: 8 }}>
+          <div className="row" style={{ justifyContent: 'space-between' }}>
+            <span className="muted" style={{ fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+              Allowance
+            </span>
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              disabled={renewalWallet === null}
+              onClick={() => void probeAllowances()}
+            >
+              {allowances === null ? 'Check allowance' : 'Re-check'}
+            </button>
+          </div>
+
+          {allowances === null ? (
+            <Note>
+              The executor pulls tokens from the account with <code>safeTransferFrom</code>, so the account must
+              approve it first. A session key cannot do this (its CallPolicy only allows <code>executeRebalance</code>)
+              and enrolling does not do it either — so a brand-new fund is blocked at its first rebalance until the
+              owner approves once. Connect the owner wallet and press Check allowance.
+            </Note>
+          ) : (
+            <>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Token</th>
+                    <th className="num">Allowance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allowances.map((row) => (
+                    <tr key={row.token}>
+                      <td>{row.symbol}</td>
+                      <td className={`num ${row.allowance > 0n ? 'pos' : 'neg'}`}>
+                        {row.allowance > 0n ? 'approved' : '0 — not approved'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {allowances.every((row) => row.allowance > 0n) ? null : (
+                <div className="row">
+                  <button
+                    type="button"
+                    className="btn btn--primary"
+                    style={{ maxWidth: 280 }}
+                    disabled={approving || renewalWallet === null}
+                    onClick={() => void doApprove()}
+                  >
+                    {approving ? 'Approving…' : 'Approve assets (owner signature)'}
+                  </button>
+                  {renewalWallet === null ? (
+                    <span className="muted" style={{ fontSize: 12 }}>
+                      connect the owner wallet first
+                    </span>
+                  ) : null}
+                </div>
+              )}
+            </>
+          )}
+
+          {approveTx === null ? null : (
+            <Note>
+              Approved on-chain. tx <span className="mono">{approveTx}</span>
+            </Note>
+          )}
+          <ErrorNote error={approveError} />
+        </div>
       )}
 
       {/* 預覽：按下去之前就知道會發生什麼 */}
