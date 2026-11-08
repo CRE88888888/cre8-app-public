@@ -104,6 +104,12 @@ export type PortfolioStatus = {
   portfolioId: number;
   /** executor 位址（approve 的 spender）。null = 這個部署沒設 EXECUTOR_ADDRESS。 */
   executorAddress: string | null;
+  /**
+   * 這個帳戶的原生幣 gas 狀態。**一個帳戶 = 一個「owner + 策略」組合**，所以 gas 是各自獨立的：
+   * 這檔基金還能不能動，取決於它自己還有多少 BNB。
+   * `null` = 查不到（RPC 掛），不是「餘額 0」。
+   */
+  gas: GasState;
   account: string;
   block: string;
   totalUsdE8: string;

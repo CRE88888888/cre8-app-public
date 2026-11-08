@@ -1,14 +1,110 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { formatEther, parseEther } from 'viem';
 import { getPortfolioStatus } from '../../lib/api';
 import type { PortfolioStatus, SessionKeyReport } from '../../lib/api';
 import { formatBps, formatUsdE8, shortAddress, toneForBps } from '../../lib/format';
 import { queryKeys } from '../../lib/query';
 import { useSession } from '../../store/session';
+import { useOwnerWallet } from '../../lib/use-owner-wallet';
+import { sendGasTopUp } from '../../lib/kernel';
 import { Badge, ErrorNote, Note, Spinner } from '../../components/ui';
 import { RebalanceCard } from '../rebalance/RebalanceCard';
 import { RenewalCard } from '../renewal/RenewalCard';
+
+/**
+ * 帳戶的 gas 一列（放在 gross drift 下面）。
+ *
+ * 為什麼值得單獨一列：**gas 是每個帳戶自己付的**（ERC-4337 的 sender 模型），而一個帳戶 = 一個
+ * 「owner + 策略」組合。所以「這檔基金還能不能動」=「它自己還有沒有 BNB」——
+ * 這件事跟別的投組無關，而使用者原本只能在一團 op 失敗訊息裡猜到。
+ *
+ * Top up 用 owner 錢包轉 BNB。**後端做不到這件事**（沒有 owner 私鑰，session key 也不能轉帳），
+ * 所以只能由使用者在這裡按一次。
+ */
+function GasRow({ status, portfolioId }: { status: PortfolioStatus; portfolioId: number }): ReactNode {
+  const token = useSession((state) => state.token);
+  const wallet = useOwnerWallet();
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const [sent, setSent] = useState<string | null>(null);
+
+  const gas = status.gas;
+  // 沒 gas 資訊就誠實說不知道，不要顯示 0（那會被讀成「沒錢」）。
+  if (gas === null || gas === undefined) {
+    return (
+      <>
+        <dt>gas</dt>
+        <dd className="muted">unknown — the RPC could not be read, so this is not the same as “no balance”</dd>
+      </>
+    );
+  }
+
+  const shortfall = BigInt(gas.shortfallWei ?? '0');
+  // 已經 ready 時再補「一次 op 的量」的兩倍，讓它有餘裕；不足時補到門檻。
+  const suggestedWei = shortfall > 0n ? shortfall : parseEther('0.01');
+
+  const topUp = useCallback(async () => {
+    if (wallet === null || token === null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const hash = await sendGasTopUp({ wallet, to: status.account as `0x${string}`, valueWei: suggestedWei });
+      setSent(hash);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.status(token, portfolioId) });
+    } catch (cause) {
+      setError(cause);
+    } finally {
+      setBusy(false);
+    }
+  }, [portfolioId, queryClient, status.account, suggestedWei, token, wallet]);
+
+  return (
+    <>
+      <dt>gas</dt>
+      <dd>
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>
+            <strong className={gas.ready === true ? 'pos' : 'neg'}>{Number(formatEther(BigInt(gas.balanceWei ?? '0'))).toFixed(6)} BNB</strong>
+            <span className="muted">
+              {' '}
+              / minimum {Number(formatEther(BigInt(gas.minimumWei ?? '0'))).toFixed(4)} BNB · about{' '}
+              {gas.estimatedOps ?? 0} op{gas.estimatedOps === 1 ? '' : 's'} left · paid by this account, not by you
+            </span>
+            {gas.ready === true ? null : (
+              <span className="neg"> · needs {Number(formatEther(shortfall)).toFixed(6)} BNB</span>
+            )}
+          </span>
+          <span className="row" style={{ gap: 8, alignItems: 'center' }}>
+            {wallet === null ? (
+              // 停用的按鈕不該只有 hover 才說原因：連錢包是唯一的解法，就寫出來。
+              <span className="muted" style={{ fontSize: 12 }}>
+                connect the owner wallet to top up
+              </span>
+            ) : null}
+            <button
+              type="button"
+              className="btn btn--sm"
+              disabled={busy || wallet === null}
+              onClick={() => void topUp()}
+            >
+              {busy ? 'Sending…' : `Top up ${Number(formatEther(suggestedWei)).toFixed(4)} BNB`}
+            </button>
+          </span>
+        </div>
+        {sent === null ? null : (
+          <div className="muted mono" style={{ fontSize: 11, marginTop: 4 }}>
+            top-up sent: {sent}
+          </div>
+        )}
+        <ErrorNote error={error} />
+      </dd>
+    </>
+  );
+}
 
 function SessionKeyNote({ report }: { report: SessionKeyReport }): ReactNode {
   // `usable === null` 只有在 `error === null` 時才可以讀成「沒有可用的 key」。
@@ -74,6 +170,8 @@ function StatusBody({ status }: { status: PortfolioStatus }): ReactNode {
           </span>
           <span className={needs ? 'neg' : 'pos'}>{needs ? 'yes' : 'no'}</span>
         </dd>
+
+        <GasRow status={status} portfolioId={status.portfolioId} />
       </dl>
 
       {status.complete ? null : (
