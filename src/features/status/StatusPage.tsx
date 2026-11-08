@@ -66,34 +66,26 @@ function GasRow({ status, portfolioId }: { status: PortfolioStatus; portfolioId:
     <>
       <dt>gas</dt>
       <dd>
-        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>
-            <strong className={gas.ready === true ? 'pos' : 'neg'}>{Number(formatEther(BigInt(gas.balanceWei ?? '0'))).toFixed(6)} BNB</strong>
-            <span className="muted">
-              {' '}
-              / minimum {Number(formatEther(BigInt(gas.minimumWei ?? '0'))).toFixed(4)} BNB · about{' '}
-              {gas.estimatedOps ?? 0} op{gas.estimatedOps === 1 ? '' : 's'} left · paid by this account, not by you
+        {/* 只留「gas + 餘額」，按鈕放在餘額左邊（先動作、再數字）。 */}
+        <div className="row" style={{ justifyContent: 'flex-end', alignItems: 'center', gap: 10 }}>
+          <button
+            type="button"
+            className="btn btn--sm"
+            disabled={busy || wallet === null}
+            title={wallet === null ? 'connect the owner wallet to top up' : undefined}
+            onClick={() => void topUp()}
+          >
+            {busy ? 'Sending…' : `Top up ${Number(formatEther(suggestedWei)).toFixed(4)} BNB`}
+          </button>
+          <strong className={gas.ready === true ? 'pos' : 'neg'}>
+            {Number(formatEther(BigInt(gas.balanceWei ?? '0'))).toFixed(6)} BNB
+          </strong>
+          {/* 只有「付不出下一筆」時才多這一句：那時光看餘額不知道要補多少。 */}
+          {gas.ready === true ? null : (
+            <span className="neg" style={{ fontSize: 12 }}>
+              needs {Number(formatEther(shortfall)).toFixed(6)}
             </span>
-            {gas.ready === true ? null : (
-              <span className="neg"> · needs {Number(formatEther(shortfall)).toFixed(6)} BNB</span>
-            )}
-          </span>
-          <span className="row" style={{ gap: 8, alignItems: 'center' }}>
-            {wallet === null ? (
-              // 停用的按鈕不該只有 hover 才說原因：連錢包是唯一的解法，就寫出來。
-              <span className="muted" style={{ fontSize: 12 }}>
-                connect the owner wallet to top up
-              </span>
-            ) : null}
-            <button
-              type="button"
-              className="btn btn--sm"
-              disabled={busy || wallet === null}
-              onClick={() => void topUp()}
-            >
-              {busy ? 'Sending…' : `Top up ${Number(formatEther(suggestedWei)).toFixed(4)} BNB`}
-            </button>
-          </span>
+          )}
         </div>
         {sent === null ? null : (
           <div className="muted mono" style={{ fontSize: 11, marginTop: 4 }}>
