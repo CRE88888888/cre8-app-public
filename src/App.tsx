@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { PhaseBanner } from './components/PhaseBanner';
 import { RequireSession } from './components/RequireSession';
 import { TopBar } from './components/TopBar';
 import { LoginPage } from './features/auth/LoginPage';
@@ -11,6 +12,7 @@ import { StatusPage } from './features/status/StatusPage';
 export function App(): ReactNode {
   return (
     <>
+      <PhaseBanner />
       <TopBar />
       <Routes>
         <Route path="/login" element={<LoginPage />} />

@@ -8,12 +8,39 @@ import { useWallet } from '../store/wallet';
 import { Badge } from './ui';
 
 /**
+ * CRE8 字標：`CRE` + 一個滾動的骰子轉盤停在 8。
+ *
+ * 這是原站的 `.c8-logo`（純 HTML + CSS，見 design.css 的 `c8roll` keyframes）。原本我們只印了
+ * 「CRE8 · ATP」這段文字 —— 那正是「logo 消失」的原因：樣式一直都在，缺的是這段 markup。
+ *
+ * 轉盤的 9 個 `<i>` 是必要的：`.c8-reel` 的靜態 transform 停在 `-8.952em`，那剛好是第 9 個
+ * 數字（8）的位置；少一個就會停在別的數字上。
+ */
+function C8Logo(): ReactNode {
+  return (
+    <span className="c8-logo" role="img" aria-label="CRE8">
+      <span className="c8-cre" aria-hidden="true">
+        CRE
+      </span>
+      <span className="c8-tile" aria-hidden="true">
+        <span className="c8-win">
+          <span className="c8-reel">
+            {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((digit) => (
+              <i key={digit}>{digit}</i>
+            ))}
+          </span>
+        </span>
+      </span>
+    </span>
+  );
+}
+
+/**
  * 標頭的「Connect wallet」。
  *
- * 行為刻意分成兩種：
+ * 行為分成兩種：
  *   * 只偵測到一個錢包 → 直接連（最少點擊）。
  *   * 偵測到多個 → 帶去 `/login` 讓使用者選（並順便在那裡完成 SIWE）。
- * 把「連線」與「挑錢包」混在同一顆按鈕裡的做法（開一個 modal）需要更多狀態，而 `/login` 已經有了。
  */
 function ConnectWalletButton(): ReactNode {
   const navigate = useNavigate();
@@ -27,7 +54,6 @@ function ConnectWalletButton(): ReactNode {
     try {
       const providers = await discoverProviders();
       if (providers.length === 0) {
-        // 沒有 EIP-6963 錢包時不要假裝成功：把使用者送到登入頁，那裡有 dev 私鑰的入口（DEV build）。
         navigate('/login');
         return;
       }
@@ -39,8 +65,6 @@ function ConnectWalletButton(): ReactNode {
       if (detail === undefined) return;
       const address = await connectProvider(detail.provider);
       wallet.connectInjected({ address, rdns: detail.info.rdns, provider: detail.provider });
-      // 連上錢包不等於登入：SIWE 還是要走一次（token 是後端認人的依據）。
-      navigate('/login');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -48,76 +72,63 @@ function ConnectWalletButton(): ReactNode {
     }
   }, [navigate, wallet]);
 
-  return (
-    <div className="row" style={{ gap: 8 }}>
-      {error === null ? null : (
-        <span className="neg" style={{ fontSize: 12 }} title={error}>
-          Connect failed
-        </span>
-      )}
-      <button type="button" className="btn btn--sm" disabled={busy} onClick={() => void connect()}>
-        {busy ? 'Detecting…' : 'Connect wallet'}
+  if (wallet.address !== null) {
+    return (
+      <button type="button" className="btn sm header-wallet" onClick={() => wallet.disconnect()}>
+        <span className="mono">{shortAddress(wallet.address)}</span>
       </button>
-    </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="btn sm header-wallet"
+      disabled={busy}
+      title={error ?? undefined}
+      onClick={() => void connect()}
+    >
+      {busy ? 'Detecting…' : 'Connect wallet'}
+    </button>
   );
 }
 
+/**
+ * 標頭。刻意照原站的 markup 寫（`header.masthead.app-masthead > .wrap`），因為樣式全在 `design.css` 裡：
+ * 換掉結構就會掉樣式 —— 這是這一輪「UI 看起來不像原站」最主要的原因。
+ *
+ * 導覽只放**真的有頁面**的兩項。原站還有 `CRE8 AI` 與 `Leaderboard`，我們沒有那兩個頁面；
+ * 放上去就是死連結，比少一個項目更糟。
+ */
 export function TopBar(): ReactNode {
-  const address = useSession((state) => state.address);
   const token = useSession((state) => state.token);
-  const walletAddress = useWallet((state) => state.address);
-  const clearSession = useSession((state) => state.clear);
-  const disconnectWallet = useWallet((state) => state.disconnect);
-  const navigate = useNavigate();
 
   return (
-    <header className="topbar">
-      <div className="topbar__inner">
-        <div className="row" style={{ gap: 20 }}>
-          <Link className="brand" to="/vaults">
-            CRE8 · ATP
-          </Link>
-          <nav className="row" style={{ gap: 14 }}>
-            <NavLink
-              to="/vaults"
-              style={({ isActive }) => ({ fontSize: 14, opacity: isActive ? 1 : 0.6 })}
-            >
-              Vaults
-            </NavLink>
-            <NavLink
-              to="/create"
-              style={({ isActive }) => ({ fontSize: 14, opacity: isActive ? 1 : 0.6 })}
-            >
-              Create
-            </NavLink>
-          </nav>
-        </div>
+    <header className="masthead app-masthead">
+      <div className="wrap">
+        <Link className="brand" to="/vaults" aria-label="CRE8 home">
+          <C8Logo />
+        </Link>
 
-        <div className="row" style={{ gap: 12 }}>
-          {token !== null ? null : walletAddress === null ? (
-            <ConnectWalletButton />
-          ) : (
-            <span className="mono" style={{ fontSize: 13 }} title={walletAddress}>
-              {shortAddress(walletAddress)}
-            </span>
-          )}
+        <nav className="nav" aria-label="Main navigation">
+          <NavLink to="/vaults" className={({ isActive }) => (isActive ? 'active' : '')}>
+            Funds
+          </NavLink>
+          <NavLink to="/create" className={({ isActive }) => (isActive ? 'active' : '')}>
+            Create fund
+          </NavLink>
+        </nav>
 
-          {address === null ? null : (
-            <>
-              <Badge tone={token === null ? 'warn' : 'ok'}>{token === null ? 'No token' : 'Signed in'}</Badge>
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                onClick={() => {
-                  clearSession();
-                  disconnectWallet();
-                  navigate('/login');
-                }}
-              >
-                Sign out
-              </button>
-            </>
+        <div className="head-right">
+          <NavLink to="/portfolios" className={({ isActive }) => `head-link ${isActive ? 'active' : ''}`}>
+            Portfolio
+          </NavLink>
+          {token === null ? null : (
+            <Badge tone="ok" >
+              Signed in
+            </Badge>
           )}
+          <ConnectWalletButton />
         </div>
       </div>
     </header>

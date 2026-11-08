@@ -1,0 +1,66 @@
+/**
+ * `Testnet phase` 跑馬燈。
+ *
+ * 從原站（app.cre8.finance）的 `phase-banner.module.css` 逐條移植過來 —— 原站用的是 CSS module，
+ * 我們是純 CSS，所以把 class 換成 `phase-*` 前綴，數值一個沒改（28px 高、24s 一輪、字距 .14em）。
+ *
+ * 為什麼要放在 `<body>` 最前面而不是包在版面容器裡：它貼著視窗頂端，`.masthead` 的 sticky 位置
+ * 是相對 body 計算的（原站的 `display: contents` wrapper 就是為此）。
+ */
+.phase-banner {
+  height: 28px;
+  overflow: hidden;
+  background: #162632;
+  color: #fff;
+  font: 11px/28px var(--mono, monospace);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+/* 螢幕閱讀器讀得到，但不在畫面上佔位（跑馬燈的內容是重複的裝飾）。 */
+.phase-banner__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.phase-banner__track {
+  display: flex;
+  width: max-content;
+  animation: phase-scroll 24s linear infinite;
+}
+
+.phase-banner__group {
+  display: flex;
+  justify-content: space-around;
+  flex-shrink: 0;
+  width: max(100vw, 640px);
+}
+
+.phase-banner__group span {
+  white-space: nowrap;
+}
+
+.phase-banner__group i {
+  margin-left: 32px;
+  font-style: normal;
+  opacity: 0.45;
+}
+
+.phase-banner:hover .phase-banner__track {
+  animation-play-state: paused;
+}
+
+@keyframes phase-scroll {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phase-banner__track {
+    animation: none;
+  }
+}

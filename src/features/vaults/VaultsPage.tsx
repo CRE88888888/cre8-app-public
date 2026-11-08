@@ -10,6 +10,7 @@ import { useBodyClass } from '../../lib/use-body-class';
 import { useSession } from '../../store/session';
 import { MOCK_FUNDS } from '../../data/mock-funds';
 import type { MockFund } from '../../data/mock-funds';
+import { AssetLogos } from '../../components/AssetLogo';
 import { Badge, ErrorNote, Spinner } from '../../components/ui';
 
 
@@ -78,13 +79,7 @@ function MockFundRow({ fund }: { fund: MockFund }): ReactNode {
         </div>
 
         <div className="fund-row-assets">
-          <span className="fund-row-logos">
-            {preview.map((holding) => (
-              <span key={holding.symbol} className="badge" style={{ height: 20, fontSize: 10 }}>
-                {holding.symbol}
-              </span>
-            ))}
-          </span>
+          <AssetLogos symbols={preview.map((holding) => holding.symbol)} />
           <span>
             {fund.holdings
               .slice(0, 3)
@@ -144,13 +139,7 @@ function LiveRow({ portfolio, status }: { portfolio: Portfolio; status: Portfoli
         </div>
 
         <div className="fund-row-assets">
-          <span className="fund-row-logos">
-            {(status?.targets ?? []).map((target) => (
-              <span key={target.asset} className="badge" style={{ height: 20, fontSize: 10 }}>
-                {target.symbol}
-              </span>
-            ))}
-          </span>
+          <AssetLogos symbols={(status?.targets ?? []).map((target) => target.symbol)} />
           <span>
             {status === undefined
               ? '—'

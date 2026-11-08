@@ -14,6 +14,7 @@ import './styles/vendor/fund-explore.css';
 import './styles/tokens.css';
 import './styles/base.css';
 import './styles/components.css';
+import './styles/phase-banner.css';
 
 const container = document.getElementById('root');
 if (container === null) throw new Error('#root is missing: index.html was modified');
