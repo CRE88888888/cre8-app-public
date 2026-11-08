@@ -20,8 +20,8 @@ flowchart TD
 
     D --> E{要做什麼?}
     E -- 建新基金 --> F[Create fund]
-    E -- 看自己的 --> G[/portfolios]
-    E -- 操作某一檔 --> H[/portfolios/:id]
+    E -- 看自己的 --> G["/portfolios"]
+    E -- 操作某一檔 --> H["/portfolios/:id"]
 
     F --> F1[取名稱]
     F1 --> F2[選資產 + 權重<br/>沒有 oracle 的資產是灰的]
@@ -186,9 +186,9 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    A[排程器/告警<br/>偵測 key 剩 < 30 天] -->|warn| B[使用者看到提醒]
-    A -->|剩 < 7 天：critical| B
-    B --> C[/portfolios/:id<br/>Install a new session key]
+    A["排程器 / 告警<br/>偵測 key 剩少於 30 天"] -->|warn| B[使用者看到提醒]
+    A -->|"剩少於 7 天：critical"| B
+    B --> C["/portfolios/:id<br/>Install a new session key"]
     C --> D[GET /renewal-params<br/>後端派生新 key + initConfig]
     D --> E[owner 錢包簽一筆 sudo UserOp]
     E --> F[帳戶 installValidation<br/>把新權限裝到自己身上]

@@ -353,14 +353,14 @@ erDiagram
 
 ```mermaid
 flowchart TD
-    A[認領 portfolio<br/>schedule_state=active 且 next_run_at<=now] --> B[讀持倉]
+    A["認領 portfolio<br/>schedule_state = active 且 next_run_at 已到期"] --> B[讀持倉]
     B --> B1[掃 Transfer 日誌找候選代幣]
     B1 --> B2[multicall balanceOf 確認非零]
     B2 --> B3[定價：numeraire + oracle floor]
     B3 --> C{總值 = 0?}
     C -- 是 --> C1[noop：空倉]
     C -- 否 --> D[算漂移 vs 目標權重]
-    D --> E{漂移 < 門檻?}
+    D --> E{"漂移小於門檻?"}
     E -- 是 --> E1[noop：不需要動]
     E -- 否 --> F[決定順序：先賣後買<br/>買的預算 = 現有 numeraire + 賣出保證淨額]
     F --> G[每一步算 amountIn<br/>夾到持倉 / 夾到預算]

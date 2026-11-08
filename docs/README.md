@@ -9,6 +9,21 @@
 
 兩份都是用 **Mermaid** 寫的，GitHub 會直接渲染成圖。
 
+### 改完圖之後怎麼確認它真的渲染得出來
+
+Mermaid 有兩個不容易自己看出來的陷阱（都真的發生過）：
+
+| 寫法 | 為什麼錯 | 修法 |
+|---|---|---|
+| `G[/portfolios]` | `[/` 是**平行四邊形的起始符**，不是文字 → lexer 找不到結尾就報 `Lexical error` | `G["/portfolios"]` |
+| `漂移 < 門檻` | 裸的 `<` 會被當成 HTML 標籤開頭 | 加引號 `{"漂移小於門檻?"}`，或改寫成文字 |
+
+驗證方式（不用裝任何東西）：用 headless Chrome 開一個載入
+`https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs` 的頁面，把每個區塊丟給
+`await mermaid.parse(code)`，逐一收集成功／失敗。目前 **12 個區塊全部通過**。
+
+⚠ 只看 Markdown 是看不出來的 —— 這兩個錯誤要真的解析才會現形。
+
 ## 三句話版本
 
 1. **每個（使用者, 策略）組合得到一個 Kernel v3.3 智慧帳戶（ERC-4337）** —— 錢在帳戶裡，
