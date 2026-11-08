@@ -1,11 +1,6 @@
-import { useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { connectProvider, discoverProviders } from '../lib/wallet';
-import { shortAddress } from '../lib/format';
-import { useSession } from '../store/session';
-import { useWallet } from '../store/wallet';
-import { Badge } from './ui';
+import { Link, NavLink } from 'react-router-dom';
+import { WalletMenu } from './WalletMenu';
 
 /**
  * CRE8 字標：`CRE` + 一個滾動的骰子轉盤停在 8。
@@ -36,64 +31,6 @@ function C8Logo(): ReactNode {
 }
 
 /**
- * 標頭的「Connect wallet」。
- *
- * 行為分成兩種：
- *   * 只偵測到一個錢包 → 直接連（最少點擊）。
- *   * 偵測到多個 → 帶去 `/login` 讓使用者選（並順便在那裡完成 SIWE）。
- */
-function ConnectWalletButton(): ReactNode {
-  const navigate = useNavigate();
-  const wallet = useWallet();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const connect = useCallback(async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      const providers = await discoverProviders();
-      if (providers.length === 0) {
-        navigate('/login');
-        return;
-      }
-      if (providers.length > 1) {
-        navigate('/login');
-        return;
-      }
-      const detail = providers[0];
-      if (detail === undefined) return;
-      const address = await connectProvider(detail.provider);
-      wallet.connectInjected({ address, rdns: detail.info.rdns, provider: detail.provider });
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setBusy(false);
-    }
-  }, [navigate, wallet]);
-
-  if (wallet.address !== null) {
-    return (
-      <button type="button" className="btn sm header-wallet" onClick={() => wallet.disconnect()}>
-        <span className="mono">{shortAddress(wallet.address)}</span>
-      </button>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      className="btn sm header-wallet"
-      disabled={busy}
-      title={error ?? undefined}
-      onClick={() => void connect()}
-    >
-      {busy ? 'Detecting…' : 'Connect wallet'}
-    </button>
-  );
-}
-
-/**
  * 標頭。刻意照原站的 markup 寫（`header.masthead.app-masthead > .wrap`），因為樣式全在 `design.css` 裡：
  * 換掉結構就會掉樣式 —— 這是這一輪「UI 看起來不像原站」最主要的原因。
  *
@@ -101,8 +38,6 @@ function ConnectWalletButton(): ReactNode {
  * 放上去就是死連結，比少一個項目更糟。
  */
 export function TopBar(): ReactNode {
-  const token = useSession((state) => state.token);
-
   return (
     <header className="masthead app-masthead">
       <div className="wrap">
@@ -123,12 +58,7 @@ export function TopBar(): ReactNode {
           <NavLink to="/portfolios" className={({ isActive }) => `head-link ${isActive ? 'active' : ''}`}>
             Portfolio
           </NavLink>
-          {token === null ? null : (
-            <Badge tone="ok" >
-              Signed in
-            </Badge>
-          )}
-          <ConnectWalletButton />
+          <WalletMenu />
         </div>
       </div>
     </header>

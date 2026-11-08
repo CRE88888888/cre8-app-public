@@ -332,3 +332,102 @@
   text-underline-offset: 3px;
   cursor: pointer;
 }
+
+/* ---------------------------------------------------------------------------
+   錢包選單（取代原本的 /login 整頁）
+   刻意寫在這裡而不是 design.css：design.css 是從原站複製的，我們不往裡面加東西。
+--------------------------------------------------------------------------- */
+
+.wallet-menu {
+  position: relative;
+}
+
+.wallet-menu__panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 80;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--card, #fff);
+  border: 1px solid var(--hair, #d8e3ec);
+  box-shadow: 0 24px 60px rgba(22, 34, 45, 0.18);
+  text-align: left;
+}
+
+.wallet-menu__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.wallet-menu__hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted, #5a7286);
+}
+
+.wallet-menu__addr {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.wallet-menu__status {
+  margin: 0;
+  font-size: 12px;
+  color: var(--pos, #1f7a4d);
+}
+
+.wallet-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--hair, #d8e3ec);
+  border-radius: 10px;
+  background: transparent;
+  font-size: 13px;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.wallet-menu__item:hover {
+  border-color: var(--ink, #16222d);
+}
+
+.wallet-menu__item img {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+}
+
+.wallet-menu__link {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  color: var(--muted, #5a7286);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* 頁面上的「Sign in」：長得像連結，但動作是叫出標頭的選單。 */
+.link-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

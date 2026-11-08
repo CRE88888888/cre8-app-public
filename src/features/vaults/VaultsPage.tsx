@@ -12,6 +12,7 @@ import { MOCK_FUNDS } from '../../data/mock-funds';
 import { MOCK_PERFORMANCE } from '../../data/mock-performance';
 import type { MockFund } from '../../data/mock-funds';
 import { AssetLogos } from '../../components/AssetLogo';
+import { SignInButton } from '../../components/WalletMenu';
 import { Sparkline } from '../../components/Sparkline';
 import { Badge, ErrorNote, Spinner } from '../../components/ui';
 
@@ -308,7 +309,7 @@ export function VaultsPage(): ReactNode {
           <div className="directory-empty">
             <strong>No wallet connected</strong>
             <p>
-              <Link to="/login">Sign in</Link> to see the portfolios your wallet owns.
+              <SignInButton /> to see the portfolios your wallet owns.
             </p>
           </div>
         ) : portfolios.isPending ? (

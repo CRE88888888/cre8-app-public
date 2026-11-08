@@ -10,6 +10,7 @@ import type { PriceableAsset } from '../../lib/api';
 import { queryKeys } from '../../lib/query';
 import { useBodyClass } from '../../lib/use-body-class';
 import { useSession } from '../../store/session';
+import { SignInButton } from '../../components/WalletMenu';
 import { ErrorNote, Note, Spinner } from '../../components/ui';
 
 /** Rebalance cadence. The backend requires `intervalSeconds >= 60`; one hour is the shortest sensible cadence. */
@@ -189,7 +190,7 @@ export function CreateFundPage(): ReactNode {
         <h1>Create a fund</h1>
         <Note tone="warn">
           Creating a fund writes a strategy under your wallet and deploys a smart account.{' '}
-          <Link to="/login">Sign in</Link> first.
+          <SignInButton /> first.
         </Note>
       </main>
     );

@@ -3,7 +3,6 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { PhaseBanner } from './components/PhaseBanner';
 import { RequireSession } from './components/RequireSession';
 import { TopBar } from './components/TopBar';
-import { LoginPage } from './features/auth/LoginPage';
 import { PortfoliosPage } from './features/portfolios/PortfoliosPage';
 import { CreateFundPage } from './features/create/CreateFundPage';
 import { VaultsPage } from './features/vaults/VaultsPage';
@@ -15,7 +14,8 @@ export function App(): ReactNode {
       <PhaseBanner />
       <TopBar />
       <Routes>
-        <Route path="/login" element={<LoginPage />} />
+        {/* 登入改由標頭的錢包選單處理；舊連結仍然可用，只是把使用者帶回目錄。 */}
+        <Route path="/login" element={<Navigate to="/vaults" replace />} />
         {/* 首頁改成 vaults：那是使用者進來的第一個畫面（Explore funds）。 */}
         <Route path="/" element={<VaultsPage />} />
         <Route path="/vaults" element={<VaultsPage />} />
