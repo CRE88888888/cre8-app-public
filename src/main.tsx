@@ -12,6 +12,7 @@ import './styles/vendor/fonts.css';
 import './styles/vendor/design.css';
 import './styles/vendor/fund-explore.css';
 import './styles/tokens.css';
+import './styles/toast.css';
 import './styles/base.css';
 import './styles/components.css';
 import './styles/phase-banner.css';

@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { PhaseBanner } from './components/PhaseBanner';
+import { Toaster } from './components/Toast';
 import { RequireSession } from './components/RequireSession';
 import { TopBar } from './components/TopBar';
+import { useAutoConnect } from './lib/use-auto-connect';
 import { FundPage } from './features/fund/FundPage';
 import { OperatorPage } from './features/operator/OperatorPage';
 import { StrategyPage } from './features/strategy/StrategyPage';
@@ -11,8 +13,11 @@ import { CreateFundPage } from './features/create/CreateFundPage';
 import { VaultsPage } from './features/vaults/VaultsPage';
 
 export function App(): ReactNode {
+  // 重新整理後自動接回先前授權過的錢包（`eth_accounts` 不彈窗）。
+  useAutoConnect();
   return (
     <>
+      <Toaster />
       <PhaseBanner />
       <TopBar />
       <Routes>

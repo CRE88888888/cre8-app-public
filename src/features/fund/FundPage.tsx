@@ -5,7 +5,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { encodeFunctionData, formatEther, formatUnits, parseEther, parseUnits } from 'viem';
 import type { Address } from 'viem';
 import { closePosition, enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, listStrategies, redeemPortfolio } from '../../lib/api';
-import { CHAIN_ID, bsc as appChain, readOnlyClient, sendGasTopUp, sendSweep, sendWithdraw } from '../../lib/kernel';
+import { CHAIN_ID, bsc as appChain, readOnlyClient, sendGasTopUp, sendSudoCalls, sendSweep, sendWithdraw } from '../../lib/kernel';
 import type { PortfolioStatus } from '../../lib/api';
 import { MOCK_FUNDS } from '../../data/mock-funds';
 import { MOCK_PERFORMANCE } from '../../data/mock-performance';
@@ -17,6 +17,7 @@ import { useSession } from '../../store/session';
 import { AssetLogo } from '../../components/AssetLogo';
 import { SignInButton } from '../../components/WalletMenu';
 import { ErrorNote, Note, Spinner } from '../../components/ui';
+import { toast } from '../../components/Toast';
 
 const ERC20_ABI = [
   { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: '', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] },
@@ -124,6 +125,7 @@ export function FundPage(): ReactNode {
     [fund, strategies.data],
   );
   const holding = (portfolios.data ?? []).find((portfolio) => portfolio.strategyId === strategy?.id);
+
   const usdt = (assets.data ?? []).find((asset) => asset.isNumeraire);
 
   const status = useQuery({
@@ -225,6 +227,17 @@ export function FundPage(): ReactNode {
   })();
 
   const live = status.data;
+
+  /**
+   * 是否**真的持有**這個基金（而不是「有一列投組但裡面是空的」）。
+   *
+   * 清倉之後帳戶價值 0、持倉 0 檔，但 DB 的 portfolio 列還在。只看 `holding !== undefined` 的話，
+   * 「My position」按鈕與那份空持倉表會留在畫面上（實測：清倉後仍顯示 0 資產、drift 5000 bps）——
+   * 使用者錢都提出來了，畫面上不該再宣稱他持有。
+   */
+  const held =
+    holding !== undefined &&
+    (live === undefined || Number(live.totalUsdE8 ?? '0') > 0 || live.holdings.length > 0);
   const rows = live === undefined
     ? fund.holdings.map((row) => ({ symbol: row.symbol, targetBps: row.weightBps, currentBps: null as number | null }))
     : (live.drift.assets ?? []).map((row) => ({ symbol: row.symbol, targetBps: row.targetBps, currentBps: row.currentBps }));
@@ -268,7 +281,7 @@ export function FundPage(): ReactNode {
                       Fund facts
                     </button>
                     {/* 只有持有這個基金時才有「My position」——沒有部位時那顆按鈕只會是空的。 */}
-                    {holding === undefined ? null : (
+                    {!held ? null : (
                       <button type="button" className="btn ghost" onClick={() => setMyPosition(true)}>
                         My position
                       </button>
@@ -501,7 +514,7 @@ export function FundPage(): ReactNode {
                     This fund exists only as an example in the catalogue — nobody has published it on-chain yet, so
                     there is nothing to deposit into.
                   </Note>
-                ) : holding === undefined ? (
+                ) : !held ? (
                   <div className="stack" style={{ gap: 10 }}>
                     <Note tone="warn">
                       You do not follow this strategy yet. Following it creates <strong>your own</strong> Kernel smart
@@ -818,15 +831,18 @@ export function FundPage(): ReactNode {
     setBusy(true);
     setError(null);
     setSent(null);
+    const toastId = toast.pending('Deposit', 'Confirm the transfer in your wallet…');
     try {
       const value = parseUnits(amount === '' ? '0' : amount, usdt.decimals);
       if (value === 0n) throw new Error('amount must be greater than zero');
       const hash = await sendUsdt(wallet, usdt.address as Address, account as Address, value);
       setSent(hash);
+      toast.replace(toastId, { tone: 'ok', title: `Deposited ${amount} ${usdt.symbol}`, body: hash });
       await queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token) });
       await queryClient.invalidateQueries({ queryKey: ['fund-status', token, holding.id] });
     } catch (cause) {
       setError(cause);
+      toast.replace(toastId, { tone: 'bad', title: 'Deposit failed', body: (cause as Error).message.split('\n')[0].slice(0, 140) });
     } finally {
       setBusy(false);
     }
@@ -914,6 +930,7 @@ export function FundPage(): ReactNode {
     setWithdrawError(null);
     setWithdrawTx(null);
     setWithdrawNote(null);
+    const toastId = toast.pending('Closing position', 'Selling every position to USDT…');
     try {
       const sold = await closePosition(token, holding.id);
       if (sold.outcome !== 'executed' && sold.outcome !== 'noop') {
@@ -929,6 +946,7 @@ export function FundPage(): ReactNode {
         recipient: wallet.address as Address,
         balances,
       });
+      toast.replace(toastId, { tone: 'pending', title: 'Sending everything back', body: 'Confirm the transfer in your wallet…' });
       if (receipt === null) {
         setWithdrawNote('Nothing left to send back — the account is already empty.');
       } else if (!receipt.success) {
@@ -939,10 +957,28 @@ export function FundPage(): ReactNode {
           `Closed: ${sold.steps.length} sell step(s), then ${balances.filter((row) => row.amountWei > 0n).length} token(s) sent back to your wallet.`,
         );
       }
+      // 連 gas 也掃回去：清倉的語意是「這個帳戶什麼都不剩」，留著 1 BNB 只是讓錢卡在裡面。
+      // 必須留一點付這一筆 UserOp 自己的 gas，否則交易連驗證都過不了（AA21/AA51）。
+      const gasWei = live?.gas?.balanceWei;
+      if (gasWei !== null && gasWei !== undefined) {
+        const GAS_RESERVE = parseEther('0.002');
+        const sweepable = BigInt(gasWei) - GAS_RESERVE;
+        if (sweepable > 0n) {
+          await sendSudoCalls({
+            wallet,
+            token,
+            accountAddress: account as Address,
+            calls: [{ to: wallet.address as Address, data: '0x', value: sweepable }],
+          });
+          toast.ok('Account emptied', `${Number(formatEther(sweepable)).toFixed(4)} BNB sent back too.`);
+        }
+      }
       await queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token) });
       await queryClient.invalidateQueries({ queryKey: ['fund-status', token, holding.id] });
+      toast.replace(toastId, { tone: 'ok', title: 'Position closed', body: 'Every asset is back in your wallet.' });
     } catch (cause) {
       setWithdrawError(cause);
+      toast.replace(toastId, { tone: 'bad', title: 'Close failed', body: (cause as Error).message.split('\n')[0].slice(0, 140) });
     } finally {
       setClosing(false);
     }
@@ -959,6 +995,7 @@ export function FundPage(): ReactNode {
     setWithdrawError(null);
     setWithdrawTx(null);
     setWithdrawNote(null);
+    const toastId = toast.pending('Withdraw', 'Preparing the round…');
     try {
       // 錢包不在本 app 的鏈上時，簽名請求會「看起來沒反應」（其實是被鏈切換擋掉）。
       // 明講要切到哪一條，比讓使用者一直按卻沒有彈窗好。
@@ -1011,6 +1048,7 @@ export function FundPage(): ReactNode {
         if (redeemed.outcome !== 'executed' && redeemed.outcome !== 'noop') {
           throw new Error(`selling the shortfall failed: ${redeemed.reason}`);
         }
+        toast.replace(toastId, { tone: 'pending', title: 'Selling positions', body: `Round ${round}: raising ${formatUsd(target)}…` });
         available = await readCash();
         // `noop` 代表連一步都排不出來（沒有可賣的部位）→ 再試也是一樣，直接停。
         if (redeemed.outcome === 'noop') break;
@@ -1035,6 +1073,7 @@ export function FundPage(): ReactNode {
           : null,
       );
       setWithdrawTx(receipt.txHash);
+      toast.replace(toastId, { tone: 'ok', title: `Withdrew ${formatUsd(sendable)}`, body: receipt.txHash });
       await queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token) });
       await queryClient.invalidateQueries({ queryKey: ['fund-status', token, holding.id] });
     } catch (cause) {
