@@ -469,6 +469,11 @@ export function FundPage(): ReactNode {
                       >
                         {closing ? 'Closing…' : 'Close position'}
                       </button>
+                      {totalUsd() === 0 ? (
+                        <p className="fine">
+                          This account is empty, so there is nothing to withdraw or close — deposit first.
+                        </p>
+                      ) : null}
                       <p className="fine">
                         Two signatures when cash is short: the fund sells pro-rata with its session key, then you sign
                         one USDT transfer out. Selling the whole position back to cash would break the mandate and the
