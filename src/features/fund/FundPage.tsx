@@ -885,16 +885,30 @@ export function FundPage(): ReactNode {
       // 「錢進去了卻還是現金」是最容易被誤認為壞掉的行為。
       const target = portfolioIdAfterEnroll;
       if (target !== undefined && target !== null) {
-        toast.replace(toastId, { tone: 'pending', title: 'Configuring your deposit', body: 'Buying the target assets…' });
+        // ⚠ 一定要把回傳的 id 接住再 replace 它。
+        //
+        // pending 的 toast **不會自己消失**（那是刻意的：它要等結果）。如果結果用
+        // `toast.ok(...)` 另開一則，那個「Configuring your deposit / Buying the target assets…」
+        // 就會永遠留在畫面上轉 —— 實測就是這樣：綠色成功訊息淡出後，白色那則還在。
+        const configuringId = toast.replace(toastId, {
+          tone: 'pending',
+          title: 'Configuring your deposit',
+          body: 'Buying the target assets…',
+        });
         try {
           const round = await postRebalance(token, target);
-          toast.ok(
-            round.outcome === 'executed' ? 'Deposit configured' : `Deposit recorded (${round.outcome})`,
-            round.txHash ?? round.reason ?? undefined,
-          );
+          toast.replace(configuringId, {
+            tone: round.outcome === 'executed' ? 'ok' : 'warn',
+            title: round.outcome === 'executed' ? 'Deposit configured' : `Deposit recorded (${round.outcome})`,
+            body: round.txHash ?? round.reason ?? undefined,
+          });
         } catch (cause) {
           // 配置失敗不影響「錢已經到了」：部位還在，排程器之後會處理（或使用者再按一次）。
-          toast.warn('Deposited, but the first rebalance failed', (cause as Error).message.split('\n')[0].slice(0, 140));
+          toast.replace(configuringId, {
+            tone: 'warn',
+            title: 'Deposited, but the first rebalance failed',
+            body: (cause as Error).message.split('\n')[0].slice(0, 140),
+          });
         }
       }
       await queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token) });

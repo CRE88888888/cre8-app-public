@@ -32,6 +32,18 @@ export type ToastInput = {
 
 const DURATION = { ok: 8_000, warn: 12_000, bad: 15_000 } as const;
 
+/**
+ * `pending` 的保險絲：5 分鐘後自動消失。
+ *
+ * 原本是 `Number.POSITIVE_INFINITY`（「它要等結果來 replace」），但那個假設一旦在某個呼叫端
+ * 破功，那則 toast 就會**永遠留在畫面上轉**。實測踩到：deposit 的「Configuring your deposit /
+ * Buying the target assets…」用 `toast.ok()` 另開一則，白色那則就一直轉到使用者重新整理。
+ *
+ * 5 分鐘的取捨：真正需要使用者簽名的流程（賣出多輪 + 等簽章）不會超過這個時間；
+ * 超過就代表它已經孤兒了，讓它自己消失比留著誤導人好。
+ */
+const PENDING_MAX_MS = 5 * 60_000;
+
 function emit(input: ToastInput, id?: ToastId): ToastId {
   const options = {
     // `id` 有值 → 更新既有的那一則（不是新增）。這是 replace 的實作方式。
@@ -39,7 +51,7 @@ function emit(input: ToastInput, id?: ToastId): ToastId {
     description: input.body,
     // pending 不自動消失：它會被下一次 replace 換掉。其餘按嚴重度給不同的停留時間
     // （失敗要留久一點才看得完）。
-    ...(input.tone === 'pending' ? { duration: Number.POSITIVE_INFINITY } : { duration: DURATION[input.tone] }),
+    ...(input.tone === 'pending' ? { duration: PENDING_MAX_MS } : { duration: DURATION[input.tone] }),
   };
 
   switch (input.tone) {
