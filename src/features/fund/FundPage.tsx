@@ -148,6 +148,7 @@ export function FundPage(): ReactNode {
   const [withdrawBusy, setWithdrawBusy] = useState(false);
   const [withdrawError, setWithdrawError] = useState<unknown>(null);
   const [withdrawTx, setWithdrawTx] = useState<string | null>(null);
+  const [withdrawNote, setWithdrawNote] = useState<string | null>(null);
   const [enrolling, setEnrolling] = useState(false);
 
   if (fund === undefined) {
@@ -399,6 +400,7 @@ export function FundPage(): ReactNode {
                           <Link to={`/portfolios/${holding.id}`}>the portfolio page</Link> first.
                         </p>
                       ) : null}
+                      {withdrawNote === null ? null : <p className="fine warn">{withdrawNote}</p>}
                       {withdrawTx === null ? null : (
                         <p className="fine">
                           Withdrawn. tx <span className="mono">{withdrawTx}</span>
@@ -693,6 +695,7 @@ export function FundPage(): ReactNode {
     setWithdrawBusy(true);
     setWithdrawError(null);
     setWithdrawTx(null);
+    setWithdrawNote(null);
     try {
       if (account === undefined || usdtAsset === undefined) throw new Error('找不到帳戶或會計資產');
       if (!Number.isFinite(requested) || requested <= 0) throw new Error('amount must be greater than zero');
@@ -700,15 +703,23 @@ export function FundPage(): ReactNode {
 
       // 現金不夠 → 先按比例賣（session key 簽），再轉出（owner 簽）。
       const shortfall = requested - cash;
+      let available = cash;
       if (shortfall > 0.000001) {
         const redeemed = await redeemPortfolio(token, holding.id, Math.round(shortfall * 1e6) / 1e6);
         if (redeemed.outcome !== 'executed' && redeemed.outcome !== 'noop') {
           throw new Error(`selling the shortfall failed: ${redeemed.reason}`);
         }
+        // ⚠ 賣出有滑價：賣掉 shortfall 不保證剛好換到 shortfall 的 USDT（實測 $4.79 的缺口只換到 $4.25）。
+        // 所以要**重讀餘額**，轉出「實際拿得到的量」，而不是死板地轉 requested。
+        const fresh = await getPortfolioStatus(token, holding.id);
+        const freshUsdt = (fresh.holdings ?? []).find((entry) => entry.symbol === (usdt?.symbol ?? 'USDT'));
+        available = freshUsdt === undefined ? 0 : Number(freshUsdt.usdValueE8) / 1e8;
       }
 
+      const sendable = Math.min(requested, available);
+      if (sendable <= 0.000001) throw new Error('there is nothing to send after selling');
       const decimals = usdtRow?.decimals ?? 18;
-      const value = parseUnits(requested.toFixed(Math.min(decimals, 6)), decimals);
+      const value = parseUnits(sendable.toFixed(Math.min(decimals, 6)), decimals);
       const receipt = await sendWithdraw({
         wallet,
         token,
@@ -718,6 +729,11 @@ export function FundPage(): ReactNode {
         amountWei: value,
       });
       if (!receipt.success) throw new Error(`UserOp landed but reverted: ${receipt.txHash}`);
+      setWithdrawNote(
+        sendable < requested - 0.000001
+          ? `Sold and sent ${formatUsd(sendable)} — the sale came back ${formatUsd(requested - sendable)} short of ${formatUsd(requested)} because of slippage.`
+          : null,
+      );
       setWithdrawTx(receipt.txHash);
       await queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token) });
       await queryClient.invalidateQueries({ queryKey: ['fund-status', token, holding.id] });
