@@ -1,20 +1,12 @@
-import { useQueries, useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { getPortfolioStatus, getPortfolios } from '../../lib/api';
-import type { Portfolio, PortfolioStatus } from '../../lib/api';
-import { formatUsdE8, shortAddress } from '../../lib/format';
-import { queryKeys } from '../../lib/query';
 import { useBodyClass } from '../../lib/use-body-class';
-import { useSession } from '../../store/session';
 import { MOCK_FUNDS } from '../../data/mock-funds';
 import { MOCK_PERFORMANCE } from '../../data/mock-performance';
 import type { MockFund } from '../../data/mock-funds';
 import { AssetLogos } from '../../components/AssetLogo';
-import { SignInButton } from '../../components/WalletMenu';
 import { Sparkline } from '../../components/Sparkline';
-import { Badge, ErrorNote, Spinner } from '../../components/ui';
 
 
 function RebalanceLabel({ value }: { value: MockFund['rebalance'] }): ReactNode {
@@ -129,83 +121,11 @@ function MockFundRow({ fund }: { fund: MockFund }): ReactNode {
   );
 }
 
-/** 真投組：有漂移就顯示漂移，沒登入就顯示「登入後可看」。 */
-function LiveRow({ portfolio, status }: { portfolio: Portfolio; status: PortfolioStatus | undefined }): ReactNode {
-  const account = portfolio.smartAccounts[0];
-  const needs = status?.drift.needsRebalance;
-  // 空倉的漂移是 drift.ts 對 total = 0 的定義值（5000 bps），不是「嚴重偏離」。
-  // 直接顯示 5000 會讓人以為要爆炸；這裡把它講成它真正代表的事：還沒入金。
-  const empty = status !== undefined && status.totalUsdE8 === '0';
-  return (
-    <article className="fund-row">
-      <Link className="fund-row-link" to={`/portfolios/${portfolio.id}`}>
-        <div className="fund-row-identity">
-          <span className="fund-mark">#{portfolio.id}</span>
-          <div>
-            <h3>{portfolio.strategyName ?? `Strategy ${portfolio.strategyId}`}</h3>
-            <span className="fund-row-meta">
-              <Badge tone="ok">LIVE</Badge>
-              <span>v{portfolio.version}</span>
-              <span className="fund-row-creator mono">
-                {account === undefined ? '—' : shortAddress(account.address)}
-              </span>
-            </span>
-            <p className="fund-row-thesis">
-              {status === undefined
-                ? 'Reading on-chain state…'
-                : `Targets ${status.targets.map((target) => `${target.symbol} ${(target.weightBps / 100).toFixed(1)}%`).join(' · ')}`}
-            </p>
-          </div>
-        </div>
-
-        <div className="fund-row-assets">
-          <AssetLogos symbols={(status?.targets ?? []).map((target) => target.symbol)} />
-          <span>
-            {status === undefined
-              ? '—'
-              : status.targets.map((target) => target.symbol).join(' · ')}
-          </span>
-        </div>
-
-        <div className="fund-row-return">
-          <span className="fund-row-label">{empty ? 'State' : 'Drift'}</span>
-          <strong className={status === undefined ? 'muted' : empty ? 'muted' : needs === true ? 'neg' : 'pos'}>
-            {status === undefined ? '—' : empty ? 'Empty' : `${status.drift.grossDriftBps} bps`}
-          </strong>
-        </div>
-
-        <div className="fund-row-drop">
-          <span className="fund-row-label">Value</span>
-          <span>{status === undefined ? '—' : formatUsdE8(status.totalUsdE8)}</span>
-        </div>
-
-        <span className="fund-row-arrow" aria-hidden="true">
-          ↗
-        </span>
-      </Link>
-    </article>
-  );
-}
-
 export function VaultsPage(): ReactNode {
   useBodyClass('vault-directory', 'fund-explore');
-  const token = useSession((state) => state.token);
   const [query, setQuery] = useState('');
 
-  const portfolios = useQuery({
-    queryKey: queryKeys.portfolios(token),
-    queryFn: () => getPortfolios(token as string),
-    enabled: token !== null,
-  });
 
-  // 每一列都要 `/status`（掃日誌＋讀池＋定價，實測 2–3 秒），所以**並行**發；序列會變成 4–6 秒。
-  const statuses = useQueries({
-    queries: (portfolios.data ?? []).map((portfolio) => ({
-      queryKey: queryKeys.status(token, portfolio.id),
-      queryFn: () => getPortfolioStatus(token as string, portfolio.id),
-      enabled: token !== null,
-    })),
-  });
 
   const [category, setCategory] = useState<'all' | 'themes' | 'people'>('all');
   // 有肖像的是「人物」組（原站的 People），其餘是市場主題。
@@ -224,10 +144,6 @@ export function VaultsPage(): ReactNode {
     );
   }, [category, needle, peopleFunds, themeFunds]);
 
-  const liveRows = (portfolios.data ?? []).map((portfolio, index) => (
-    <LiveRow key={portfolio.id} portfolio={portfolio} status={statuses[index]?.data} />
-  ));
-
   return (
     <main className="explore-wrap">
       <header className="explore-heading">
@@ -236,8 +152,8 @@ export function VaultsPage(): ReactNode {
             Explore funds<span>.</span>
           </h1>
           <p>
-            <strong>Live</strong> funds are real portfolios on BNB Chain — open one to see drift and rebalance it.
-            Everything under Example funds is a structural example: allocations and rules only, no performance.
+            Open a fund to see its mandate, its performance and — if you hold it — your own position. Your portfolios
+            live on the fund page now; they are no longer listed here.
           </p>
         </div>
         <div className="explore-heading-actions">
@@ -300,35 +216,6 @@ export function VaultsPage(): ReactNode {
         </label>
       </div>
 
-      <section className="explore-collection" aria-label="Live funds">
-        <header>
-          <h2>Live on this deployment</h2>
-        </header>
-
-        {/* 查詢失敗必須看得見：不然「讀不到」與「你沒有投組」在畫面上完全一樣。 */}
-        <ErrorNote error={portfolios.error} />
-        {portfolios.error !== null && portfolios.error !== undefined ? null : token === null ? (
-          <div className="directory-empty">
-            <strong>No wallet connected</strong>
-            <p>
-              <SignInButton /> to see the portfolios your wallet owns.
-            </p>
-          </div>
-        ) : portfolios.isPending ? (
-          <div className="fund-list-loading">
-            <Spinner /> <span className="muted">Loading portfolios…</span>
-          </div>
-        ) : liveRows.length === 0 ? (
-          <div className="directory-empty">
-            <strong>No funds yet</strong>
-            <p>
-              This wallet owns no portfolios. <Link to="/create">Create one</Link>.
-            </p>
-          </div>
-        ) : (
-          liveRows
-        )}
-      </section>
 
       {visibleFunds.length === 0 ? (
         <div className="directory-empty">

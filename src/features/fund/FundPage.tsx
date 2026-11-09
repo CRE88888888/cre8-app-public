@@ -2,10 +2,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { encodeFunctionData, formatUnits, parseUnits } from 'viem';
+import { encodeFunctionData, formatEther, formatUnits, parseEther, parseUnits } from 'viem';
 import type { Address } from 'viem';
 import { closePosition, enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, listStrategies, redeemPortfolio } from '../../lib/api';
-import { CHAIN_ID, bsc as appChain, readOnlyClient, sendSweep, sendWithdraw } from '../../lib/kernel';
+import { CHAIN_ID, bsc as appChain, readOnlyClient, sendGasTopUp, sendSweep, sendWithdraw } from '../../lib/kernel';
 import type { PortfolioStatus } from '../../lib/api';
 import { MOCK_FUNDS } from '../../data/mock-funds';
 import { MOCK_PERFORMANCE } from '../../data/mock-performance';
@@ -143,6 +143,9 @@ export function FundPage(): ReactNode {
   const [error, setError] = useState<unknown>(null);
   const [sent, setSent] = useState<string | null>(null);
   const [facts, setFacts] = useState(false);
+  // 「My position」＝這個投組的即時狀態（原本在 /portfolios/:id 才能看，現在收進基金頁）。
+  const [myPosition, setMyPosition] = useState(false);
+  const [toppingUp, setToppingUp] = useState(false);
   // 提領：預設 USDT（現金腿），可選帳戶裡任何有餘額的資產 —— 每個都只是一筆 transfer。
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawBusy, setWithdrawBusy] = useState(false);
@@ -264,6 +267,12 @@ export function FundPage(): ReactNode {
                     <button type="button" className="btn ghost" onClick={() => setFacts(true)}>
                       Fund facts
                     </button>
+                    {/* 只有持有這個基金時才有「My position」——沒有部位時那顆按鈕只會是空的。 */}
+                    {holding === undefined ? null : (
+                      <button type="button" className="btn ghost" onClick={() => setMyPosition(true)}>
+                        My position
+                      </button>
+                    )}
                     <div className="tags">
                       <span className="tag pos">{strategy === undefined ? 'Example' : 'Open'}</span>
                       <span className="tag accounting-chip">Accounting asset: {usdt?.symbol ?? 'USDT'}</span>
@@ -536,12 +545,21 @@ export function FundPage(): ReactNode {
                         value={amount}
                         onChange={(event) => setAmount(event.target.value)}
                       />
+                      {/* ⚠ 只能有**一個** `.swap-sub`：在 ticket 裡它是 grid 的 `sub` 區，
+                          兩個元素會被放進同一格而重疊（實測「USDT → your account…」疊在
+                          「Wallet balance…」上面，變成看不懂的一行）。所以兩段資訊放進同一個
+                          flex 容器，並沿用 CSS 已預期的 `.swap-sub > span` 結構。 */}
                       <span className="swap-sub">
-                        {usdt?.symbol ?? 'USDT'} → your account {shortAddress(holding.smartAccounts[0]?.address ?? '')}
-                      </span>
-                      <span className="swap-sub">
-                        Wallet balance {walletUsdt === null ? '—' : Number(formatUnits(walletUsdt, usdtDecimals)).toLocaleString('en-US', { maximumFractionDigits: 4 })}{' '}
-                        {usdt?.symbol ?? 'USDT'}
+                        <span>
+                          {usdt?.symbol ?? 'USDT'} → {shortAddress(holding.smartAccounts[0]?.address ?? '')}
+                        </span>
+                        <span className="vault-balance-value">
+                          · balance{' '}
+                          {walletUsdt === null
+                            ? '—'
+                            : Number(formatUnits(walletUsdt, usdtDecimals)).toLocaleString('en-US', { maximumFractionDigits: 4 })}{' '}
+                          {usdt?.symbol ?? 'USDT'}
+                        </span>
                       </span>
                       {depositTooLarge ? (
                         <p className="fine neg" style={{ margin: '6px 0 0' }}>
@@ -595,6 +613,97 @@ export function FundPage(): ReactNode {
           </aside>
         </div>
       </main>
+
+
+      {/* My position：這個投組的即時狀態。沿用 Fund facts 的抽屜樣式（dialog.pros-drawer）。 */}
+      {myPosition && live !== undefined ? (
+        <dialog className="pros-drawer" open aria-labelledby="pos-title">
+          <header className="pros-head">
+            <div>
+              <p className="label">[ My position ]</p>
+              <h2 id="pos-title">Portfolio #{live.portfolioId}</h2>
+            </div>
+            <button type="button" className="pros-x" aria-label="Close my position" onClick={() => setMyPosition(false)}>
+              ×
+            </button>
+          </header>
+          <div className="pros-body">
+            <section className="panel pros-sec">
+              <div className="panel-h">
+                <h3>Status</h3>
+                <span className="label">block #{live.block}</span>
+              </div>
+              <div className="panel-b">
+                <dl className="kv">
+                  <dt>account</dt>
+                  <dd className="mono">{live.account}</dd>
+                  <dt>total value</dt>
+                  <dd>{formatUsd(totalUsd())}</dd>
+                  <dt>gross drift</dt>
+                  <dd>
+                    {live.drift.grossDriftBps} bps / threshold {live.drift.thresholdBps} bps / needs rebalance:{' '}
+                    {live.drift.needsRebalance ? 'yes' : 'no'}
+                  </dd>
+                  <dt>gas</dt>
+                  <dd>
+                    {live.gas === null || live.gas.balanceWei === null || live.gas.balanceWei === undefined
+                      ? 'unknown'
+                      : `${Number(formatEther(BigInt(live.gas.balanceWei))).toFixed(6)} BNB`}
+                    {wallet === null ? null : (
+                      <button
+                        type="button"
+                        className="btn ghost sm"
+                        style={{ marginLeft: 8 }}
+                        disabled={toppingUp}
+                        onClick={() => void topUpGas()}
+                      >
+                        {toppingUp ? 'Topping up…' : 'Top up 0.0100 BNB'}
+                      </button>
+                    )}
+                  </dd>
+                </dl>
+                <ErrorNote error={error} />
+              </div>
+            </section>
+
+            <section className="panel pros-sec">
+              <div className="panel-h">
+                <h3>Holdings</h3>
+                <span className="label">{live.holdings.length} assets</span>
+              </div>
+              <div className="panel-b">
+                <table className="dk-table">
+                  <thead>
+                    <tr>
+                      <th>Symbol</th>
+                      <th className="num">Target bps</th>
+                      <th className="num">Current bps</th>
+                      <th className="num">Delta</th>
+                      <th className="num">USD value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {live.drift.assets.map((row) => (
+                      <tr key={row.symbol}>
+                        <td className="mono">
+                          <strong>{row.symbol}</strong>
+                        </td>
+                        <td className="num">{row.targetBps}</td>
+                        <td className="num">{row.currentBps}</td>
+                        <td className={`num ${row.deltaBps > 0 ? 'pos' : row.deltaBps < 0 ? 'neg' : ''}`}>
+                          {row.deltaBps > 0 ? '+' : ''}
+                          {row.deltaBps} bps
+                        </td>
+                        <td className="num">{formatUsd(Number(row.usdValueE8) / 1e8)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </dialog>
+      ) : null}
 
       {/* Fund facts：參考站是一個右側抽屜（dialog.pros-drawer）。 */}
       {facts ? (
@@ -780,6 +889,23 @@ export function FundPage(): ReactNode {
    * 為什麼要第二段掃塵埃：賣出有滑價與 wei 級取整，帳戶裡一定會剩一點非 USDT 的渣。
    * 「清倉」的語意是錢包裡什麼都不剩，不是帳戶裡什麼都不剩。
    */
+  /** 幫帳戶補 gas（owner 錢包轉 BNB 進帳戶，與 portfolio 頁的 top-up 同一條路徑）。 */
+  async function topUpGas(): Promise<void> {
+    if (wallet === null || token === null || holding === undefined) return;
+    const account = holding.smartAccounts[0]?.address;
+    if (account === undefined) return;
+    setToppingUp(true);
+    setError(null);
+    try {
+      await sendGasTopUp({ wallet, to: account as Address, valueWei: parseEther('0.01') });
+      await queryClient.invalidateQueries({ queryKey: ['fund-status', token, holding.id] });
+    } catch (cause) {
+      setError(cause);
+    } finally {
+      setToppingUp(false);
+    }
+  }
+
   async function closeAll(): Promise<void> {
     if (wallet === null || token === null || holding === undefined) return;
     const account = holding.smartAccounts[0]?.address;
