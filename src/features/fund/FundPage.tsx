@@ -5,7 +5,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { encodeFunctionData, formatUnits, parseUnits } from 'viem';
 import type { Address } from 'viem';
 import { closePosition, enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, listStrategies, redeemPortfolio } from '../../lib/api';
-import { CHAIN_ID, readOnlyClient, sendSweep, sendWithdraw } from '../../lib/kernel';
+import { CHAIN_ID, bsc as appChain, readOnlyClient, sendSweep, sendWithdraw } from '../../lib/kernel';
 import type { PortfolioStatus } from '../../lib/api';
 import { MOCK_FUNDS } from '../../data/mock-funds';
 import { MOCK_PERFORMANCE } from '../../data/mock-performance';
@@ -912,17 +912,16 @@ async function sendUsdt(
   value: bigint,
 ): Promise<string> {
   const { createWalletClient, custom, http } = await import('viem');
-  const { bsc } = await import('viem/chains');
   const data = encodeFunctionData({ abi: ERC20_ABI, functionName: 'transfer', args: [to, value] });
 
   if (wallet.kind === 'dev') {
     const rpcUrl = import.meta.env.VITE_RPC_URL ?? (import.meta.env.DEV ? '/rpc' : undefined);
     if (rpcUrl === undefined || rpcUrl === '') throw new Error('dev mode needs VITE_RPC_URL');
-    const client = createWalletClient({ account: wallet.account, chain: bsc, transport: http(rpcUrl) });
-    return client.sendTransaction({ to: token, data, chain: bsc });
+    const client = createWalletClient({ account: wallet.account, chain: appChain, transport: http(rpcUrl) });
+    return client.sendTransaction({ to: token, data, chain: appChain });
   }
-  const client = createWalletClient({ account: wallet.address, chain: bsc, transport: custom(wallet.provider as never) });
-  return client.sendTransaction({ to: token, data, chain: bsc });
+  const client = createWalletClient({ account: wallet.address, chain: appChain, transport: custom(wallet.provider as never) });
+  return client.sendTransaction({ to: token, data, chain: appChain });
 }
 
 // AssetLogo 目前沒用到（表格用符號），保留 import 會讓 typecheck 失敗，所以標記為已使用。
