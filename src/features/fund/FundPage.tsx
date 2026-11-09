@@ -1,11 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { encodeFunctionData, formatUnits, parseUnits } from 'viem';
 import type { Address } from 'viem';
 import { enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, listStrategies, redeemPortfolio } from '../../lib/api';
-import { sendWithdraw } from '../../lib/kernel';
+import { readOnlyClient, sendWithdraw } from '../../lib/kernel';
 import type { PortfolioStatus } from '../../lib/api';
 import { MOCK_FUNDS } from '../../data/mock-funds';
 import { MOCK_PERFORMANCE } from '../../data/mock-performance';
@@ -149,7 +149,57 @@ export function FundPage(): ReactNode {
   const [withdrawError, setWithdrawError] = useState<unknown>(null);
   const [withdrawTx, setWithdrawTx] = useState<string | null>(null);
   const [withdrawNote, setWithdrawNote] = useState<string | null>(null);
+  /**
+   * 錢包（EOA）自己在鏈上的 USDT 餘額。
+   *
+   * 為什麼一定要顯示：存款失敗時 MetaMask 只會說「This transaction is likely to fail / Network fee
+   * Unavailable」，完全看不出是 `BEP20: transfer amount exceeds balance`。實測就是餘額 999 卻要轉 1000。
+   */
+  const [walletUsdt, setWalletUsdt] = useState<bigint | null>(null);
   const [enrolling, setEnrolling] = useState(false);
+
+  const walletAddress = wallet?.address ?? null;
+  const usdtAddress = usdt?.address;
+  const usdtDecimals = usdt?.decimals ?? 18;
+
+  /**
+   * 存款金額是否超過錢包餘額。
+   *
+   * 一定要在送出前擋：超過時鏈上是 `BEP20: transfer amount exceeds balance`，而 MetaMask 只會顯示
+   * 「This transaction is likely to fail」＋「Network fee Unavailable」，看不出是餘額問題。
+   */
+  const depositTooLarge = (() => {
+    if (walletUsdt === null) return false;
+    try {
+      const parsed = parseUnits(amount === '' ? '0' : amount, usdtDecimals);
+      return parsed > walletUsdt;
+    } catch {
+      return false;
+    }
+  })();
+  useEffect(() => {
+    if (walletAddress === null || usdtAddress === undefined) {
+      setWalletUsdt(null);
+      return;
+    }
+    let cancelled = false;
+    void readOnlyClient()
+      .readContract({
+        address: usdtAddress as Address,
+        abi: ERC20_ABI,
+        functionName: 'balanceOf',
+        args: [walletAddress as Address],
+      })
+      .then((value) => {
+        if (!cancelled) setWalletUsdt(value as bigint);
+      })
+      .catch(() => {
+        if (!cancelled) setWalletUsdt(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [walletAddress, usdtAddress]);
 
   if (fund === undefined) {
     return (
@@ -472,8 +522,18 @@ export function FundPage(): ReactNode {
                       <span className="swap-sub">
                         {usdt?.symbol ?? 'USDT'} → your account {shortAddress(holding.smartAccounts[0]?.address ?? '')}
                       </span>
+                      <span className="swap-sub">
+                        Wallet balance {walletUsdt === null ? '—' : Number(formatUnits(walletUsdt, usdtDecimals)).toLocaleString('en-US', { maximumFractionDigits: 4 })}{' '}
+                        {usdt?.symbol ?? 'USDT'}
+                      </span>
+                      {depositTooLarge ? (
+                        <p className="fine neg" style={{ margin: '6px 0 0' }}>
+                          That is more than the wallet holds — the transfer would revert with
+                          &ldquo;BEP20: transfer amount exceeds balance&rdquo; before it reaches the chain.
+                        </p>
+                      ) : null}
                     </div>
-                    <button type="submit" className="btn primary block" disabled={busy || wallet === null}>
+                    <button type="submit" className="btn primary block" disabled={busy || wallet === null || depositTooLarge}>
                       {busy ? 'Sending…' : 'Deposit'}
                     </button>
                     {wallet === null ? <p className="fine">Connect the owner wallet in the header first.</p> : null}
