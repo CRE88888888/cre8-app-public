@@ -914,6 +914,7 @@ export function FundPage(): ReactNode {
               wallet,
               token,
               accountAddress: account as Address,
+              strategyId: strategy.id,
               calls: targets.map((row) => ({
                 to: row.asset as Address,
                 data: approveCalldata(executorAddress as Address),
@@ -1065,6 +1066,7 @@ export function FundPage(): ReactNode {
         wallet,
         token,
         accountAddress: account as Address,
+        strategyId: holding.strategyId,
         recipient: wallet.address as Address,
         balances,
         nativeWei,
@@ -1184,6 +1186,7 @@ export function FundPage(): ReactNode {
         wallet,
         token,
         accountAddress: account as Address,
+        strategyId: holding.strategyId,
         asset: usdtAsset as Address,
         recipient: wallet.address as Address,
         amountWei: value,

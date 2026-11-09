@@ -22,7 +22,7 @@ import {
 import { KERNEL_V3_3 } from '@zerodev/sdk/constants';
 import type { GetKernelVersion } from '@zerodev/sdk/types';
 import { signerToEcdsaValidator } from '@zerodev/ecdsa-validator';
-import { createPublicClient, createWalletClient, custom, encodeFunctionData, http } from 'viem';
+import { createPublicClient, createWalletClient, custom, encodeFunctionData, encodePacked, http, keccak256 } from 'viem';
 import type { Address, Chain, Hex, LocalAccount, PublicClient, WalletClient } from 'viem';
 
 const API_BASE: string = import.meta.env.VITE_API_BASE ?? '/api';
@@ -114,11 +114,30 @@ export type RenewalReceipt = {
  * 續期（安裝權限）與 approve 都是「帳戶自己做的事、需要 owner 簽名」，差別只在 calls 的內容 ——
  * 所以組裝與送出只有這一份。
  */
+/**
+ * 帳戶的 counterfactual salt —— **必須與後端逐 byte 相同**。
+ *
+ * 後端（`backend/src/kernel.ts` 的 `computeSalt`）用
+ * `keccak256(encodePacked(['string','address','uint256'], [TAG, owner, strategyId]))`
+ * 當 `createKernelAccount` 的 `index`。前端若省略 index（等於 0n），推導出的
+ * counterfactual 地址就**不是**那個帳戶 —— 簽章會綁到錯的設定上，EntryPoint 只會回
+ * 一句看不懂的 `AA24 signature error`。
+ */
+const SALT_DOMAIN_TAG = 'cre8-atp:kernel-v3.3';
+
+export function computeAccountSalt(owner: Address, strategyId: number): bigint {
+  return BigInt(
+    keccak256(encodePacked(['string', 'address', 'uint256'], [SALT_DOMAIN_TAG, owner, BigInt(strategyId)])),
+  );
+}
+
 export async function sendSudoCalls(args: {
   wallet: RenewalWallet;
   token: string;
   accountAddress: Address;
   calls: readonly { to: Address; data: Hex; value: bigint }[];
+  /** 投組對應的策略 id —— 用來算出與後端相同的帳戶 salt（見 `computeAccountSalt`）。 */
+  strategyId: number;
   timeoutMs?: number;
 }): Promise<RenewalReceipt> {
   const publicClient = publicClientFor(args.wallet);
@@ -128,6 +147,8 @@ export async function sendSudoCalls(args: {
   // 位址**明確傳**：帳戶已經存在，它的位址不該取決於這一次跑出來的 init code。
   const sudoAccount = await createKernelAccount(publicClient, {
     address: args.accountAddress,
+    // 與後端同一個 index（salt）；少了它，SDK 會用 0n 推導出不同的帳戶設定。
+    index: computeAccountSalt(args.wallet.address as Address, args.strategyId),
     plugins: {
       sudo: await signerToEcdsaValidator(publicClient, {
         signer: signerFor(args.wallet) as never,
@@ -199,6 +220,8 @@ export async function sendRenewalUserOp(args: {
   accountAddress: Address;
   entryPoint: string;
   initConfig: readonly Hex[];
+  /** 投組對應的策略 id（算出帳戶 salt 用）。 */
+  strategyId: number;
   timeoutMs?: number;
 }): Promise<RenewalReceipt> {
   assertEntryPoint(args.entryPoint);
@@ -206,6 +229,7 @@ export async function sendRenewalUserOp(args: {
     wallet: args.wallet,
     token: args.token,
     accountAddress: args.accountAddress,
+    strategyId: args.strategyId,
     calls: args.initConfig.map((data) => ({ to: args.accountAddress, data, value: 0n })),
     ...(args.timeoutMs === undefined ? {} : { timeoutMs: args.timeoutMs }),
   });
@@ -228,6 +252,8 @@ export async function sendSweep(args: {
   accountAddress: Address;
   recipient: Address;
   /** 要掃出去的資產與金額（wei）。金額為 0 的會被忽略。 */
+  /** 投組對應的策略 id（算出帳戶 salt 用）。 */
+  strategyId: number;
   balances: readonly { asset: Address; amountWei: bigint }[];
   /**
    * 額外要退回的原生幣（wei），與代幣轉帳放在**同一個** UserOp 裡。
@@ -249,6 +275,7 @@ export async function sendSweep(args: {
     wallet: args.wallet,
     token: args.token,
     accountAddress: args.accountAddress,
+    strategyId: args.strategyId,
     calls,
   });
 }
@@ -286,12 +313,15 @@ export async function sendWithdraw(args: {
   asset: Address;
   recipient: Address;
   amountWei: bigint;
+  /** 投組對應的策略 id（算出帳戶 salt 用）。 */
+  strategyId: number;
 }): Promise<RenewalReceipt> {
   if (args.amountWei === 0n) throw new Error('withdraw amount must be greater than zero');
   return sendSudoCalls({
     wallet: args.wallet,
     token: args.token,
     accountAddress: args.accountAddress,
+    strategyId: args.strategyId,
     calls: [{ to: args.asset, data: transferCalldata(args.recipient, args.amountWei), value: 0n }],
   });
 }

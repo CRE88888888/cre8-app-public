@@ -156,6 +156,7 @@ export function CreateFundPage(): ReactNode {
               wallet: renewalWallet,
               token,
               accountAddress: status.account as `0x${string}`,
+              strategyId: strategy.id,
               calls: status.targets.map((target) => ({
                 to: target.asset as `0x${string}`,
                 data: approveCalldata(executor as `0x${string}`),
