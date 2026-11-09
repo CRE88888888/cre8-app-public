@@ -4,6 +4,7 @@ import { PhaseBanner } from './components/PhaseBanner';
 import { RequireSession } from './components/RequireSession';
 import { TopBar } from './components/TopBar';
 import { OperatorPage } from './features/operator/OperatorPage';
+import { StrategyPage } from './features/strategy/StrategyPage';
 import { PortfoliosPage } from './features/portfolios/PortfoliosPage';
 import { CreateFundPage } from './features/create/CreateFundPage';
 import { VaultsPage } from './features/vaults/VaultsPage';
@@ -22,6 +23,7 @@ export function App(): ReactNode {
         <Route path="/vaults" element={<VaultsPage />} />
         <Route path="/create" element={<CreateFundPage />} />
         <Route path="/operator" element={<OperatorPage />} />
+        <Route path="/strategies/:id" element={<StrategyPage />} />
         {/* 舊的「只有列表」頁保留：它比 vaults 更適合 debug（沒有範例資料）。 */}
         <Route
           path="/portfolios"

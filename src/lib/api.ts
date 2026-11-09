@@ -398,3 +398,35 @@ export type OperatorOverview = {
 export function getOperatorOverview(token: string): Promise<OperatorOverview> {
   return request<OperatorOverview>('/operator/overview', { token });
 }
+
+// ---------------------------------------------------------------------------
+// 策略（mandate）
+// ---------------------------------------------------------------------------
+
+export type StrategyAllocationAsset = { address: string; weightBps: number };
+
+export type StrategyVersion = {
+  strategyId: number;
+  version: number;
+  allocation: { assets: StrategyAllocationAsset[] };
+  schedule: { kind: 'interval'; intervalSeconds: number } | { kind: 'cron'; cron: string };
+  changeLog: string | null;
+  activeAt: string | null;
+  createdAt: string;
+};
+
+export type StrategyDetail = {
+  id: number;
+  provider: string;
+  name: string;
+  description: string;
+  isPublic: boolean;
+  swapFeeBps: number;
+  createdAt: string;
+  onchainId: number | null;
+  versions: StrategyVersion[];
+};
+
+export function getStrategy(token: string, id: number): Promise<StrategyDetail> {
+  return request<StrategyDetail>(`/strategies/${id}`, { token });
+}

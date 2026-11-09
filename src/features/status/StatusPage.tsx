@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { formatEther, parseEther } from 'viem';
-import { getPortfolioStatus } from '../../lib/api';
+import { getPortfolioStatus, getPortfolios } from '../../lib/api';
 import type { PortfolioStatus, SessionKeyReport } from '../../lib/api';
 import { formatBps, formatUsdE8, shortAddress, toneForBps } from '../../lib/format';
 import { queryKeys } from '../../lib/query';
@@ -268,6 +268,14 @@ export function StatusPage(): ReactNode {
   const id = Number(params.id);
   const valid = Number.isInteger(id) && id > 0;
 
+  // 這一筆是**純 DB 讀取**：status 讀不到持倉時（RPC/fork 掛），至少還看得到「這檔跟的是哪個策略」。
+  const list = useQuery({
+    queryKey: queryKeys.portfolios(token),
+    queryFn: () => getPortfolios(token as string),
+    enabled: token !== null,
+  });
+  const row = (list.data ?? []).find((portfolio) => portfolio.id === id);
+
   const query = useQuery({
     queryKey: queryKeys.status(token, valid ? id : -1),
     queryFn: () => getPortfolioStatus(token as string, id),
@@ -302,6 +310,13 @@ export function StatusPage(): ReactNode {
           </p>
         </div>
       ) : null}
+
+      {row === undefined ? null : (
+        <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+          Strategy <Link to={`/strategies/${row.strategyId}`}>{row.strategyName ?? `#${row.strategyId}`}</Link> · pinned
+          at v{row.version}
+        </p>
+      )}
 
       <ErrorNote error={query.error} />
 
