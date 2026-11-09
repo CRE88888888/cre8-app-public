@@ -879,6 +879,16 @@ export function FundPage(): ReactNode {
       toast.replace(toastId, { tone: 'ok', title: `Deposited ${amount} ${usdt.symbol}`, body: hash });
       setAmount('');
 
+      // 等轉帳**真的被 RPC 看到**再觸發配置。
+      //
+      // 為什麼：使用者按 Deposit 之後我們立刻呼叫 rebalance，而後端用「目前區塊」讀餘額。
+      // 有些 RPC 的 head 會落後一兩個塊（publicnode 實測），於是在 N-1 那個塊上帳戶還是 0 USDT
+      // → 規劃器回『Portfolio value is 0 … not sending empty steps』→ 使用者看到
+      // 「Deposit recorded (noop)」，錢明明進去了卻沒被配置。
+      //
+      // 等 2 個確認把「錢在鏈上」與「RPC 看得到它」之間的窗口關掉。
+      await waitForConfirmations(hash, 2);
+
       // 入金後**立刻**跑一輪配置。
       //
       // 為什麼一定要有這一步：排程器只認領 `next_run_at` 已到期的投組，而入金不會調整它 ——
@@ -939,9 +949,20 @@ export function FundPage(): ReactNode {
 
         try {
           const round = await postRebalance(token, target);
+          // 三種結果要講清楚，因為它們要求使用者做的事完全不同：
+          //   executed → 配置完成
+          //   blocked  → 被前置檢查擋下（最常見是 allowance），要**再按一次**或先 approve
+          //   noop     → 規劃器認為沒事可做（錢沒被看到/已經對齊）
+          const tone = round.outcome === 'executed' ? 'ok' : round.outcome === 'blocked' ? 'bad' : 'warn';
+          const title =
+            round.outcome === 'executed'
+              ? 'Deposit configured'
+              : round.outcome === 'blocked'
+                ? 'Deposited, but the first rebalance was blocked'
+                : `Deposited — nothing to configure yet (${round.outcome})`;
           toast.replace(configuringId, {
-            tone: round.outcome === 'executed' ? 'ok' : 'warn',
-            title: round.outcome === 'executed' ? 'Deposit configured' : `Deposit recorded (${round.outcome})`,
+            tone,
+            title,
             body: round.txHash ?? round.reason ?? undefined,
           });
         } catch (cause) {
@@ -1225,6 +1246,23 @@ export function FundPage(): ReactNode {
 }
 
 /** 用 owner 錢包把 USDT 轉進 Kernel 帳戶（dev 私鑰或注入錢包都支援）。 */
+/**
+ * 等交易被 **N 個確認**（預設 2）—— 不是只等 receipt。
+ *
+ * 只等 receipt 的話，我們拿到的「已上鏈」與「RPC 的 head 已經超過那一塊」是兩件事：
+ * 後端用 head 讀餘額，head 落後時就看不到剛進來的錢（實測造成 deposit 後的 noop）。
+ * 多等一個確認等於替 RPC 留一個塊的追上時間。
+ *
+ * 用 readOnlyClient（不碰錢包 provider）：這是純讀取，不該經過使用者的錢包。
+ */
+async function waitForConfirmations(hash: string, confirmations = 2): Promise<void> {
+  try {
+    await readOnlyClient().waitForTransactionReceipt({ hash: hash as `0x${string}`, confirmations });
+  } catch {
+    // 等不到也不算失敗：錢已經上鏈了。讓後面的 rebalance 自己去判斷。
+  }
+}
+
 async function sendUsdt(
   wallet: NonNullable<ReturnType<typeof useOwnerWallet>>,
   token: Address,
