@@ -161,7 +161,6 @@ export function FundPage(): ReactNode {
    * Unavailable」，完全看不出是 `BEP20: transfer amount exceeds balance`。實測就是餘額 999 卻要轉 1000。
    */
   const [walletUsdt, setWalletUsdt] = useState<bigint | null>(null);
-  const [enrolling, setEnrolling] = useState(false);
   const [closing, setClosing] = useState(false);
 
   const walletAddress = wallet?.address ?? null;
@@ -514,24 +513,9 @@ export function FundPage(): ReactNode {
                     This fund exists only as an example in the catalogue — nobody has published it on-chain yet, so
                     there is nothing to deposit into.
                   </Note>
-                ) : !held ? (
-                  <div className="stack" style={{ gap: 10 }}>
-                    <Note tone="warn">
-                      You do not follow this strategy yet. Following it creates <strong>your own</strong> Kernel smart
-                      account for this fund — one account per (owner, strategy), so your balance and session key are
-                      independent of every other holder.
-                    </Note>
-                    <button
-                      type="button"
-                      className="btn primary block"
-                      disabled={enrolling}
-                      onClick={() => void follow()}
-                    >
-                      {enrolling ? 'Creating your account…' : 'Follow this fund'}
-                    </button>
-                    <ErrorNote error={error} />
-                  </div>
                 ) : (
+                  /* 沒有「先 Follow 再 Deposit」這一步 —— 存款就是跟隨。
+                     未持有時按 Deposit 會先建帳戶（enroll）再轉 USDT，使用者不必理解 enroll 這個概念。 */
                   <form
                     className="swap"
                     onSubmit={(event) => {
@@ -564,7 +548,10 @@ export function FundPage(): ReactNode {
                           flex 容器，並沿用 CSS 已預期的 `.swap-sub > span` 結構。 */}
                       <span className="swap-sub">
                         <span>
-                          {usdt?.symbol ?? 'USDT'} → {shortAddress(holding.smartAccounts[0]?.address ?? '')}
+                          {usdt?.symbol ?? 'USDT'} →{' '}
+                          {holding === undefined
+                            ? 'your new account'
+                            : shortAddress(holding.smartAccounts[0]?.address ?? '')}
                         </span>
                         <span className="vault-balance-value">
                           · balance{' '}
@@ -825,21 +812,37 @@ export function FundPage(): ReactNode {
   );
 
   async function deposit(): Promise<void> {
-    if (wallet === null || holding === undefined || usdt === undefined) return;
-    const account = holding.smartAccounts[0]?.address;
-    if (account === undefined) return;
+    if (wallet === null || token === null || strategy === undefined || usdt === undefined) return;
     setBusy(true);
     setError(null);
     setSent(null);
-    const toastId = toast.pending('Deposit', 'Confirm the transfer in your wallet…');
+    const toastId = toast.pending('Deposit', 'Preparing…');
     try {
+      // 沒有帳戶就先建（enroll）——「存款就是跟隨」，使用者不必先理解 enroll。
+      // 位址是 counterfactual 的：同一個 (owner, strategy) 永遠同一個地址，所以建好之後
+      // 之後所有存款都進同一個帳戶。
+      let account = holding?.smartAccounts[0]?.address;
+      if (account === undefined) {
+        toast.replace(toastId, {
+          tone: 'pending',
+          title: 'Creating your account',
+          body: 'One account per owner and strategy…',
+        });
+        const created = await enrollPortfolio(token, strategy.id);
+        account = created.smartAccounts[0]?.address;
+        if (account === undefined) throw new Error('the backend returned no smart account address');
+        await queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token) });
+        toast.replace(toastId, { tone: 'pending', title: 'Deposit', body: 'Confirm the transfer in your wallet…' });
+      }
+
       const value = parseUnits(amount === '' ? '0' : amount, usdt.decimals);
       if (value === 0n) throw new Error('amount must be greater than zero');
       const hash = await sendUsdt(wallet, usdt.address as Address, account as Address, value);
       setSent(hash);
       toast.replace(toastId, { tone: 'ok', title: `Deposited ${amount} ${usdt.symbol}`, body: hash });
       await queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token) });
-      await queryClient.invalidateQueries({ queryKey: ['fund-status', token, holding.id] });
+      // 剛建立帳戶時 `holding` 還是 undefined，所以不能拿 holding.id 當 key；用 portfolio 清單重抓即可。
+      await queryClient.invalidateQueries({ queryKey: ['fund-status'] });
     } catch (cause) {
       setError(cause);
       toast.replace(toastId, { tone: 'bad', title: 'Deposit failed', body: (cause as Error).message.split('\n')[0].slice(0, 140) });
@@ -856,21 +859,6 @@ export function FundPage(): ReactNode {
     return BigInt(wei) < 10n ** 16n;
   }
 
-  /** 在基金頁直接建立「我的帳戶」（＝enroll），不必繞去 /create。 */
-  async function follow(): Promise<void> {
-    if (token === null || strategy === undefined) return;
-    setEnrolling(true);
-    setError(null);
-    try {
-      await enrollPortfolio(token, strategy.id);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token) });
-      await queryClient.invalidateQueries({ queryKey: ['strategies', token] });
-    } catch (cause) {
-      setError(cause);
-    } finally {
-      setEnrolling(false);
-    }
-  }
 
   /** 帳戶裡的現金（numeraire）價值（美元）。 */
   function cashUsd(): number {
@@ -974,7 +962,8 @@ export function FundPage(): ReactNode {
         }
       }
       await queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token) });
-      await queryClient.invalidateQueries({ queryKey: ['fund-status', token, holding.id] });
+      // 剛建立帳戶時 `holding` 還是 undefined，所以不能拿 holding.id 當 key；用 portfolio 清單重抓即可。
+      await queryClient.invalidateQueries({ queryKey: ['fund-status'] });
       toast.replace(toastId, { tone: 'ok', title: 'Position closed', body: 'Every asset is back in your wallet.' });
     } catch (cause) {
       setWithdrawError(cause);
@@ -1075,7 +1064,8 @@ export function FundPage(): ReactNode {
       setWithdrawTx(receipt.txHash);
       toast.replace(toastId, { tone: 'ok', title: `Withdrew ${formatUsd(sendable)}`, body: receipt.txHash });
       await queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token) });
-      await queryClient.invalidateQueries({ queryKey: ['fund-status', token, holding.id] });
+      // 剛建立帳戶時 `holding` 還是 undefined，所以不能拿 holding.id 當 key；用 portfolio 清單重抓即可。
+      await queryClient.invalidateQueries({ queryKey: ['fund-status'] });
     } catch (cause) {
       setWithdrawError(cause);
     } finally {
