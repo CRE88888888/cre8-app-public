@@ -523,8 +523,8 @@ export function FundPage(): ReactNode {
                           You pay
                         </label>
                         <span className="swap-picks">
-                          <button type="button" onClick={() => setAmount('1000')}>
-                            1000
+                          <button type="button" onClick={() => setAmount(maxDepositLabel())}>
+                            Max
                           </button>
                         </span>
                       </div>
@@ -751,6 +751,18 @@ export function FundPage(): ReactNode {
   function cashUsd(): number {
     const row = (live?.holdings ?? []).find((entry) => entry.symbol === (usdt?.symbol ?? 'USDT'));
     return row === undefined ? 0 : Number(row.usdValueE8) / 1e8;
+  }
+
+  /**
+   * Deposit 的 Max = 錢包 USDT 餘額**向下取整到分**。
+   *
+   * 寫死 `1000` 的快捷鍵在餘額只有 996 時會直接把表單填成一個「必定 revert」的金額
+   * （實測使用者按下去只看到 "That is more than the wallet holds"）。最大值只能向下取。
+   */
+  function maxDepositLabel(): string {
+    if (walletUsdt === null) return '';
+    const amount = Number(formatUnits(walletUsdt, usdtDecimals));
+    return amount === 0 ? '' : (Math.floor(amount * 100) / 100).toFixed(2);
   }
 
   /** 整個基金價值（美元）。 */
