@@ -206,13 +206,30 @@ export function approveCalldata(spender: Address): Hex {
 }
 
 /** 帳戶對 spender 的 ERC-20 allowance。 */
+/**
+ * 唯讀的 public client —— **不需要錢包**。
+ *
+ * allowance 是純讀取，卻原本綁在「錢包 transport」上，於是沒連錢包時整個 Allowance 區塊只能顯示
+ * 那段長說明（永遠不知道其實已經 approve 了）。把讀取與簽名拆開：讀用 RPC，簽才需要錢包。
+ */
+export function readOnlyClient(): PublicClient {
+  const rpcUrl = import.meta.env.VITE_RPC_URL ?? (import.meta.env.DEV ? '/rpc' : undefined);
+  if (rpcUrl === undefined || rpcUrl === '') {
+    throw new Error(
+      'Reading allowance needs an RPC: set VITE_RPC_URL (in dev the vite /rpc proxy is used automatically)',
+    );
+  }
+  return createPublicClient({ chain: bsc, transport: http(rpcUrl) });
+}
+
 export async function readAllowance(args: {
-  wallet: RenewalWallet;
+  /** 有連錢包就用它的 transport（沿用使用者自己的 RPC）；沒有就退回唯讀 client。 */
+  wallet?: RenewalWallet | null;
   token: Address;
   owner: Address;
   spender: Address;
 }): Promise<bigint> {
-  const client = publicClientFor(args.wallet);
+  const client = args.wallet === null || args.wallet === undefined ? readOnlyClient() : publicClientFor(args.wallet);
   return (await client.readContract({
     address: args.token,
     abi: [

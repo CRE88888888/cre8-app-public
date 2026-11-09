@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Address } from 'viem';
 import { ApiError, getRebalancePlan, postRebalance } from '../../lib/api';
@@ -61,8 +61,11 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
   const [approveTx, setApproveTx] = useState<string | null>(null);
 
   const executor = status.executorAddress;
+  // 全部資產都 approve 過 → UI 收成一行（那段說明只在第一次有用）。
+  const allApproved = allowances !== null && allowances.length > 0 && allowances.every((row) => row.allowance > 0n);
   const probeAllowances = useCallback(async () => {
-    if (renewalWallet === null || executor === null) return;
+    // 讀 allowance 不需要錢包（純讀取）—— 只有 approve 才需要 owner 簽名。
+    if (executor === null) return;
     setApproveError(null);
     try {
       const rows = await Promise.all(
@@ -85,6 +88,11 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
       setApproveError(cause);
     }
   }, [executor, renewalWallet, status.account, status.targets]);
+  // 進頁面就探一次：不探就永遠不知道已 approve，那種情況使用者會一直看到那段長說明。
+  // 成本是每個資產一次 （我們的基金 2–3 個），比讓使用者手動按一次值得。
+  useEffect(() => {
+    void probeAllowances();
+  }, [probeAllowances]);
 
   const doApprove = useCallback(async () => {
     if (renewalWallet === null || executor === null || token === null) return;
@@ -196,8 +204,28 @@ export function RebalanceCard({ status }: { status: PortfolioStatus }): ReactNod
         </>
       )}
 
-      {/* allowance：新投組最常見的卡點。owner 錢包簽一筆 sudo UserOp 就能解決。 */}
-      {executor === null ? null : (
+      {/* allowance：新投組最常見的卡點。owner 錢包簽一筆 sudo UserOp 就能解決。
+          已 approve 之後**收成一行** —— 那段「為什麼需要 approve」的說明只在第一次有用。 */}
+      {executor === null ? null : allApproved ? (
+        <div className="row" style={{ gap: 10, alignItems: 'center', justifyContent: 'space-between' }}>
+          <span className="row" style={{ gap: 8, alignItems: 'center' }}>
+            <span className="pos" style={{ fontSize: 13 }}>
+              Allowance ok
+            </span>
+            <span className="muted" style={{ fontSize: 12 }}>
+              the executor can pull every asset in this fund
+            </span>
+          </span>
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            disabled={renewalWallet === null}
+            onClick={() => void probeAllowances()}
+          >
+            Re-check
+          </button>
+        </div>
+      ) : (
         <div className="stack" style={{ gap: 8 }}>
           <div className="row" style={{ justifyContent: 'space-between' }}>
             <span className="muted" style={{ fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
