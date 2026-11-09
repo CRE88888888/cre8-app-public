@@ -7,6 +7,7 @@ import { shortAddress } from '../lib/format';
 import { useSession } from '../store/session';
 import { useWallet } from '../store/wallet';
 import { siwePhaseLabel, useSiweSignIn } from '../features/auth/use-siwe-signin';
+import { useWalletDiagnostics } from '../lib/use-wallet-diagnostics';
 import { ErrorNote } from './ui';
 
 /** 任何地方都可以叫出錢包選單（例如 `RequireSession` 的「Sign in」）。 */
@@ -38,6 +39,8 @@ export function WalletMenu(): ReactNode {
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   const siwe = useSiweSignIn(() => setOpen(false));
+  // 錢包讀的是它自己的 RPC，所以「餘額不足」常常是連錯網路（chain 56 有兩個：主網與我們的 fork）。
+  const diagnostics = useWalletDiagnostics(wallet.address, wallet.provider);
 
   const refreshProviders = useCallback(async () => {
     try {
@@ -118,7 +121,13 @@ export function WalletMenu(): ReactNode {
 
       {open ? (
         <div className="wallet-menu__panel" role="menu">
-          {wallet.address === null ? (
+          {wallet.address !== null && diagnostics.problem !== null ? (
+        <p className="wallet-warning" role="alert" style={{ margin: '0 0 10px', fontSize: 12, lineHeight: 1.5 }}>
+          {diagnostics.problem}
+        </p>
+      ) : null}
+
+      {wallet.address === null ? (
             <>
               <p className="wallet-menu__title">Connect a wallet</p>
               {providers === null ? (
