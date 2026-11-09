@@ -140,7 +140,10 @@ export function FundPage(): ReactNode {
   // `?tab=withdraw` 直接開提領分頁 —— 分頁狀態本來只在記憶體裡，沒有網址就只能靠手動點。
   const [search] = useSearchParams();
   const [tab, setTab] = useState<'deposit' | 'withdraw'>(search.get('tab') === 'withdraw' ? 'withdraw' : 'deposit');
+  // 預設金額刻意不是寫死的 1000：錢包只有 996 時，一進頁面就會被判「超過餘額」而顯示紅字，
+  // 使用者什麼都還沒做。下面用 `amountTouched` 區分「預設值」與「使用者自己填的」。
   const [amount, setAmount] = useState('1000');
+  const [amountTouched, setAmountTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [sent, setSent] = useState<string | null>(null);
@@ -529,7 +532,13 @@ export function FundPage(): ReactNode {
                           You pay
                         </label>
                         <span className="swap-picks">
-                          <button type="button" onClick={() => setAmount(maxDepositLabel())}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAmountTouched(true);
+                              setAmount(maxDepositLabel());
+                            }}
+                          >
                             Max
                           </button>
                         </span>
@@ -540,7 +549,10 @@ export function FundPage(): ReactNode {
                         autoComplete="off"
                         placeholder="0"
                         value={amount}
-                        onChange={(event) => setAmount(event.target.value)}
+                        onChange={(event) => {
+                          setAmountTouched(true);
+                          setAmount(event.target.value);
+                        }}
                       />
                       {/* ⚠ 只能有**一個** `.swap-sub`：在 ticket 裡它是 grid 的 `sub` 區，
                           兩個元素會被放進同一格而重疊（實測「USDT → your account…」疊在
@@ -561,7 +573,7 @@ export function FundPage(): ReactNode {
                           {usdt?.symbol ?? 'USDT'}
                         </span>
                       </span>
-                      {depositTooLarge ? (
+                      {amountTouched && depositTooLarge ? (
                         <p className="fine neg" style={{ margin: '6px 0 0' }}>
                           That is more than the wallet holds — the transfer would revert with
                           &ldquo;BEP20: transfer amount exceeds balance&rdquo; before it reaches the chain.
