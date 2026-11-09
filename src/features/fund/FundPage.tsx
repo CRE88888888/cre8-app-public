@@ -911,9 +911,23 @@ export function FundPage(): ReactNode {
           });
         }
       }
-      await queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token) });
-      // 剛建立帳戶時 `holding` 還是 undefined，所以不能拿 holding.id 當 key；用 portfolio 清單重抓即可。
-      await queryClient.invalidateQueries({ queryKey: ['fund-status'] });
+      // 存款後要重抓的是**整條依賴鏈**，不是只有 portfolios：
+      //
+      //   strategies ──┐
+      //                ├──> holding ──> held ──> 「My position」按鈕出不出現
+      //   portfolios ──┘
+      //
+      // 只失效 portfolios 的話，`strategy` 可能還是快取裡那個「這檔基金還沒上鏈」的舊清單，
+      // 於是 `holding` 永遠找不到 → 按鈕不出現，**要手動重整才會出現**（實測回報）。
+      //
+      // `refetchType: 'all'` 連非 active 的查詢一起重抓：`fund-status` 的 queryKey 帶
+      // `holding?.id`，在剛 enroll 完的那一輪 render 裡它是 `undefined` 且 `enabled: false` ——
+      // 預設只重抓 active 查詢的話，那一筆會被跳過。
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['strategies'], refetchType: 'all' }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token), refetchType: 'all' }),
+        queryClient.invalidateQueries({ queryKey: ['fund-status'], refetchType: 'all' }),
+      ]);
     } catch (cause) {
       setError(cause);
       toast.replace(toastId, { tone: 'bad', title: 'Deposit failed', body: (cause as Error).message.split('\n')[0].slice(0, 140) });
@@ -1023,9 +1037,23 @@ export function FundPage(): ReactNode {
           `Closed: ${sold.steps.length} sell step(s), then ${balances.filter((row) => row.amountWei > 0n).length} token(s) sent back to your wallet.`,
         );
       }
-      await queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token) });
-      // 剛建立帳戶時 `holding` 還是 undefined，所以不能拿 holding.id 當 key；用 portfolio 清單重抓即可。
-      await queryClient.invalidateQueries({ queryKey: ['fund-status'] });
+      // 存款後要重抓的是**整條依賴鏈**，不是只有 portfolios：
+      //
+      //   strategies ──┐
+      //                ├──> holding ──> held ──> 「My position」按鈕出不出現
+      //   portfolios ──┘
+      //
+      // 只失效 portfolios 的話，`strategy` 可能還是快取裡那個「這檔基金還沒上鏈」的舊清單，
+      // 於是 `holding` 永遠找不到 → 按鈕不出現，**要手動重整才會出現**（實測回報）。
+      //
+      // `refetchType: 'all'` 連非 active 的查詢一起重抓：`fund-status` 的 queryKey 帶
+      // `holding?.id`，在剛 enroll 完的那一輪 render 裡它是 `undefined` 且 `enabled: false` ——
+      // 預設只重抓 active 查詢的話，那一筆會被跳過。
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['strategies'], refetchType: 'all' }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token), refetchType: 'all' }),
+        queryClient.invalidateQueries({ queryKey: ['fund-status'], refetchType: 'all' }),
+      ]);
       toast.replace(toastId, { tone: 'ok', title: 'Position closed', body: 'Every asset is back in your wallet.' });
     } catch (cause) {
       setWithdrawError(cause);
@@ -1125,9 +1153,23 @@ export function FundPage(): ReactNode {
       );
       setWithdrawTx(receipt.txHash);
       toast.replace(toastId, { tone: 'ok', title: `Withdrew ${formatUsd(sendable)}`, body: receipt.txHash });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token) });
-      // 剛建立帳戶時 `holding` 還是 undefined，所以不能拿 holding.id 當 key；用 portfolio 清單重抓即可。
-      await queryClient.invalidateQueries({ queryKey: ['fund-status'] });
+      // 存款後要重抓的是**整條依賴鏈**，不是只有 portfolios：
+      //
+      //   strategies ──┐
+      //                ├──> holding ──> held ──> 「My position」按鈕出不出現
+      //   portfolios ──┘
+      //
+      // 只失效 portfolios 的話，`strategy` 可能還是快取裡那個「這檔基金還沒上鏈」的舊清單，
+      // 於是 `holding` 永遠找不到 → 按鈕不出現，**要手動重整才會出現**（實測回報）。
+      //
+      // `refetchType: 'all'` 連非 active 的查詢一起重抓：`fund-status` 的 queryKey 帶
+      // `holding?.id`，在剛 enroll 完的那一輪 render 裡它是 `undefined` 且 `enabled: false` ——
+      // 預設只重抓 active 查詢的話，那一筆會被跳過。
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['strategies'], refetchType: 'all' }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token), refetchType: 'all' }),
+        queryClient.invalidateQueries({ queryKey: ['fund-status'], refetchType: 'all' }),
+      ]);
     } catch (cause) {
       setWithdrawError(cause);
     } finally {
