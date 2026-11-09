@@ -145,7 +145,6 @@ export function FundPage(): ReactNode {
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  const [sent, setSent] = useState<string | null>(null);
   const [facts, setFacts] = useState(false);
   // 「My position」＝這個投組的即時狀態（原本在 /portfolios/:id 才能看，現在收進基金頁）。
   const [myPosition, setMyPosition] = useState(false);
@@ -574,11 +573,6 @@ export function FundPage(): ReactNode {
                       {busy ? 'Sending…' : 'Deposit'}
                     </button>
                     {wallet === null ? <p className="fine">Connect the owner wallet in the header first.</p> : null}
-                    {sent === null ? null : (
-                      <p className="fine">
-                        Deposited. tx <span className="mono">{sent}</span>
-                      </p>
-                    )}
                     <ErrorNote error={error} />
                   </form>
                 )}
@@ -817,7 +811,6 @@ export function FundPage(): ReactNode {
     if (wallet === null || token === null || strategy === undefined || usdt === undefined) return;
     setBusy(true);
     setError(null);
-    setSent(null);
     const toastId = toast.pending('Deposit', 'Preparing…');
     try {
       // 沒有帳戶就先建（enroll）——「存款就是跟隨」，使用者不必先理解 enroll。
@@ -840,8 +833,8 @@ export function FundPage(): ReactNode {
       const value = parseUnits(amount === '' ? '0' : amount, usdt.decimals);
       if (value === 0n) throw new Error('amount must be greater than zero');
       const hash = await sendUsdt(wallet, usdt.address as Address, account as Address, value);
-      setSent(hash);
       toast.replace(toastId, { tone: 'ok', title: `Deposited ${amount} ${usdt.symbol}`, body: hash });
+      // 成功後清空輸入框：這是按下 Deposit 之後最直接的視覺回饋（不用等 toast 出現）。\n      setAmount('');
       await queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token) });
       // 剛建立帳戶時 `holding` 還是 undefined，所以不能拿 holding.id 當 key；用 portfolio 清單重抓即可。
       await queryClient.invalidateQueries({ queryKey: ['fund-status'] });
