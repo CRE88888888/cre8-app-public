@@ -31,23 +31,41 @@ bun run build
 
 `VITE_CHAIN_ID` 會在**建置時**被寫進 bundle（`uu=56`），不是執行時讀取 —— 換鏈就要重新建置。
 
-## 部署
+## 部署（已實際執行）
 
 ```bash
-# 首次
-wrangler pages project create cre8-app --production-branch=main
-wrangler pages deploy dist --project-name=cre8-app
-
-# 自訂網域
-wrangler pages domain add app.cre8.xyz --project-name=cre8-app
+wrangler pages project create cre8-atp --production-branch=main
+wrangler pages deploy dist --project-name=cre8-atp --branch=main
 ```
 
-## 後端對應設定
+沙箱環境要注意：wrangler 要寫 `~/Library/Preferences/.wrangler`，預設不可寫。
+做法與 Railway CLI 相同 —— 把憑證複製到工作區並改 HOME：
 
+```bash
+mkdir -p .wrangler-home/Library/Preferences
+cp -R ~/Library/Preferences/.wrangler .wrangler-home/Library/Preferences/
+HOME=$PWD/.wrangler-home wrangler pages deploy dist --project-name=cre8-atp
 ```
-AUTH_DOMAIN=app.cre8.xyz
-AUTH_URI=https://app.cre8.xyz
-```
+
+（`.wrangler-home/` 含 OAuth token，已 gitignore。）
+
+## 目前狀態（暫時用 Pages 預設網域）
+
+| 項目 | 值 |
+|---|---|
+| 前端 | `https://cre8-atp.pages.dev` |
+| API（同源代理） | `https://cre8-atp.pages.dev/api/*` |
+| `AUTH_DOMAIN` | `cre8-atp.pages.dev` |
+| `AUTH_URI` | `https://cre8-atp.pages.dev` |
+
+### 換成 app.cre8.xyz 時要改三處
+
+1. Cloudflare Pages → 專案 → Custom domains → 加 `app.cre8.xyz`（DNS 由 Cloudflare 自動建立）
+2. Railway api 服務的 `AUTH_DOMAIN=app.cre8.xyz`、`AUTH_URI=https://app.cre8.xyz`，然後**重新部署**
+3. 驗證：`curl -s -X POST https://app.cre8.xyz/api/auth/nonce` → domain 要是 `app.cre8.xyz`
+
+**漏掉第 2 步的症狀**：頁面載入正常，但按下 Sign in 時錢包簽完卻得到
+`SIWE message domain "app.cre8.xyz" does not match this server (cre8-atp.pages.dev)`。
 
 驗證（不必登入就能看）：
 
