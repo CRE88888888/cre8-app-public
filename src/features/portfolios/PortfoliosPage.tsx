@@ -8,6 +8,7 @@ import { queryKeys } from '../../lib/query';
 import { useBodyClass } from '../../lib/use-body-class';
 import { useSession } from '../../store/session';
 import { useWallet } from '../../store/wallet';
+import { MOCK_FUNDS } from '../../data/mock-funds';
 import { Badge, ErrorNote, Spinner } from '../../components/ui';
 import { SignInButton } from '../../components/WalletMenu';
 
@@ -146,7 +147,16 @@ export function PortfoliosPage(): ReactNode {
                     return (
                       <tr key={id}>
                         <td>
-                          <Link to={`/portfolios/${id}`}>{nameOf.get(id) ?? `Strategy ${id}`}</Link>
+                          {/* 名稱 → 目錄 slug：細節頁移除後，這裡是使用者唯一能點進去看基金的地方。 */}
+                          {(() => {
+                            const name = nameOf.get(id);
+                            const slug = MOCK_FUNDS.find((fund) => fund.name === name)?.slug;
+                            return name === undefined ? (
+                              `Strategy ${id}`
+                            ) : (
+                              <Link to={slug === undefined ? '/vaults' : `/funds/${slug}`}>{name}</Link>
+                            );
+                          })()}
                         </td>
                         <td className="mono muted" style={{ fontSize: 12 }}>
                           {status === undefined ? '—' : shortAddress(status.account)}
@@ -167,7 +177,14 @@ export function PortfoliosPage(): ReactNode {
                           )}
                         </td>
                         <td>
-                          <Link to={`/portfolios/${id}`}>Open →</Link>
+                          {(() => {
+                            const slug = MOCK_FUNDS.find((fund) => fund.name === nameOf.get(id))?.slug;
+                            return slug === undefined ? (
+                              <span className="muted">—</span>
+                            ) : (
+                              <Link to={`/funds/${slug}`}>Open →</Link>
+                            );
+                          })()}
                         </td>
                       </tr>
                     );
@@ -211,7 +228,7 @@ export function PortfoliosPage(): ReactNode {
                   {merged.slice(0, 20).map(({ portfolioId, entry }) => (
                     <tr key={`${portfolioId}-${entry.id}`}>
                       <td>
-                        <Link to={`/portfolios/${portfolioId}`}>{nameOf.get(portfolioId) ?? `#${portfolioId}`}</Link>
+                        {nameOf.get(portfolioId) ?? `#${portfolioId}`}
                       </td>
                       <td className="muted" style={{ fontSize: 12 }}>
                         {new Date(entry.createdAt).toLocaleString('en-GB', { hour12: false })}

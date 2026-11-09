@@ -9,7 +9,6 @@ import { StrategyPage } from './features/strategy/StrategyPage';
 import { PortfoliosPage } from './features/portfolios/PortfoliosPage';
 import { CreateFundPage } from './features/create/CreateFundPage';
 import { VaultsPage } from './features/vaults/VaultsPage';
-import { StatusPage } from './features/status/StatusPage';
 
 export function App(): ReactNode {
   return (
@@ -32,14 +31,6 @@ export function App(): ReactNode {
           element={
             <RequireSession>
               <PortfoliosPage />
-            </RequireSession>
-          }
-        />
-        <Route
-          path="/portfolios/:id"
-          element={
-            <RequireSession>
-              <StatusPage />
             </RequireSession>
           }
         />

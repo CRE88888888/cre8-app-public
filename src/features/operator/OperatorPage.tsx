@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
 import { getOperatorOverview } from '../../lib/api';
 import type { OperatorOverview, OperatorRow } from '../../lib/api';
 import { formatEther } from 'viem';
@@ -140,7 +139,7 @@ function Dashboard({ overview }: { overview: OperatorOverview }): ReactNode {
               return (
                 <tr key={row.id}>
                   <td className="mono">
-                    <Link to={`/portfolios/${row.id}`}>{row.id}</Link>
+                    {row.id}
                   </td>
                   <td>
                     {row.strategyName ?? `strategy ${row.strategyId}`}

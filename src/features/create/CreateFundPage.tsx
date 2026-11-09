@@ -431,7 +431,7 @@ export function CreateFundPage(): ReactNode {
               <button
                 type="button"
                 className="btn btn--sm"
-                onClick={() => navigate(`/portfolios/${created.portfolioId}`)}
+                onClick={() => navigate('/portfolios')}
               >
                 Open the portfolio
               </button>

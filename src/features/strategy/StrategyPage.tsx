@@ -241,7 +241,7 @@ export function StrategyPage(): ReactNode {
                       </td>
                       <td className="num">v{portfolio.version}</td>
                       <td>
-                        <Link to={`/portfolios/${portfolio.id}`}>Open →</Link>
+                        <span className="muted">—</span>
                       </td>
                     </tr>
                   ))}

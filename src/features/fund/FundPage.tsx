@@ -376,7 +376,7 @@ export function FundPage(): ReactNode {
                 <p className="fine vault-info">
                   Live weights at block #{live.block} · drift {live.drift.grossDriftBps} bps (threshold{' '}
                   {live.drift.thresholdBps} bps) ·{' '}
-                  <Link to={`/portfolios/${holding?.id}`}>open portfolio #{holding?.id}</Link>
+                  portfolio #{holding?.id} (see “My position” above)
                 </p>
               )}
             </section>
@@ -457,7 +457,7 @@ export function FundPage(): ReactNode {
                       {gasTooLow(live) ? (
                         <p className="fine">
                           The account needs BNB for gas. Top it up on{' '}
-                          <Link to={`/portfolios/${holding.id}`}>the portfolio page</Link> first.
+                          the “My position” drawer above first.
                         </p>
                       ) : null}
                       {withdrawNote === null ? null : <p className="fine warn">{withdrawNote}</p>}
