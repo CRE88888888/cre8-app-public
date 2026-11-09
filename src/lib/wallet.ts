@@ -125,3 +125,59 @@ export function createDevSigner(privateKey: Hex): DevSigner {
 export function isLikelyPrivateKey(value: string): value is Hex {
   return /^0x[0-9a-fA-F]{64}$/.test(value.trim());
 }
+
+/**
+ * 讓錢包切到 `chainId`；錢包不認識這條鏈時把它加進去。
+ *
+ * ## 為什麼一定要做這件事
+ *
+ * 這個 app 之前**完全沒有** `wallet_switchEthereumChain` —— 連上錢包之後就直接用
+ * 「錢包目前所在的鏈」。實測後果：使用者上次測試時把 MetaMask 加了一個
+ * 「CRE8 Local (1337)」的網路，之後打開主網的網站，畫面看起來像「網站連到 1337 測試網」，
+ * 實際上只是錢包停在那條鏈上，而我們照著用。
+ *
+ * 那種狀態下每個讀取都會失敗（RPC 指向已關閉的 anvil），而使用者看到的是一堆看不懂的錯誤。
+ * 主動切鏈、切不動就明講，比靜默用錯鏈好。
+ *
+ * ## 三種結果
+ *
+ *   'already' —— 本來就在這條鏈上（最常見）
+ *   'switched' —— 成功切換（或先加入再切換）
+ *   'declined' —— 使用者在錢包裡按了取消；呼叫端應該提示而不是報錯
+ */
+export async function ensureChain(
+  provider: Eip1193Provider,
+  chainId: number,
+  addParams: { chainName: string; rpcUrls: string[]; nativeCurrency: { name: string; symbol: string; decimals: number }; blockExplorerUrls?: string[] },
+): Promise<'already' | 'switched' | 'declined'> {
+  const current = await chainIdOf(provider).catch(() => null);
+  if (current === chainId) return 'already';
+
+  const hex = `0x${chainId.toString(16)}`;
+  try {
+    await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hex }] });
+    return 'switched';
+  } catch (cause) {
+    // 4902 = 錢包不認識這條鏈 → 加進去再切一次。
+    // 其他錯誤（含使用者按取消的 4001）往上拋由呼叫端判斷。
+    const code = (cause as { code?: number }).code;
+    if (code !== 4902) {
+      if (code === 4001) return 'declined';
+      throw cause;
+    }
+  }
+
+  await provider.request({
+    method: 'wallet_addEthereumChain',
+    params: [
+      {
+        chainId: hex,
+        chainName: addParams.chainName,
+        rpcUrls: addParams.rpcUrls,
+        nativeCurrency: addParams.nativeCurrency,
+        ...(addParams.blockExplorerUrls === undefined ? {} : { blockExplorerUrls: addParams.blockExplorerUrls }),
+      },
+    ],
+  });
+  return 'switched';
+}
