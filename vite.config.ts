@@ -1,4 +1,6 @@
+import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 
 /**
@@ -9,7 +11,11 @@ import { defineConfig } from 'vite';
  * 部署時由反向代理做同一件事（`/api` → backend），前端不必改任何一行。
  */
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
+  resolve: {
+    // shadcn 的元件一律用 `@/…` 匯入，Vite 與 TypeScript 都要知道這個別名。
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+  },
   server: {
     port: 5173,
     proxy: {

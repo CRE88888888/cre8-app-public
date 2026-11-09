@@ -1,0 +1,90 @@
+/**
+ * shadcn/ui 的樣式入口。
+ *
+ * ## 為什麼不是一行 `@import "tailwindcss"`
+ * 那一行會連 **Preflight**（Tailwind 的全域 reset）一起帶進來，而這個專案的畫面是靠
+ * `styles/vendor/design.css`（設計稿的逐字複本，4500 行）撐起來的。Preflight 會把
+ * margin / font / border / heading 全部歸零，等於把已經對齊好的設計稿版面打掉。
+ *
+ * 所以這裡只引入 theme 與 utilities，**刻意跳過 preflight**：
+ *
+ *   @import "tailwindcss/theme.css"      → CSS 變數（顏色、間距、字體）
+ *   @import "tailwindcss/utilities.css"  → `flex gap-2 text-sm` 這些工具類別
+ *
+ * 代價是「裸元素不會被 reset」，所以 shadcn 元件內部若依賴 preflight 的假設
+ * （例如 `border-width: 0` 的預設值），要在元件自己的 class 裡補回來 —— shadcn 的元件
+ * 幾乎都顯式寫了 border/bg，實測不受影響。
+ */
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/*
+ * shadcn 的設計 token。
+ *
+ * 用 `oklch` 而不是 hex：Tailwind v4 的 theme 就是 oklch，混用會讓 `bg-primary/50`
+ * 這種透明度修飾詞算出來的顏色跳掉。
+ *
+ * 這裡刻意**不**覆寫 `--font-sans` 等字體變數 —— 字體由 `styles/vendor/fonts.css`
+ * 與設計稿的 CSS 決定，shadcn 元件沿用同一組字體看起來才一致。
+ */
+:root {
+  --radius: 0.75rem;
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.22 0.03 240);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.03 240);
+
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.03 240);
+
+  /* 主色沿用 CRE8 的深藍（design.css 的 --deep-mist #16222D 附近）。 */
+  --primary: oklch(0.33 0.035 240);
+  --primary-foreground: oklch(0.98 0.005 240);
+
+  --secondary: oklch(0.96 0.01 240);
+  --secondary-foreground: oklch(0.33 0.035 240);
+
+  --muted: oklch(0.96 0.01 240);
+  --muted-foreground: oklch(0.55 0.02 240);
+
+  --accent: oklch(0.95 0.02 200);
+  --accent-foreground: oklch(0.33 0.035 240);
+
+  --destructive: oklch(0.55 0.19 27);
+  --destructive-foreground: oklch(0.98 0.005 240);
+
+  --border: oklch(0.9 0.01 240);
+  --input: oklch(0.9 0.01 240);
+  --ring: oklch(0.6 0.04 240);
+}
+
+/* shadcn 元件用 `bg-background text-foreground` 這類語意名稱，這裡把它們接到 Tailwind 的
+ * theme 變數上（v4 的 `@theme` 才會生成對應的 utility）。 */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}

@@ -1,98 +1,91 @@
-import { create } from 'zustand';
 import type { ReactNode } from 'react';
+import { Toaster as SonnerToaster, toast as sonner } from 'sonner';
 
 /**
- * 全域 toast：交易這種**跨越好幾秒、好幾個簽章**的動作，需要一個「現在進行到哪」的出口。
+ * Toast —— **用 shadcn 的 sonner**，不再自己寫。
  *
- * 為什麼不是就地顯示：交易狀態是「已送出 → 等待簽章 → 已上鏈」，每一步都可能發生在
- * 使用者把視線移開之後（簽完名順手切回錢包）。就地訊息要等他切回來才看到；
- * toast 是「發生時就在那裡」。
+ * ## 為什麼換掉手寫版
+ * 手寫版需要自己處理：堆疊、自動消失、暫停計時、`aria-live`、動畫、可存取性、多個同時出現時的
+ * 排版。這每一項都是「看起來做到了、細節都錯」的典型（我們實際踩到的是：`className` 與設計稿的
+ * `.toast` 撞名 → 元素在 DOM 裡但 `opacity: 0`，畫面上完全看不到）。
+ * sonner 這些都處理好了，而且是 shadcn 的官方選項。
  *
- * 刻意不做：queue、堆疊上限以外的排序。同時最多三則，多的擠掉最舊的。
+ * ## 為什麼保留這個 adapter 而不是直接用 sonner
+ * 呼叫端用的是**語意化的四個狀態**（pending / ok / warn / bad）＋ `replace(id, …)`，
+ * 那組介面在 11 個地方用到。留一層薄薄的 adapter，遷移就只是換實作，不必改任何呼叫點。
+ *
+ * sonner 的 `{ id }` 選項就是「更新既有的那一則」—— 這正好對上我們的 `replace`：
+ * 「送出中」→「已確認」會在原本的位置變色，而不是多出一則新的。
  */
+
+/** sonner 的 id 是字串（`toast.loading()` 回傳值）。 */
+export type ToastId = string | number;
 
 export type ToastTone = 'pending' | 'ok' | 'warn' | 'bad';
 
-export type Toast = {
-  id: number;
+export type ToastInput = {
   tone: ToastTone;
   title: string;
-  /** 第二行（tx hash、金額、原因）。 */
+  /** 第二行（tx hash、金額、原因）。sonner 稱它 `description`。 */
   body?: string;
 };
 
-type ToastState = {
-  toasts: Toast[];
-  push: (toast: Omit<Toast, 'id'>) => number;
-  dismiss: (id: number) => void;
-  replace: (id: number, toast: Omit<Toast, 'id'>) => number;
-};
+const DURATION = { ok: 8_000, warn: 12_000, bad: 15_000 } as const;
 
-/** 同時最多三則 —— 四個以上就沒人會讀了。 */
-const MAX_VISIBLE = 3;
+function emit(input: ToastInput, id?: ToastId): ToastId {
+  const options = {
+    // `id` 有值 → 更新既有的那一則（不是新增）。這是 replace 的實作方式。
+    ...(id === undefined ? {} : { id }),
+    description: input.body,
+    // pending 不自動消失：它會被下一次 replace 換掉。其餘按嚴重度給不同的停留時間
+    // （失敗要留久一點才看得完）。
+    ...(input.tone === 'pending' ? { duration: Number.POSITIVE_INFINITY } : { duration: DURATION[input.tone] }),
+  };
 
-/** `pending` 不自動消失：它要等 `replace` 換成結果，否則會留下一個永遠在轉的圈。 */
-const TTL: Record<ToastTone, number | null> = { pending: null, ok: 8_000, warn: 12_000, bad: 15_000 };
-
-let nextId = 1;
-
-export const useToasts = create<ToastState>()((set, get) => ({
-  toasts: [],
-  push: (toast) => {
-    const id = nextId;
-    nextId += 1;
-    set((state) => ({ toasts: [...state.toasts, { ...toast, id }].slice(-MAX_VISIBLE) }));
-    const ttl = TTL[toast.tone];
-    if (ttl !== null) window.setTimeout(() => get().dismiss(id), ttl);
-    return id;
-  },
-  dismiss: (id) => set((state) => ({ toasts: state.toasts.filter((entry) => entry.id !== id) })),
-  replace: (id, toast) => {
-    get().dismiss(id);
-    return get().push(toast);
-  },
-}));
-
-/** 給非 React 的呼叫端（`catch` 裡、async 流程中）用。 */
-export const toast = {
-  pending: (title: string, body?: string): number => useToasts.getState().push({ tone: 'pending', title, body }),
-  ok: (title: string, body?: string): number => useToasts.getState().push({ tone: 'ok', title, body }),
-  warn: (title: string, body?: string): number => useToasts.getState().push({ tone: 'warn', title, body }),
-  bad: (title: string, body?: string): number => useToasts.getState().push({ tone: 'bad', title, body }),
-  replace: (id: number, next: Omit<Toast, 'id'>): number => useToasts.getState().replace(id, next),
-  dismiss: (id: number): void => useToasts.getState().dismiss(id),
-};
-
-// DEV 自測：`?toast=1` 時在**模組載入**就推一則（不放在 effect 裡）。
-// 這樣可以分辨「元件沒掛上」與「effect 沒跑」—— 模組載入一定比任何 render 早。
-if (import.meta.env.DEV && typeof window !== 'undefined') {
-  if (new URLSearchParams(window.location.search).get('toast') !== null) {
-    window.setTimeout(() => toast.warn('Toast self-test', 'module-load path'), 0);
+  switch (input.tone) {
+    case 'pending':
+      return sonner.loading(input.title, options);
+    case 'ok':
+      return sonner.success(input.title, options);
+    case 'warn':
+      return sonner.warning(input.title, options);
+    case 'bad':
+      return sonner.error(input.title, options);
+    default:
+      return sonner(input.title, options);
   }
 }
 
-const TONE_LABEL: Record<ToastTone, string> = { pending: 'Pending', ok: 'Done', warn: 'Note', bad: 'Failed' };
+/** 給非 React 的呼叫端（`catch` 裡、async 流程中）用。 */
+export const toast = {
+  pending: (title: string, body?: string): ToastId => emit({ tone: 'pending', title, body }),
+  ok: (title: string, body?: string): ToastId => emit({ tone: 'ok', title, body }),
+  warn: (title: string, body?: string): ToastId => emit({ tone: 'warn', title, body }),
+  bad: (title: string, body?: string): ToastId => emit({ tone: 'bad', title, body }),
+  /**
+   * 把一則既有的 toast 換成結果（同一個位置、同一個 id）。
+   *
+   * `tone: 'pending'` 也支援 —— 「準備中 → 建立帳戶中 → 等待簽章」這種多階段流程會用到。
+   */
+  replace: (id: ToastId, next: ToastInput): ToastId => emit(next, id),
+  dismiss: (id: ToastId): void => {
+    sonner.dismiss(id);
+  },
+};
 
-/** 掛在 App 最外層一次。 */
+/**
+ * 掛在 App 最外層一次。
+ *
+ * `richColors` 讓四種狀態有各自的底色（不用自己寫 CSS）；`closeButton` 給使用者關掉長訊息的路。
+ * 位置固定在右下角 —— 與原本手寫版一致。
+ */
 export function Toaster(): ReactNode {
-  const toasts = useToasts((state) => state.toasts);
-  const dismiss = useToasts((state) => state.dismiss);
-  if (toasts.length === 0) return null;
-
-  return (
-    <div className="app-toast-stack" role="status" aria-live="polite">
-      {toasts.map((entry) => (
-        <div key={entry.id} className={`app-toast app-toast--${entry.tone}`}>
-          <div className="app-toast-head">
-            <span className="app-toast-tone">{TONE_LABEL[entry.tone]}</span>
-            <button type="button" className="app-toast-x" aria-label="Dismiss" onClick={() => dismiss(entry.id)}>
-              ×
-            </button>
-          </div>
-          <strong className="app-toast-title">{entry.title}</strong>
-          {entry.body === undefined ? null : <span className="app-toast-body mono">{entry.body}</span>}
-        </div>
-      ))}
-    </div>
-  );
+  // DEV 自測：`?toast=1` 就推一則（不放在 effect 裡 —— 模組載入一定比任何 render 早，
+  // 這樣才能分辨「元件沒掛上」與「effect 沒跑」）。正式 build 會被 tree-shake 掉。
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
+    if (new URLSearchParams(window.location.search).get('toast') !== null) {
+      window.setTimeout(() => toast.warn('Toast self-test', 'sonner via shadcn'), 0);
+    }
+  }
+  return <SonnerToaster richColors closeButton position="bottom-right" />;
 }

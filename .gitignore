@@ -4,3 +4,6 @@ dist/
 .env
 .env.*
 !.env.example
+
+# bun 的預設快取目錄在這個環境不可寫，shadcn CLI 需要一個可寫的快取
+.bun-cache/
