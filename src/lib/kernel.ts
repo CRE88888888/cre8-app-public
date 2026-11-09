@@ -140,6 +140,21 @@ export async function sendSudoCalls(args: {
     useMetaFactory: true,
   });
 
+  // 「連錯錢包」要講清楚，不要讓它變成 AA24。
+  //
+  // Kernel 的 sudo 驗證是「這個簽名是不是帳戶 owner 簽的」。如果使用者目前連的錢包
+  // 不是當初建立那個帳戶的 owner，EntryPoint 只會回一句 `AA24 signature error` ——
+  // 那句話完全看不出原因是「錢包不對」，而使用者只會以為是我們的程式壞了。
+  //
+  // 這裡用同一個 signer 推導一次 counterfactual 地址來比對：地址不同就代表簽名者不是 owner。
+  if (sudoAccount.address.toLowerCase() !== args.accountAddress.toLowerCase()) {
+    throw new Error(
+      `This wallet does not control the fund's account. ` +
+        `Connected signer derives ${sudoAccount.address}, but the fund lives at ${args.accountAddress}. ` +
+        `Switch MetaMask to the wallet that created this position (the one shown in "My position"), then try again.`,
+    );
+  }
+
   const accountClient = createKernelAccountClient({
     account: sudoAccount,
     chain: bsc,
