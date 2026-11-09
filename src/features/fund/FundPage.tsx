@@ -665,7 +665,7 @@ export function FundPage(): ReactNode {
                         disabled={toppingUp}
                         onClick={() => void topUpGas()}
                       >
-                        {toppingUp ? 'Topping up…' : 'Top up 0.0100 BNB'}
+                        {toppingUp ? 'Topping up…' : 'Top up 0.002 BNB'}
                       </button>
                     )}
                   </dd>
@@ -859,10 +859,11 @@ export function FundPage(): ReactNode {
         const balance = gas !== null && gas !== undefined && gas.balanceWei !== undefined ? BigInt(gas.balanceWei) : 0n;
         // 最低 gas：後端算的 `minimumWei`，或退而求其次用 0.01 BNB（新帳戶查不到 minimum 時）。
         const minimum =
-          gas !== null && gas !== undefined && gas.minimumWei !== undefined ? BigInt(gas.minimumWei) : parseEther('0.01');
+          gas !== null && gas !== undefined && gas.minimumWei !== undefined ? BigInt(gas.minimumWei) : parseEther('0.002');
         if (balance < minimum) {
           // 補到 minimum + 一小段餘裕（約 1 筆交易的 gas），避免補完立刻又低於門檻。
-          const topUpWei = minimum - balance + parseEther('0.01');
+          // 緩衝只留 0.0005 BNB（約 20 筆 UserOp）—— 原本是 0.01，等於每次補 5 倍的量。
+          const topUpWei = minimum - balance + parseEther('0.0005');
           toast.replace(toastId, {
             tone: 'pending',
             title: 'Topping up gas',
@@ -1026,7 +1027,7 @@ export function FundPage(): ReactNode {
     setToppingUp(true);
     setError(null);
     try {
-      await sendGasTopUp({ wallet, to: account as Address, valueWei: parseEther('0.01') });
+      await sendGasTopUp({ wallet, to: account as Address, valueWei: parseEther('0.002') });
       await queryClient.invalidateQueries({ queryKey: ['fund-status', token, holding.id] });
     } catch (cause) {
       setError(cause);
@@ -1055,7 +1056,9 @@ export function FundPage(): ReactNode {
       // 連 gas 一起：清倉的語意是「這個帳戶什麼都不剩」。
       // 必須留一點付**這一筆** UserOp 的 gas，否則連驗證都過不了（AA21/AA51）。
       const gasWei = live?.gas?.balanceWei;
-      const GAS_RESERVE = parseEther('0.003');
+      // 掃回時保留的 gas：一筆 sudo UserOp 約 0.000025 BNB，0.0005 是 20 倍餘裕。
+      // 原本的 0.003 會讓每次清倉多留 6 倍的錢在帳戶裡。
+      const GAS_RESERVE = parseEther('0.0005');
       const nativeWei =
         gasWei === null || gasWei === undefined ? 0n : BigInt(gasWei) > GAS_RESERVE ? BigInt(gasWei) - GAS_RESERVE : 0n;
       const receipt = await sendSweep({
