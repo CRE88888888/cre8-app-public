@@ -861,18 +861,33 @@ export function FundPage(): ReactNode {
       }
 
       // 現金不夠 → 先按比例賣（session key 簽），再轉出（owner 簽）。
-      const shortfall = effective - cash;
+      //
+      // 賣出量要**放大**：賣掉 $X 的部位不會換到 $X 的 USDT —— 每一條腿都有成本
+      // （池費 0.25%、TWAP 地板折扣、價格衝擊）。實測 4 檔賣 $350 只換回 $332（少 5.2%），
+      // 於是「提領 400」實際只拿到 381.76。按缺口賣等於系統性少給。
+      //
+      // 所以：① 按 1/(1−緩衝) 放大 ② 賣完重讀餘額 ③ 還是不夠就再補一輪（最多 2 輪）。
+      // 上限 2 輪是刻意的：真的賣不動（流動性不足）時，重試只會燒 gas 而不會變好。
+      const SELL_BUFFER = 0.06;
+      const MAX_SELL_ROUNDS = 2;
+      const readCash = async (): Promise<number> => {
+        const fresh = await getPortfolioStatus(token, holding.id);
+        const row = (fresh.holdings ?? []).find((entry) => entry.symbol === (usdt?.symbol ?? 'USDT'));
+        return row === undefined ? 0 : Number(row.usdValueE8) / 1e8;
+      };
+
       let available = cash;
-      if (shortfall > 0.000001) {
-        const redeemed = await redeemPortfolio(token, holding.id, Math.round(shortfall * 1e6) / 1e6);
+      for (let round = 1; round <= MAX_SELL_ROUNDS; round += 1) {
+        const shortfall = effective - available;
+        if (shortfall <= 0.01) break;
+        const target = Math.ceil((shortfall / (1 - SELL_BUFFER)) * 1e6) / 1e6;
+        const redeemed = await redeemPortfolio(token, holding.id, target);
         if (redeemed.outcome !== 'executed' && redeemed.outcome !== 'noop') {
           throw new Error(`selling the shortfall failed: ${redeemed.reason}`);
         }
-        // ⚠ 賣出有滑價：賣掉 shortfall 不保證剛好換到 shortfall 的 USDT（實測 $4.79 的缺口只換到 $4.25）。
-        // 所以要**重讀餘額**，轉出「實際拿得到的量」，而不是死板地轉 requested。
-        const fresh = await getPortfolioStatus(token, holding.id);
-        const freshUsdt = (fresh.holdings ?? []).find((entry) => entry.symbol === (usdt?.symbol ?? 'USDT'));
-        available = freshUsdt === undefined ? 0 : Number(freshUsdt.usdValueE8) / 1e8;
+        available = await readCash();
+        // `noop` 代表連一步都排不出來（沒有可賣的部位）→ 再試也是一樣，直接停。
+        if (redeemed.outcome === 'noop') break;
       }
 
       const sendable = Math.min(effective, available);
@@ -889,8 +904,8 @@ export function FundPage(): ReactNode {
       });
       if (!receipt.success) throw new Error(`UserOp landed but reverted: ${receipt.txHash}`);
       setWithdrawNote(
-        sendable < effective - 0.000001
-          ? `Sold and sent ${formatUsd(sendable)} — the sale came back ${formatUsd(effective - sendable)} short of ${formatUsd(effective)} because of slippage.`
+        sendable < effective - 0.01
+          ? `Sent ${formatUsd(sendable)} of the ${formatUsd(effective)} you asked for — the account ran out of sellable positions (${formatUsd(effective - sendable)} still in stock).`
           : null,
       );
       setWithdrawTx(receipt.txHash);
