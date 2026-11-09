@@ -845,27 +845,32 @@ export function FundPage(): ReactNode {
       const value = parseUnits(amount === '' ? '0' : amount, usdt.decimals);
       if (value === 0n) throw new Error('amount must be greater than zero');
 
-      // 動錢之前先確認這個帳戶的 gas 夠不夠。
+      // 動錢之前先確認這個帳戶的 gas 夠不夠；不夠就**自動補**。
       //
-      // 為什麼是**這裡**：清倉時會把 BNB 掃回錢包（只留 0.003），下一次 deposit 就會碰到
-      // 「USDT 進去了、但再平衡付不出 gas」—— 實測正是這樣：
+      // 為什麼：清倉時會把 BNB 掃回錢包（只留 0.003），下一次 deposit 之後再平衡就會碰到
+      // 「USDT 進去了、但配置付不出 gas」—— 實測正是這樣：
       //   Send failed: Smart Account does not have sufficient funds
-      // 與其讓它進半套（錢到、配置失敗），不如在一開始就講清楚，並主動補 gas。
+      // 與其讓它進半套，不如在轉 USDT 之前先把 gas 補到位。
       //
-      // 只對**已存在的帳戶**檢查：enroll 剛建好的帳戶還沒收過 BNB，gas 一定是 0，
-      // 那時不能擋（否則第一次存款永遠過不去）—— 而是靠 deposit 之後的「補 gas」路徑。
-      if (account !== undefined && account !== null && holding !== undefined) {
+      // 只對**已存在的帳戶**：enroll 剛建好的新帳戶 gas 一定是 0，但那是「本來就該補」的情境，
+      // 這裡也一併補（一次 top-up 同時覆蓋新帳戶與清倉後的舊帳戶）。
+      if (account !== undefined && account !== null) {
         const gas = live?.gas;
-        if (gas !== null && gas !== undefined && gas.balanceWei !== undefined && gas.minimumWei !== undefined) {
-          const balance = BigInt(gas.balanceWei);
-          const minimum = BigInt(gas.minimumWei);
-          if (balance < minimum) {
-            const shortfall = Number(formatEther(minimum - balance)).toFixed(4);
-            throw new Error(
-              `This fund's account has only ${Number(formatEther(balance)).toFixed(4)} BNB for gas (needs ${Number(formatEther(minimum)).toFixed(4)}). ` +
-                `Top up ${shortfall} BNB first — your first rebalance would run out of gas.`,
-            );
-          }
+        const balance = gas !== null && gas !== undefined && gas.balanceWei !== undefined ? BigInt(gas.balanceWei) : 0n;
+        // 最低 gas：後端算的 `minimumWei`，或退而求其次用 0.01 BNB（新帳戶查不到 minimum 時）。
+        const minimum =
+          gas !== null && gas !== undefined && gas.minimumWei !== undefined ? BigInt(gas.minimumWei) : parseEther('0.01');
+        if (balance < minimum) {
+          // 補到 minimum + 一小段餘裕（約 1 筆交易的 gas），避免補完立刻又低於門檻。
+          const topUpWei = minimum - balance + parseEther('0.01');
+          toast.replace(toastId, {
+            tone: 'pending',
+            title: 'Topping up gas',
+            body: `Sending ${Number(formatEther(topUpWei)).toFixed(4)} BNB to the fund's account…`,
+          });
+          // 這是 owner 錢包 → 帳戶的普通 BNB 轉帳（會再要一次簽名）。
+          await sendGasTopUp({ wallet, to: account as Address, valueWei: topUpWei });
+          toast.replace(toastId, { tone: 'pending', title: 'Deposit', body: 'Confirm the USDT transfer in your wallet…' });
         }
       }
 
