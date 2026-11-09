@@ -18,12 +18,13 @@ import { AssetLogo } from '../../components/AssetLogo';
 import { SignInButton } from '../../components/WalletMenu';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ErrorNote, Note, Spinner } from '../../components/ui';
+import { Badge, ErrorNote, Note, Spinner } from '../../components/ui';
 import { toast } from '../../components/Toast';
 
 const ERC20_ABI = [
   { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: '', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] },
   { type: 'function', name: 'transfer', stateMutability: 'nonpayable', inputs: [{ name: 'to', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ name: '', type: 'bool' }] },
+  { type: 'function', name: 'allowance', stateMutability: 'view', inputs: [{ name: '', type: 'address' }, { name: '', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] },
 ] as const;
 
 const PERIODS = ['7D', '30D', '90D', '1Y', 'ALL'] as const;
@@ -139,6 +140,8 @@ export function FundPage(): ReactNode {
   });
 
   const [period, setPeriod] = useState<Period>('1Y');
+
+
   // `?tab=withdraw` 直接開提領分頁 —— 分頁狀態本來只在記憶體裡，沒有網址就只能靠手動點。
   const [search] = useSearchParams();
   const [tab, setTab] = useState<'deposit' | 'withdraw'>(search.get('tab') === 'withdraw' ? 'withdraw' : 'deposit');
@@ -152,6 +155,9 @@ export function FundPage(): ReactNode {
   // 「My position」＝這個投組的即時狀態（原本在 /portfolios/:id 才能看，現在收進基金頁）。
   const [myPosition, setMyPosition] = useState(search.get('position') === '1');
   const [toppingUp, setToppingUp] = useState(false);
+  /** 還沒授權給 executor 的資產（`null` = 還沒讀完）。有錢但沒授權時，UI 必須說出來。 */
+  const [unapproved, setUnapproved] = useState<string[] | null>(null);
+  const [approving, setApproving] = useState(false);
   // 提領：預設 USDT（現金腿），可選帳戶裡任何有餘額的資產 —— 每個都只是一筆 transfer。
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawBusy, setWithdrawBusy] = useState(false);
@@ -230,6 +236,50 @@ export function FundPage(): ReactNode {
   })();
 
   const live = status.data;
+
+  /**
+   * 讀「哪些資產還沒授權給 executor」。
+   *
+   * 為什麼要獨立成一個 effect：`blocked: ALLOWANCE_TOO_LOW` 是後端在**送交易前**才發現的，
+   * 使用者當下看到的是一句看不懂的英文。把這件事提前到畫面上，他才會知道「按這顆按鈕就好」。
+   *
+   * `null` 代表「還沒讀完」—— 不要用空陣列假裝「都授權好了」，那會讓 UI 在載入中說謊。
+   */
+  const executorForAllowance = live?.executorAddress ?? null;
+  const accountForAllowance = live?.account ?? null;
+  const assetRows = live?.drift.assets ?? [];
+  /** 用字串當依賴：陣列每次 render 都是新參考，會讓 effect 無限重跑。 */
+  const assetKey = assetRows.map((row) => row.asset.toLowerCase()).join(',');
+  useEffect(() => {
+    if (executorForAllowance === null || accountForAllowance === null || assetKey === '') {
+      setUnapproved(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const reader = readOnlyClient();
+      const missing = (
+        await Promise.all(
+          assetRows.map(async (row) => {
+            const allowance = await reader
+              .readContract({
+                address: row.asset as Address,
+                abi: ERC20_ABI,
+                functionName: 'allowance',
+                args: [accountForAllowance as Address, executorForAllowance as Address],
+              })
+              .catch(() => 0n);
+            return allowance > 0n ? null : row.symbol;
+          }),
+        )
+      ).filter((symbol): symbol is string => symbol !== null);
+      if (!cancelled) setUnapproved(missing);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // assetRows 用 assetKey 代表；其他依賴都是原始值。
+  }, [accountForAllowance, assetKey, executorForAllowance]);
 
   /**
    * 是否**真的持有**這個基金（而不是「有一列投組但裡面是空的」）。
@@ -652,6 +702,31 @@ export function FundPage(): ReactNode {
                     {live.drift.grossDriftBps} bps / threshold {live.drift.thresholdBps} bps / needs rebalance:{' '}
                     {live.drift.needsRebalance ? 'yes' : 'no'}
                   </dd>
+                  <dt>executor approval</dt>
+                  <dd>
+                    {unapproved === null ? (
+                      <span className="muted">checking…</span>
+                    ) : unapproved.length === 0 ? (
+                      <Badge tone="ok">approved</Badge>
+                    ) : (
+                      <>
+                        <Badge tone="warn">{unapproved.length} asset{unapproved.length === 1 ? '' : 's'} not approved</Badge>
+                        <div className="fine neg" style={{ marginTop: 4 }}>
+                          The executor cannot pull {unapproved.join(', ')} — a rebalance will be blocked until you
+                          approve. Your money is safe; it just cannot be invested.
+                        </div>
+                        <button
+                          type="button"
+                          className="btn ghost sm"
+                          style={{ marginTop: 6 }}
+                          disabled={approving}
+                          onClick={() => void approveMissingAssets()}
+                        >
+                          {approving ? 'Approving…' : `Approve ${unapproved.length} asset${unapproved.length === 1 ? '' : 's'}`}
+                        </button>
+                      </>
+                    )}
+                  </dd>
                   <dt>gas</dt>
                   <dd>
                     {live.gas === null || live.gas.balanceWei === null || live.gas.balanceWei === undefined
@@ -912,19 +987,43 @@ export function FundPage(): ReactNode {
         // 只有 executeRebalance 是），所以它只能發生在使用者在場的時候 —— 存款正好是那個時刻。
         // 一次 UserOp 打包所有 approve，不是每個資產一個簽名。
         const executorAddress = live?.executorAddress;
-        const targets = live?.drift.assets ?? [];
+        // 只對「還沒授權」的資產送 approve。
+        //
+        // approve 給的是 max allowance，一次就永久有效 —— 第二次存款開始本來就不該再要簽名。
+        // 這裡先讀鏈上 allowance（純讀取、不花錢、不簽名），把已授權過的濾掉。
+        const universe = live?.drift.assets ?? [];
+        const targets =
+          executorAddress === null || executorAddress === undefined || universe.length === 0
+            ? []
+            : (await Promise.all(
+                universe.map(async (row) => {
+                  const allowance = await readOnlyClient()
+                    .readContract({
+                      address: row.asset as Address,
+                      abi: ERC20_ABI,
+                      functionName: 'allowance',
+                      args: [account as Address, executorAddress as Address],
+                    })
+                    // 讀不到就當沒授權：寧可多簽一次，也不要送出一筆必定 revert 的 rebalance。
+                    .catch(() => 0n);
+                  return { row, approved: allowance > 0n };
+                }),
+              ))
+                .filter((entry) => !entry.approved)
+                .map((entry) => entry.row);
+
         if (executorAddress !== null && executorAddress !== undefined && targets.length > 0) {
           try {
             toast.replace(configuringId, {
               tone: 'pending',
               title: 'Approving the executor',
-              body: `One signature for ${targets.length} assets…`,
+              body: `One signature for ${targets.length} asset${targets.length === 1 ? '' : 's'}…`,
             });
             await sendSudoCalls({
               wallet,
               token,
               accountAddress: account as Address,
-              strategyId: strategy.id,
+              strategyId: holding?.strategyId ?? strategy.id,
               calls: targets.map((row) => ({
                 to: row.asset as Address,
                 data: approveCalldata(executorAddress as Address),
@@ -1041,6 +1140,60 @@ export function FundPage(): ReactNode {
    * 為什麼要第二段掃塵埃：賣出有滑價與 wei 級取整，帳戶裡一定會剩一點非 USDT 的渣。
    * 「清倉」的語意是錢包裡什麼都不剩，不是帳戶裡什麼都不剩。
    */
+  /**
+   * 只授權「還沒授權」的資產。這顆按鈕存在的理由：
+   *
+   * `ALLOWANCE_TOO_LOW` 是後端送交易前才發現的，使用者看到的是英文錯誤訊息。
+   * 把「你有錢、但 executor 還不能動它」變成畫面上一個明確的狀態 + 一顆按鈕，
+   * 他就不必讀懂 allowance 這個字。
+   */
+  async function approveMissingAssets(): Promise<void> {
+    if (wallet === null || token === null || holding === undefined || live === undefined) return;
+    const executorAddress = live.executorAddress;
+    const accountAddress = live.account;
+    if (executorAddress === null || executorAddress === undefined) {
+      throw new Error('this deployment has no executor configured');
+    }
+    const pending = live.drift.assets.filter((row) => unapproved?.includes(row.symbol) === true);
+    if (pending.length === 0) return;
+
+    setApproving(true);
+    setError(null);
+    const id = toast.pending(
+      'Approving the executor',
+      `One signature for ${pending.length} asset${pending.length === 1 ? '' : 's'}…`,
+    );
+    try {
+      await sendSudoCalls({
+        wallet,
+        token,
+        accountAddress: accountAddress as Address,
+        strategyId: holding.strategyId,
+        calls: pending.map((row) => ({
+          to: row.asset as Address,
+          data: approveCalldata(executorAddress as Address),
+          value: 0n,
+        })),
+      });
+      toast.replace(id, {
+        tone: 'ok',
+        title: 'Executor approved',
+        body: 'The next rebalance can pull these assets.',
+      });
+      setUnapproved(null);
+      await queryClient.invalidateQueries({ queryKey: ['fund-status'], refetchType: 'all' });
+    } catch (cause) {
+      toast.replace(id, {
+        tone: 'bad',
+        title: 'Approval failed',
+        body: (cause as Error).message.split('\n')[0].slice(0, 140),
+      });
+      setError(cause);
+    } finally {
+      setApproving(false);
+    }
+  }
+
   /** 幫帳戶補 gas（owner 錢包轉 BNB 進帳戶，與 portfolio 頁的 top-up 同一條路徑）。 */
   async function topUpGas(): Promise<void> {
     if (wallet === null || token === null || holding === undefined) return;
