@@ -27,10 +27,21 @@ import type { Address, Chain, Hex, LocalAccount, PublicClient, WalletClient } fr
 
 const API_BASE: string = import.meta.env.VITE_API_BASE ?? '/api';
 
-/** BSC 主網。後端只支援 56，續期參數也一定帶 56。 */
+/**
+ * 這個 app 跑的鏈。
+ *
+ * 為什麼預設是 **1337** 而不是 56：chainId 56 是 MetaMask「認識」的鏈，它會把**代幣餘額顯示**
+ * 與**交易模擬**交給自家後端（以 chainId 為主鍵）→ 我們的 fork 被當成 BSC 主網，
+ * 於是錢包永遠顯示 0 USDT、永遠說 "likely to fail"，而 nonce/gas 卻是從我們的 RPC 拿的
+ * （所以看起來像「連對了但餘額不對」）。換成 MetaMask 不認得的 id，它就只能問我們的 RPC。
+ *
+ * 正式部署時把 `VITE_CHAIN_ID=56` 設回去即可，呼叫端的名字不變。
+ */
+export const CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID ?? 1337);
+
 export const bsc = {
-  id: 56,
-  name: 'BNB Smart Chain',
+  id: CHAIN_ID,
+  name: CHAIN_ID === 56 ? 'BNB Smart Chain' : `CRE8 Local (${CHAIN_ID})`,
   nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
   rpcUrls: { default: { http: ['https://bsc-dataseed.binance.org'] } },
 } as const satisfies Chain;
