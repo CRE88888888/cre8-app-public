@@ -5,7 +5,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { encodeFunctionData, formatUnits, parseUnits } from 'viem';
 import type { Address } from 'viem';
 import { enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, listStrategies, redeemPortfolio } from '../../lib/api';
-import { readOnlyClient, sendWithdraw } from '../../lib/kernel';
+import { CHAIN_ID, readOnlyClient, sendWithdraw } from '../../lib/kernel';
 import type { PortfolioStatus } from '../../lib/api';
 import { MOCK_FUNDS } from '../../data/mock-funds';
 import { MOCK_PERFORMANCE } from '../../data/mock-performance';
@@ -757,15 +757,34 @@ export function FundPage(): ReactNode {
     setWithdrawTx(null);
     setWithdrawNote(null);
     try {
+      // 錢包不在本 app 的鏈上時，簽名請求會「看起來沒反應」（其實是被鏈切換擋掉）。
+      // 明講要切到哪一條，比讓使用者一直按卻沒有彈窗好。
+      if (wallet.kind === 'injected') {
+        const raw = await (wallet.provider as { request: (a: { method: string }) => Promise<unknown> })
+          .request({ method: 'eth_chainId' })
+          .catch(() => null);
+        const walletChain = typeof raw === 'string' ? Number.parseInt(raw, 16) : null;
+        if (walletChain !== null && walletChain !== CHAIN_ID) {
+          throw new Error(
+            `Your wallet is on chain ${walletChain}; this app needs chain ${CHAIN_ID}. ` +
+              `Switch MetaMask to the network that uses RPC http://127.0.0.1:8545 with chain id ${CHAIN_ID}.`,
+          );
+        }
+      }
       if (account === undefined || usdtAsset === undefined) throw new Error('找不到帳戶或會計資產');
       if (!Number.isFinite(requested) || requested <= 0) throw new Error('amount must be greater than zero');
-      // 容差 1e-6 美元：浮點運算下「等於總值」可能被判成「大於」。真正超額時仍會擋。
-      if (requested > totalUsd() + 1e-6) {
-        throw new Error(`amount exceeds the fund value (${formatUsd(totalUsd())})`);
+      // ⚠ 不因為「超過總值」丟錯，而是**夾到可提領上限**。
+      // 這裡本來是 `throw`，結果 Max 按鈕只要因為四捨五入多填 0.01，使用者就完全無法提領
+      // （實測：total 996.0999 → Max 填 996.10 → 直接被自己的驗證擋掉）。
+      // 提領自己的錢，多填一點的正確反應是「提出全部」，不是報錯。
+      const ceiling = totalUsd();
+      const effective = Math.min(requested, ceiling);
+      if (requested > ceiling + 1e-6) {
+        setWithdrawNote(`Capped to the fund value: ${formatUsd(ceiling)} (you asked for ${formatUsd(requested)}).`);
       }
 
       // 現金不夠 → 先按比例賣（session key 簽），再轉出（owner 簽）。
-      const shortfall = requested - cash;
+      const shortfall = effective - cash;
       let available = cash;
       if (shortfall > 0.000001) {
         const redeemed = await redeemPortfolio(token, holding.id, Math.round(shortfall * 1e6) / 1e6);
@@ -779,7 +798,7 @@ export function FundPage(): ReactNode {
         available = freshUsdt === undefined ? 0 : Number(freshUsdt.usdValueE8) / 1e8;
       }
 
-      const sendable = Math.min(requested, available);
+      const sendable = Math.min(effective, available);
       if (sendable <= 0.000001) throw new Error('there is nothing to send after selling');
       const decimals = usdtRow?.decimals ?? 18;
       const value = parseUnits(sendable.toFixed(Math.min(decimals, 6)), decimals);
@@ -793,8 +812,8 @@ export function FundPage(): ReactNode {
       });
       if (!receipt.success) throw new Error(`UserOp landed but reverted: ${receipt.txHash}`);
       setWithdrawNote(
-        sendable < requested - 0.000001
-          ? `Sold and sent ${formatUsd(sendable)} — the sale came back ${formatUsd(requested - sendable)} short of ${formatUsd(requested)} because of slippage.`
+        sendable < effective - 0.000001
+          ? `Sold and sent ${formatUsd(sendable)} — the sale came back ${formatUsd(effective - sendable)} short of ${formatUsd(effective)} because of slippage.`
           : null,
       );
       setWithdrawTx(receipt.txHash);
