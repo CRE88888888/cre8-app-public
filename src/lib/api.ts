@@ -505,3 +505,34 @@ export function closePosition(token: string, id: number): Promise<RedeemResult> 
 export function operatorForceRebalance(token: string, id: number): Promise<RebalanceResult> {
   return request<RebalanceResult>(`/operator/portfolios/${id}/rebalance`, { token, method: 'POST' });
 }
+
+/**
+ * 營運端全域活動流：誰（owner 錢包）在哪個策略上被處理、成功或失敗、前後漂移。
+ *
+ * 為什麼不是 `/portfolios/:id/activity`：那一支要求你是該投組的 owner。營運端要看全部。
+ */
+export type OperatorActivityRow = {
+  id: number;
+  portfolioId: number;
+  /** owner 錢包。 */
+  wallet: string;
+  strategyId: number;
+  strategyName: string | null;
+  type: string;
+  state: string;
+  txHash: string | null;
+  attempts: number;
+  error: string | null;
+  createdAt: string;
+  driftBeforeBps: number | null;
+  driftAfterBps: number | null;
+  usdBeforeE8: string | null;
+  usdAfterE8: string | null;
+};
+
+export function getOperatorActivity(
+  token: string,
+  limit = 50,
+): Promise<{ activity: OperatorActivityRow[] }> {
+  return request<{ activity: OperatorActivityRow[] }>(`/operator/activity?limit=${limit}`, { token });
+}

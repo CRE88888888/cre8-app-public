@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { getOperatorOverview, operatorForceRebalance } from '../../lib/api';
-import type { OperatorOverview, OperatorRow } from '../../lib/api';
+import { getOperatorActivity, getOperatorOverview, operatorForceRebalance } from '../../lib/api';
+import type { OperatorActivityRow, OperatorOverview, OperatorRow } from '../../lib/api';
 import { formatEther } from 'viem';
 import { formatUsdE8, shortAddress } from '../../lib/format';
 import { useBodyClass } from '../../lib/use-body-class';
@@ -62,6 +62,95 @@ function rowFlags(row: OperatorRow): { label: string; tone: 'ok' | 'warn' | 'bad
   if (row.needsRebalance === true) flags.push({ label: 'rebalance due', tone: 'warn' });
   if (row.observedAt === null) flags.push({ label: 'never ran', tone: 'warn' });
   return flags;
+}
+
+/**
+ * 最近活動：**誰、哪個策略、什麼時候、成功還是失敗**。
+ *
+ * 為什麼與上面的表格分開：上面是「現況」（誰現在 drift 多少、該不該跑），
+ * 這裡是「歷史」（誰在什麼時候被處理過）。同一個投組會在這張表出現很多次，
+ * 因為它就是「每一輪的紀錄」。
+ */
+function ActivityTable({ token }: { token: string }): ReactNode {
+  const activity = useQuery({
+    queryKey: ['operator-activity', token],
+    queryFn: () => getOperatorActivity(token, 50),
+    enabled: token !== null,
+    // 與 overview 一樣自動刷新：排程器每 60 秒跑一輪，這裡要跟得上。
+    refetchInterval: 15_000,
+  });
+
+  if (activity.isPending) {
+    return (
+      <div className="fund-list-loading">
+        <Spinner /> <span className="muted">Loading activity…</span>
+      </div>
+    );
+  }
+  if (activity.error !== null && activity.error !== undefined) return <ErrorNote error={activity.error} />;
+
+  const rows: OperatorActivityRow[] = activity.data?.activity ?? [];
+  if (rows.length === 0) {
+    return (
+      <div className="directory-empty">
+        <strong>No activity yet</strong>
+        <p>The scheduler has not touched any portfolio on this deployment.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>when</th>
+            <th>owner</th>
+            <th>strategy</th>
+            <th>#</th>
+            <th>kind</th>
+            <th>result</th>
+            <th>drift</th>
+            <th>tx</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const drift =
+              row.driftBeforeBps === null
+                ? '—'
+                : row.driftAfterBps === null
+                  ? `${row.driftBeforeBps} bps → ?`
+                  : `${row.driftBeforeBps} → ${row.driftAfterBps} bps`;
+            return (
+              <tr key={row.id}>
+                <td className="muted" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                  {new Date(row.createdAt).toLocaleTimeString('en-GB')}
+                </td>
+                <td className="mono" style={{ fontSize: 12 }}>
+                  {shortAddress(row.wallet)}
+                </td>
+                <td>{row.strategyName ?? `Strategy ${row.strategyId}`}</td>
+                <td className="mono">{row.portfolioId}</td>
+                <td className="muted">{row.type}</td>
+                <td>
+                  <Badge tone={row.state === 'confirmed' ? 'ok' : row.state === 'failed' || row.state === 'reverted' ? 'bad' : 'warn'}>
+                    {row.state}
+                  </Badge>
+                </td>
+                <td className="muted" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                  {drift}
+                </td>
+                <td className="mono" style={{ fontSize: 11 }}>
+                  {row.txHash === null ? '—' : `${row.txHash.slice(0, 12)}…`}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function Dashboard({
@@ -293,6 +382,16 @@ function Dashboard({
             })}
           </tbody>
         </table>
+      </div>
+
+      <div className="panel" style={{ marginTop: 20 }}>
+        <div className="panel-h">
+          <h2>Recent activity</h2>
+          <span className="label">who was rebalanced, and how it went</span>
+        </div>
+        <div className="panel-b">
+          <ActivityTable token={token} />
+        </div>
       </div>
     </>
   );
