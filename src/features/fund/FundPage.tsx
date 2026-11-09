@@ -17,6 +17,7 @@ import { useSession } from '../../store/session';
 import { AssetLogo } from '../../components/AssetLogo';
 import { SignInButton } from '../../components/WalletMenu';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ErrorNote, Note, Spinner } from '../../components/ui';
 import { toast } from '../../components/Toast';
 
@@ -399,14 +400,18 @@ export function FundPage(): ReactNode {
 
           <aside className="side">
             <section className="panel ticket">
-              <div className="tabs" role="tablist">
-                <button type="button" className={tab === 'deposit' ? 'on' : ''} onClick={() => setTab('deposit')}>
-                  Deposit
-                </button>
-                <button type="button" className={tab === 'withdraw' ? 'on' : ''} onClick={() => setTab('withdraw')}>
-                  Withdraw
-                </button>
-              </div>
+              {/* Radix Tabs 取代手寫的 role="tablist" + 兩顆 button：拿到鍵盤左右鍵切換、
+                  `aria-selected`、`tabIndex` 管理。內容仍是同一個三元式（不改 TabsContent）——
+                  那份內容很長，重排只增加 diff 而不增加正確性。 */}
+              <Tabs value={tab} onValueChange={(value) => setTab(value as 'deposit' | 'withdraw')}>
+                <TabsList className="w-full">
+                  <TabsTrigger value="deposit" className="flex-1">
+                    Deposit
+                  </TabsTrigger>
+                  <TabsTrigger value="withdraw" className="flex-1">
+                    Withdraw
+                  </TabsTrigger>
+                </TabsList>
               <div className="panel-b">
                 {tab === 'withdraw' ? (
                   token === null ? (
@@ -578,7 +583,8 @@ export function FundPage(): ReactNode {
                     <ErrorNote error={error} />
                   </form>
                 )}
-              </div>
+                </div>
+              </Tabs>
             </section>
 
             <section className="panel vault-creator-card">

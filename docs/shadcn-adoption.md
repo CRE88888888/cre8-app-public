@@ -10,7 +10,7 @@
 | `components.json`（style: new-york、cssVariables） | ✅ |
 | `@/` 別名（Vite + tsconfig） | ✅ |
 | `cn()`（clsx + tailwind-merge） | ✅ `src/lib/utils.ts` |
-| `src/components/ui/{sonner,button,badge}.tsx` | ✅ CLI 產生 |
+| `src/components/ui/{sonner,button,badge,sheet,tabs,alert}.tsx` | ✅ CLI 產生 |
 | Toast | ✅ **已換成 sonner**（`components/Toast.tsx` 是薄 adapter，11 處呼叫端未改） |
 
 ## ⚠ 最重要的決定：**跳過 Tailwind 的 Preflight**
@@ -38,10 +38,10 @@ Preflight 是全域 reset（margin / font / border / heading 全部歸零），�
 | # | 元件 | 取代目前的 | 省下什麼 | 難度 |
 |---|---|---|---|---|
 | 1 | `sonner` | 手寫 Toast | 堆疊、自動消失、aria-live、動畫 | ✅ 已完成 |
-| 2 | `dialog` / `sheet` | `<dialog class="pros-drawer">`（Fund facts、My position） | **focus trap、Esc、背景鎖捲動**（我們現在只有 Esc） | 小 |
-| 3 | `tabs` | Deposit／Withdraw 的手寫 state 按鈕 | 鍵盤方向鍵、`aria-selected` | 小 |
+| 2 | ~~`dialog` / `sheet`~~ | ~~`<dialog class="pros-drawer">`~~ | ✅ **已完成**（Fund facts / My position → `Sheet`，拿到 focus trap、背景鎖捲動、aria-modal） | — |
+| 3 | ~~`tabs`~~ | ~~Deposit／Withdraw 手寫按鈕~~ | ✅ **已完成**（鍵盤左右鍵、`aria-selected`） | — |
 | 4 | `dropdown-menu` | `WalletMenu` 的手寫下拉 | 焦點管理、outside click、鍵盤導航 | 中 |
-| 5 | `alert` | `Note` / `ErrorNote`（3 種語氣自己寫） | 一致的語氣與圖示 | 小 |
+| 5 | `alert` | `Note` / `ErrorNote`（3 種語氣自己寫） | 一致的語氣與圖示 | **暫緩**：`.note` 是 design.css 的一部分，市集頁也在用；換掉會同時改到兩種區域。等「只換營運頁」時再處理 | — |
 | 6 | `select` | 提領時的 `<select>` | 原生 select 在深色底下的樣式問題 | 小 |
 | 7 | `checkbox` / `switch` | operator 的「include paused / idle」 | 可存取性 | 極小 |
 | 8 | `table` | `/operator` 的 `<table>` | 排序／空狀態的樣式一致 | 小 |
@@ -61,3 +61,11 @@ Preflight 是全域 reset（margin / font / border / heading 全部歸零），�
 
 **教訓**：引入任何新元件的 class 前，先 `grep` 設計稿的 CSS。shadcn 的元件用的是
 `bg-background`／`text-muted-foreground` 這種語意名稱，撞名機率低，但自訂 wrapper 仍要小心。
+
+## 第二個坑：跳過 preflight 就必須自己寫 `@source`
+
+只引入 `theme.css` + `utilities.css` 時，Tailwind 的**自動來源偵測也不會啟動** ——
+`className="h-4 w-4 overflow-y-auto"` 這些工具類別完全不會被生成，症狀是
+「元件有渲染、完全沒樣式」（實測：Sheet 的關閉鈕是瀏覽器預設灰框、寬度沒受限）。
+
+`src/styles/shadcn.css` 裡的 `@source "../";` 是**必要配套**，不是可選項。
