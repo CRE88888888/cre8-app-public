@@ -466,3 +466,13 @@ export type RedeemResult = {
 export function redeemPortfolio(token: string, id: number, usd: number): Promise<RedeemResult> {
   return request<RedeemResult>(`/portfolios/${id}/redeem`, { token, method: 'POST', body: { usd } });
 }
+
+/**
+ * 清倉：把**全部**部位賣成 numeraire（後端 `POST /portfolios/:id/close`）。
+ *
+ * 與 `redeemPortfolio` 同一條管線，差別只在比例：這一支賣 100%，所以投組會被清空。
+ * 賣不掉的部分會留在帳戶裡 —— 前端接著用 `sendSweep` 把它們直接轉回錢包。
+ */
+export function closePosition(token: string, id: number): Promise<RedeemResult> {
+  return request<RedeemResult>(`/portfolios/${id}/close`, { token, method: 'POST' });
+}

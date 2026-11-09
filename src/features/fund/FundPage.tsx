@@ -4,8 +4,8 @@ import type { ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { encodeFunctionData, formatUnits, parseUnits } from 'viem';
 import type { Address } from 'viem';
-import { enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, listStrategies, redeemPortfolio } from '../../lib/api';
-import { CHAIN_ID, readOnlyClient, sendWithdraw } from '../../lib/kernel';
+import { closePosition, enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, listStrategies, redeemPortfolio } from '../../lib/api';
+import { CHAIN_ID, readOnlyClient, sendSweep, sendWithdraw } from '../../lib/kernel';
 import type { PortfolioStatus } from '../../lib/api';
 import { MOCK_FUNDS } from '../../data/mock-funds';
 import { MOCK_PERFORMANCE } from '../../data/mock-performance';
@@ -157,6 +157,7 @@ export function FundPage(): ReactNode {
    */
   const [walletUsdt, setWalletUsdt] = useState<bigint | null>(null);
   const [enrolling, setEnrolling] = useState(false);
+  const [closing, setClosing] = useState(false);
 
   const walletAddress = wallet?.address ?? null;
   const usdtAddress = usdt?.address;
@@ -457,6 +458,17 @@ export function FundPage(): ReactNode {
                         </p>
                       )}
                       <ErrorNote error={withdrawError} />
+                      {/* 清倉：把全部部位賣成 USDT，再把 USDT 與所有殘留的股票代幣（塵埃）掃回錢包。 */}
+                      <button
+                        type="button"
+                        className="btn ghost block"
+                        disabled={closing || withdrawBusy || wallet === null || totalUsd() === 0}
+                        onClick={() => void closeAll()}
+                        style={{ marginTop: 8 }}
+                        title="Sell everything to USDT, then send the USDT and every leftover token back to your wallet"
+                      >
+                        {closing ? 'Closing…' : 'Close position'}
+                      </button>
                       <p className="fine">
                         Two signatures when cash is short: the fund sells pro-rata with its session key, then you sign
                         one USDT transfer out. Selling the whole position back to cash would break the mandate and the
@@ -743,6 +755,54 @@ export function FundPage(): ReactNode {
 
   function maxWithdrawLabel(): string {
     return totalUsd() === 0 ? '' : totalUsd().toFixed(2);
+  }
+
+  /**
+   * 清倉：① 全部賣成 USDT（session key）② 把 USDT 與**所有殘留代幣**掃回錢包（owner 簽）。
+   *
+   * 為什麼要第二段掃塵埃：賣出有滑價與 wei 級取整，帳戶裡一定會剩一點非 USDT 的渣。
+   * 「清倉」的語意是錢包裡什麼都不剩，不是帳戶裡什麼都不剩。
+   */
+  async function closeAll(): Promise<void> {
+    if (wallet === null || token === null || holding === undefined) return;
+    const account = holding.smartAccounts[0]?.address;
+    if (account === undefined) throw new Error('找不到帳戶');
+    setClosing(true);
+    setWithdrawError(null);
+    setWithdrawTx(null);
+    setWithdrawNote(null);
+    try {
+      const sold = await closePosition(token, holding.id);
+      if (sold.outcome !== 'executed' && sold.outcome !== 'noop') {
+        throw new Error(`closing the position failed: ${sold.reason}`);
+      }
+      // 賣完重讀餘額：USDT + 所有非零餘額（含賣不掉的塵埃）一起掃回去。
+      const fresh = await getPortfolioStatus(token, holding.id);
+      const balances = fresh.holdings.map((row) => ({ asset: row.asset as Address, amountWei: BigInt(row.amountWei) }));
+      const receipt = await sendSweep({
+        wallet,
+        token,
+        accountAddress: account as Address,
+        recipient: wallet.address as Address,
+        balances,
+      });
+      if (receipt === null) {
+        setWithdrawNote('Nothing left to send back — the account is already empty.');
+      } else if (!receipt.success) {
+        throw new Error(`sweep UserOp landed but reverted: ${receipt.txHash}`);
+      } else {
+        setWithdrawTx(receipt.txHash);
+        setWithdrawNote(
+          `Closed: ${sold.steps.length} sell step(s), then ${balances.filter((row) => row.amountWei > 0n).length} token(s) sent back to your wallet.`,
+        );
+      }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token) });
+      await queryClient.invalidateQueries({ queryKey: ['fund-status', token, holding.id] });
+    } catch (cause) {
+      setWithdrawError(cause);
+    } finally {
+      setClosing(false);
+    }
   }
 
   async function withdraw(): Promise<void> {

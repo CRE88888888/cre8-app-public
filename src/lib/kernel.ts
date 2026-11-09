@@ -199,6 +199,34 @@ export async function sendRenewalUserOp(args: {
 /** ERC-20 `approve` 的 calldata（`uint256(2**256-1)` = 無限額度）。 */
 
 /** `transfer(to, amount)` 的 calldata —— 提領就是這一筆（帳戶 → 使用者錢包）。 */
+/**
+ * 把帳戶裡多個資產一次掃回錢包（一筆 sudo UserOp、多個 transfer）。
+ *
+ * 為什麼要「一次」：清倉後殘留的是 wei 級塵埃，每一筆各自送一個 UserOp 的話，
+ * 光 gas 就比那些塵埃值錢。合併成一筆只付一次 overhead。
+ *
+ * 只掃**餘額 > 0** 的資產；`0` 的別送（transfer(0) 浪費 gas 又沒有語意）。
+ */
+export async function sendSweep(args: {
+  wallet: RenewalWallet;
+  token: string;
+  accountAddress: Address;
+  recipient: Address;
+  /** 要掃出去的資產與金額（wei）。金額為 0 的會被忽略。 */
+  balances: readonly { asset: Address; amountWei: bigint }[];
+}): Promise<RenewalReceipt | null> {
+  const calls = args.balances
+    .filter((row) => row.amountWei > 0n)
+    .map((row) => ({ to: row.asset, data: transferCalldata(args.recipient, row.amountWei), value: 0n }));
+  if (calls.length === 0) return null;
+  return sendSudoCalls({
+    wallet: args.wallet,
+    token: args.token,
+    accountAddress: args.accountAddress,
+    calls,
+  });
+}
+
 export function transferCalldata(to: Address, amount: bigint): Hex {
   return encodeFunctionData({
     abi: [
