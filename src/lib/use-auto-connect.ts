@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 
 import { discoverProviders } from './wallet';
+import { useSession } from '../store/session';
 import { useWallet } from '../store/wallet';
 
 /**
@@ -79,6 +80,12 @@ export function useAutoConnect(): void {
       if (useWallet.getState().address !== null) return;
 
       useWallet.getState().connectInjected({ address: first, rdns: match.info.rdns, provider: match.provider });
+      // 接回的錢包若與 session token 綁定的不同，token 就失效了 —— 清掉，讓 UI 提示重新登入。
+      // （session.address 存的是「簽 SIWE 那一刻」的錢包；不該拿 A 的 token 去查 B 的投組。）
+      const session = useSession.getState();
+      if (session.address !== null && session.address.toLowerCase() !== first.toLowerCase()) {
+        session.clear();
+      }
     })();
 
     return () => {

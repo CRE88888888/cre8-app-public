@@ -5,6 +5,7 @@ import { Toaster } from './components/Toast';
 import { RequireSession } from './components/RequireSession';
 import { TopBar } from './components/TopBar';
 import { useAutoConnect } from './lib/use-auto-connect';
+import { useAccountWatch } from './lib/use-account-watch';
 import { FundPage } from './features/fund/FundPage';
 import { OperatorPage } from './features/operator/OperatorPage';
 import { StrategyPage } from './features/strategy/StrategyPage';
@@ -15,6 +16,7 @@ import { VaultsPage } from './features/vaults/VaultsPage';
 export function App(): ReactNode {
   // 重新整理後自動接回先前授權過的錢包（`eth_accounts` 不彈窗）。
   useAutoConnect();
+  useAccountWatch();
   return (
     <>
       <Toaster />
