@@ -7,6 +7,8 @@ import { formatEther } from 'viem';
 import { formatUsdE8, shortAddress } from '../../lib/format';
 import { useBodyClass } from '../../lib/use-body-class';
 import { useSession } from '../../store/session';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 import { Badge, ErrorNote, Spinner } from '../../components/ui';
 import { toast } from '../../components/Toast';
 import { SignInButton } from '../../components/WalletMenu';
@@ -121,16 +123,20 @@ function ActivityTable({ token }: { token: string }): ReactNode {
     <>
       <div className="activity-filters">
         <span className="label">filter</span>
-        <div className="tabs" role="group" aria-label="Filter by result">
-          <button type="button" className={result === 'all' ? 'on' : ''} onClick={() => setResult('all')}>
+        <div className="flex items-center gap-1" role="group" aria-label="Filter by result">
+          <Button size="sm" variant={result === 'all' ? 'default' : 'outline'} onClick={() => setResult('all')}>
             All ({all.length})
-          </button>
-          <button type="button" className={result === 'failed' ? 'on' : ''} onClick={() => setResult('failed')}>
+          </Button>
+          <Button
+            size="sm"
+            variant={result === 'failed' ? 'destructive' : 'outline'}
+            onClick={() => setResult('failed')}
+          >
             Failed ({failures.length})
-          </button>
-          <button type="button" className={result === 'ok' ? 'on' : ''} onClick={() => setResult('ok')}>
+          </Button>
+          <Button size="sm" variant={result === 'ok' ? 'default' : 'outline'} onClick={() => setResult('ok')}>
             Confirmed ({all.length - failures.length})
-          </button>
+          </Button>
         </div>
         <select
           aria-label="Filter by strategy"
@@ -157,21 +163,20 @@ function ActivityTable({ token }: { token: string }): ReactNode {
           </p>
         </div>
       ) : (
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>when</th>
-            <th>owner</th>
-            <th>strategy</th>
-            <th>#</th>
-            <th>kind</th>
-            <th>result</th>
-            <th>drift</th>
-            <th>tx</th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>when</TableHead>
+            <TableHead>owner</TableHead>
+            <TableHead>strategy</TableHead>
+            <TableHead>#</TableHead>
+            <TableHead>kind</TableHead>
+            <TableHead>result</TableHead>
+            <TableHead>drift</TableHead>
+            <TableHead>tx</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {rows.map((row) => {
             const drift =
               row.driftBeforeBps === null
@@ -180,33 +185,26 @@ function ActivityTable({ token }: { token: string }): ReactNode {
                   ? `${row.driftBeforeBps} bps → ?`
                   : `${row.driftBeforeBps} → ${row.driftAfterBps} bps`;
             return (
-              <tr key={row.id}>
-                <td className="muted" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+              <TableRow key={row.id}>
+                <TableCell className="whitespace-nowrap text-xs text-[var(--muted)]">
                   {new Date(row.createdAt).toLocaleTimeString('en-GB')}
-                </td>
-                <td className="mono" style={{ fontSize: 12 }}>
-                  {shortAddress(row.wallet)}
-                </td>
-                <td>{row.strategyName ?? `Strategy ${row.strategyId}`}</td>
-                <td className="mono">{row.portfolioId}</td>
-                <td className="muted">{row.type}</td>
-                <td>
-                  <Badge tone={row.state === 'confirmed' ? 'ok' : row.state === 'failed' || row.state === 'reverted' ? 'bad' : 'warn'}>
-                    {row.state}
-                  </Badge>
-                </td>
-                <td className="muted" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                  {drift}
-                </td>
-                <td className="mono" style={{ fontSize: 11 }}>
+                </TableCell>
+                <TableCell className="font-mono text-xs">{shortAddress(row.wallet)}</TableCell>
+                <TableCell className="font-medium">{row.strategyName ?? `Strategy ${row.strategyId}`}</TableCell>
+                <TableCell className="font-mono text-xs text-[var(--muted)]">{row.portfolioId}</TableCell>
+                <TableCell className="text-xs text-[var(--muted)]">{row.type}</TableCell>
+                <TableCell>
+                  <Badge tone={isFailure(row) ? 'bad' : row.state === 'confirmed' ? 'ok' : 'warn'}>{row.state}</Badge>
+                </TableCell>
+                <TableCell className="tabular-nums text-xs">{drift}</TableCell>
+                <TableCell className="font-mono text-[11px] text-[var(--muted)]">
                   {row.txHash === null ? '—' : `${row.txHash.slice(0, 12)}…`}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             );
           })}
-        </tbody>
-      </table>
-    </div>
+        </TableBody>
+      </Table>
       )}
     </>
   );

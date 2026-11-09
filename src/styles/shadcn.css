@@ -121,9 +121,7 @@
   margin-bottom: 12px;
 }
 
-.activity-filters .tabs {
-  margin: 0;
-}
+/* 篩選按鈕群用 shadcn Button，這裡只留容器；`.tabs` 的間距規則不再需要。 */
 
 .activity-filter-select {
   margin-left: auto;
