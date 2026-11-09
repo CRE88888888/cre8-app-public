@@ -52,6 +52,10 @@ export function TopBar(): ReactNode {
           <NavLink to="/create" className={({ isActive }) => (isActive ? 'active' : '')}>
             Create fund
           </NavLink>
+          {/* 內部維運入口。使用者說先全開放，之後再加 OPERATOR_WALLETS 白名單。 */}
+          <NavLink to="/operator" className={({ isActive }) => (isActive ? 'active' : '')}>
+            Rebalance
+          </NavLink>
         </nav>
 
         <div className="head-right">

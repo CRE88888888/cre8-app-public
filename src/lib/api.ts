@@ -364,3 +364,37 @@ export type PortfolioActivity = {
   usdBeforeE8: string | null;
   usdAfterE8: string | null;
 };
+
+// ---------------------------------------------------------------------------
+// Operator 總覽（rebalance dashboard）
+// ---------------------------------------------------------------------------
+
+export type OperatorRow = {
+  id: number;
+  strategyId: number;
+  strategyName: string | null;
+  version: number;
+  scheduleState: string;
+  account: string | null;
+  nextRunAt: string | null;
+  lastCheckedAt: string | null;
+  /** 最新快照的觀測點；`null` = 從來沒跑過一輪（不是「0 漂移」）。 */
+  observedAt: string | null;
+  driftBps: number | null;
+  totalUsdE8: string | null;
+  needsRebalance: boolean | null;
+  gasWei: string | null;
+  sessionKeyExpiresAt: string | null;
+  lastOperation: { id: number; state: string; txHash: string | null; createdAt: string } | null;
+};
+
+export type OperatorOverview = {
+  generatedAt: string;
+  alerts: { critical: number; warn: number; open: number } | null;
+  lastCheckedAt: string | null;
+  portfolios: OperatorRow[];
+};
+
+export function getOperatorOverview(token: string): Promise<OperatorOverview> {
+  return request<OperatorOverview>('/operator/overview', { token });
+}

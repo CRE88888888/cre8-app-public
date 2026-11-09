@@ -318,8 +318,23 @@ export function StatusPage(): ReactNode {
         </div>
       )}
 
-      {/* 順序刻意：先「現在執行」再「換 key」。使用者多是為了讓投組回到目標而來。 */}
-      {query.data === undefined ? null : <RebalanceCard status={query.data} />}
+      {/* 手動觸發收進 Advanced：再平衡本來就是排程器的工作，這一頁的主體是「這檔基金現在怎麼樣」。
+          剛入金不想等、或出事要重試時，這裡仍然找得到入口。 */}
+      {query.data === undefined ? null : (
+        <details className="card">
+          <summary style={{ cursor: 'pointer', fontSize: 13 }}>
+            Advanced — trigger a round now
+            <span className="muted" style={{ display: 'block', fontSize: 12, marginTop: 4 }}>
+              The scheduler already rebalances this fund on its own. Manual triggering is for “I just funded it and do
+              not want to wait”, or for retrying after a failure. Next due time is on{' '}
+              <a href="/operator">/operator</a>.
+            </span>
+          </summary>
+          <div style={{ marginTop: 16 }}>
+            <RebalanceCard status={query.data} />
+          </div>
+        </details>
+      )}
 
       {valid ? <RenewalCard portfolioId={id} /> : null}
     </main>
