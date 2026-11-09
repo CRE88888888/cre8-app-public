@@ -759,7 +759,10 @@ export function FundPage(): ReactNode {
     try {
       if (account === undefined || usdtAsset === undefined) throw new Error('找不到帳戶或會計資產');
       if (!Number.isFinite(requested) || requested <= 0) throw new Error('amount must be greater than zero');
-      if (requested > totalUsd()) throw new Error(`amount exceeds the fund value (${formatUsd(totalUsd())})`);
+      // 容差 1e-6 美元：浮點運算下「等於總值」可能被判成「大於」。真正超額時仍會擋。
+      if (requested > totalUsd() + 1e-6) {
+        throw new Error(`amount exceeds the fund value (${formatUsd(totalUsd())})`);
+      }
 
       // 現金不夠 → 先按比例賣（session key 簽），再轉出（owner 簽）。
       const shortfall = requested - cash;
