@@ -476,3 +476,14 @@ export function redeemPortfolio(token: string, id: number, usd: number): Promise
 export function closePosition(token: string, id: number): Promise<RedeemResult> {
   return request<RedeemResult>(`/portfolios/${id}/close`, { token, method: 'POST' });
 }
+
+/**
+ * 營運端：手動觸發某一輪再平衡（**不檢查 owner**）。
+ *
+ * 使用者端的是 `POST /portfolios/:id/rebalance`（要求你是那個投組的 owner）；
+ * 營運端要跑別人的投組，所以走 `/operator/...`。鏈上規則不變（session key 的 UserOp、
+ * executor 的 enrollment/allowlist/oracle 地板），這支只能「叫排程器跑一輪」。
+ */
+export function operatorForceRebalance(token: string, id: number): Promise<RebalanceResult> {
+  return request<RebalanceResult>(`/operator/portfolios/${id}/rebalance`, { token, method: 'POST' });
+}

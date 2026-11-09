@@ -63,6 +63,14 @@ export const toast = {
   dismiss: (id: number): void => useToasts.getState().dismiss(id),
 };
 
+// DEV 自測：`?toast=1` 時在**模組載入**就推一則（不放在 effect 裡）。
+// 這樣可以分辨「元件沒掛上」與「effect 沒跑」—— 模組載入一定比任何 render 早。
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  if (new URLSearchParams(window.location.search).get('toast') !== null) {
+    window.setTimeout(() => toast.warn('Toast self-test', 'module-load path'), 0);
+  }
+}
+
 const TONE_LABEL: Record<ToastTone, string> = { pending: 'Pending', ok: 'Done', warn: 'Note', bad: 'Failed' };
 
 /** 掛在 App 最外層一次。 */
@@ -72,17 +80,17 @@ export function Toaster(): ReactNode {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="toast-stack" role="status" aria-live="polite">
+    <div className="app-toast-stack" role="status" aria-live="polite">
       {toasts.map((entry) => (
-        <div key={entry.id} className={`toast toast--${entry.tone}`}>
-          <div className="toast-head">
-            <span className="toast-tone">{TONE_LABEL[entry.tone]}</span>
-            <button type="button" className="toast-x" aria-label="Dismiss" onClick={() => dismiss(entry.id)}>
+        <div key={entry.id} className={`app-toast app-toast--${entry.tone}`}>
+          <div className="app-toast-head">
+            <span className="app-toast-tone">{TONE_LABEL[entry.tone]}</span>
+            <button type="button" className="app-toast-x" aria-label="Dismiss" onClick={() => dismiss(entry.id)}>
               ×
             </button>
           </div>
-          <strong className="toast-title">{entry.title}</strong>
-          {entry.body === undefined ? null : <span className="toast-body mono">{entry.body}</span>}
+          <strong className="app-toast-title">{entry.title}</strong>
+          {entry.body === undefined ? null : <span className="app-toast-body mono">{entry.body}</span>}
         </div>
       ))}
     </div>

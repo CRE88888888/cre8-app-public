@@ -1,13 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { getOperatorOverview } from '../../lib/api';
+import { getOperatorOverview, operatorForceRebalance } from '../../lib/api';
 import type { OperatorOverview, OperatorRow } from '../../lib/api';
 import { formatEther } from 'viem';
 import { formatUsdE8, shortAddress } from '../../lib/format';
 import { useBodyClass } from '../../lib/use-body-class';
 import { useSession } from '../../store/session';
 import { Badge, ErrorNote, Spinner } from '../../components/ui';
+import { toast } from '../../components/Toast';
 import { SignInButton } from '../../components/WalletMenu';
 
 /** 相對時間（「12 秒前」）比絕對時間更能回答「現在有沒有在跑」。 */
@@ -63,7 +64,37 @@ function rowFlags(row: OperatorRow): { label: string; tone: 'ok' | 'warn' | 'bad
   return flags;
 }
 
-function Dashboard({ overview }: { overview: OperatorOverview }): ReactNode {
+function Dashboard({
+  overview,
+  token,
+  refetch,
+}: {
+  overview: OperatorOverview;
+  token: string;
+  refetch: () => Promise<unknown>;
+}): ReactNode {
+  /**
+   * 營運端手動跑一輪。
+   *
+   * 為什麼放在 dashboard 而不是 portfolio 頁：這是**我們**的工作，不是使用者的。
+   * 使用者的 UI 只保留 deposit / withdraw / close；觸發再平衡、換 session key 都在這裡。
+   */
+  const runRound = async (id: number): Promise<void> => {
+    const toastId = toast.pending(`Rebalance #${id}`, 'Planning the round…');
+    try {
+      const result = await operatorForceRebalance(token, id);
+      const ok = result.outcome === 'executed' || result.outcome === 'noop';
+      toast.replace(toastId, {
+        tone: ok ? 'ok' : 'bad',
+        title: `#${id}: ${result.outcome}`,
+        body: (result.txHash ?? result.reason ?? '').slice(0, 120),
+      });
+      await refetch();
+    } catch (cause) {
+      toast.replace(toastId, { tone: 'bad', title: `#${id}: request failed`, body: (cause as Error).message.slice(0, 120) });
+    }
+  };
+
   // 預設只顯示 active：這個環境裡有大量測試殘骸（paused / 從沒跑過），全部列出來會蓋掉真正要看的。
   const [showAll, setShowAll] = useState(false);
   const rows = (showAll ? overview.portfolios : overview.portfolios.filter((row) => row.scheduleState === 'active'))
@@ -130,6 +161,7 @@ function Dashboard({ overview }: { overview: OperatorOverview }): ReactNode {
               <th>Next run</th>
               <th>Last round</th>
               <th>Flags</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -190,6 +222,16 @@ function Dashboard({ overview }: { overview: OperatorOverview }): ReactNode {
                         </div>
                       </>
                     )}
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="btn ghost sm"
+                      title="Run one rebalance round with the session key"
+                      onClick={() => void runRound(row.id)}
+                    >
+                      Run round
+                    </button>
                   </td>
                   <td>
                     {flags.length === 0 ? (
@@ -268,7 +310,7 @@ export function OperatorPage(): ReactNode {
       ) : overview.error !== null && overview.error !== undefined ? (
         <ErrorNote error={overview.error} />
       ) : overview.data === undefined ? null : (
-        <Dashboard overview={overview.data} />
+        <Dashboard overview={overview.data} token={token} refetch={() => overview.refetch()} />
       )}
     </main>
   );

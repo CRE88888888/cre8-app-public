@@ -1,10 +1,14 @@
 /**
  * Toast 的樣式。
  *
- * 刻意**不**寫進 `styles/vendor/design.css` —— 那個檔案是設計稿的逐字複本，
- * 混進我們自己的元件樣式之後就沒辦法再跟來源對照。
+ * ⚠ 類別一律加 `app-` 前綴：設計稿的 `design.css` 已經有 `.toast`（固定在中下、`opacity: 0`、
+ * `transform: translate(-50%, 20px)`），撞名的話我們的 toast 會被那條規則吃掉 ——
+ * 實測症狀是「DOM 裡明明有 toast、畫面上完全看不到」。
+ *
+ * 另一件事：刻意**不**寫進 `styles/vendor/design.css` —— 那個檔案是設計稿的逐字複本，
+ * 混進我們自己的樣式之後就沒辦法再跟來源對照。
  */
-.toast-stack {
+.app-toast-stack {
   position: fixed;
   right: 20px;
   bottom: 20px;
@@ -15,7 +19,7 @@
   max-width: min(380px, calc(100vw - 32px));
 }
 
-.toast {
+.app-toast {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -33,22 +37,22 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .toast { animation: none; }
+  .app-toast { animation: none; }
 }
 
 /* 左側色條＝狀態。pending 用一個緩慢脈動表示「還在動」。 */
-.toast--ok { border-left: 3px solid var(--positive, #1f7a4d); }
-.toast--warn { border-left: 3px solid #b8860b; }
-.toast--bad { border-left: 3px solid var(--negative, #b3261e); }
-.toast--pending { border-left: 3px solid #8297a8; }
-.toast--pending .toast-tone { animation: toast-pulse 1.4s ease-in-out infinite; }
+.app-toast--ok { border-left: 3px solid var(--positive, #1f7a4d); }
+.app-toast--warn { border-left: 3px solid #b8860b; }
+.app-toast--bad { border-left: 3px solid var(--negative, #b3261e); }
+.app-toast--pending { border-left: 3px solid #8297a8; }
+.app-toast--pending .app-toast-tone { animation: toast-pulse 1.4s ease-in-out infinite; }
 
 @keyframes toast-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }
 }
 
-.toast-head {
+.app-toast-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -59,7 +63,7 @@
   color: #8297a8;
 }
 
-.toast-x {
+.app-toast-x {
   border: 0;
   background: transparent;
   color: #8297a8;
@@ -69,7 +73,7 @@
   padding: 0 2px;
 }
 
-.toast-x:hover { color: #eef3f7; }
+.app-toast-x:hover { color: #eef3f7; }
 
-.toast-title { font-size: 14px; font-weight: 600; line-height: 1.35; }
-.toast-body { font-size: 11px; color: #a8bccb; overflow-wrap: anywhere; }
+.app-toast-title { font-size: 14px; font-weight: 600; line-height: 1.35; }
+.app-toast-body { font-size: 11px; color: #a8bccb; overflow-wrap: anywhere; }
