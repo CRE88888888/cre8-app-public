@@ -186,6 +186,51 @@ export async function sendRenewalUserOp(args: {
 }
 
 /** ERC-20 `approve` 的 calldata（`uint256(2**256-1)` = 無限額度）。 */
+
+/** `transfer(to, amount)` 的 calldata —— 提領就是這一筆（帳戶 → 使用者錢包）。 */
+export function transferCalldata(to: Address, amount: bigint): Hex {
+  return encodeFunctionData({
+    abi: [
+      {
+        type: 'function',
+        name: 'transfer',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'to', type: 'address' },
+          { name: 'amount', type: 'uint256' },
+        ],
+        outputs: [{ name: '', type: 'bool' }],
+      },
+    ] as const,
+    functionName: 'transfer',
+    args: [to, amount],
+  });
+}
+
+/**
+ * 從 Kernel 帳戶提領一個資產到使用者自己的錢包。
+ *
+ * 為什麼一定要 owner 簽名：session key 的 CallPolicy 只允許 `executeRebalance`，
+ * 所以「把錢轉出去」這件事**只能**由 owner 的 sudo 驗證做（跟 approve 同一條路徑）。
+ * 這也意味著提領需要帳戶裡有 BNB 付 gas —— 沒有就先 top up。
+ */
+export async function sendWithdraw(args: {
+  wallet: RenewalWallet;
+  token: string;
+  accountAddress: Address;
+  asset: Address;
+  recipient: Address;
+  amountWei: bigint;
+}): Promise<RenewalReceipt> {
+  if (args.amountWei === 0n) throw new Error('withdraw amount must be greater than zero');
+  return sendSudoCalls({
+    wallet: args.wallet,
+    token: args.token,
+    accountAddress: args.accountAddress,
+    calls: [{ to: args.asset, data: transferCalldata(args.recipient, args.amountWei), value: 0n }],
+  });
+}
+
 export function approveCalldata(spender: Address): Hex {
   return encodeFunctionData({
     abi: [

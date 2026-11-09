@@ -1,10 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { encodeFunctionData, formatUnits, parseUnits } from 'viem';
 import type { Address } from 'viem';
 import { getAssets, getPortfolioStatus, getPortfolios, listStrategies } from '../../lib/api';
+import { sendWithdraw } from '../../lib/kernel';
 import type { PortfolioStatus } from '../../lib/api';
 import { MOCK_FUNDS } from '../../data/mock-funds';
 import { MOCK_PERFORMANCE } from '../../data/mock-performance';
@@ -129,12 +130,20 @@ export function FundPage(): ReactNode {
   });
 
   const [period, setPeriod] = useState<Period>('1Y');
-  const [tab, setTab] = useState<'deposit' | 'withdraw'>('deposit');
+  // `?tab=withdraw` 直接開提領分頁 —— 分頁狀態本來只在記憶體裡，沒有網址就只能靠手動點。
+  const [search] = useSearchParams();
+  const [tab, setTab] = useState<'deposit' | 'withdraw'>(search.get('tab') === 'withdraw' ? 'withdraw' : 'deposit');
   const [amount, setAmount] = useState('1000');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [sent, setSent] = useState<string | null>(null);
   const [facts, setFacts] = useState(false);
+  // 提領：預設 USDT（現金腿），可選帳戶裡任何有餘額的資產 —— 每個都只是一筆 transfer。
+  const [withdrawAsset, setWithdrawAsset] = useState<string | null>(null);
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [withdrawBusy, setWithdrawBusy] = useState(false);
+  const [withdrawError, setWithdrawError] = useState<unknown>(null);
+  const [withdrawTx, setWithdrawTx] = useState<string | null>(null);
 
   if (fund === undefined) {
     return (
@@ -319,10 +328,91 @@ export function FundPage(): ReactNode {
               </div>
               <div className="panel-b">
                 {tab === 'withdraw' ? (
-                  <Note>
-                    Withdrawals are not wired yet. The tokens sit in your own smart account, so a withdrawal is a
-                    transfer out of that account — it needs an owner-signed UserOp, which this build does not send.
-                  </Note>
+                  token === null ? (
+                    <Note tone="warn">
+                      <SignInButton /> to withdraw.
+                    </Note>
+                  ) : holding === undefined ? (
+                    <Note>You do not follow this strategy, so there is nothing to withdraw.</Note>
+                  ) : live === undefined ? (
+                    <div className="row">
+                      <Spinner /> <span className="muted">Reading balances…</span>
+                    </div>
+                  ) : wallet === null ? (
+                    <Note tone="warn">Connect the owner wallet in the header — a withdrawal is an owner-signed UserOp.</Note>
+                  ) : (
+                    <form
+                      className="swap"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void withdraw();
+                      }}
+                    >
+                      <div className="swap-box">
+                        <div className="swap-head">
+                          <label className="swap-label" htmlFor="withdraw-asset">
+                            You receive
+                          </label>
+                          <span className="swap-picks">
+                            <button type="button" onClick={() => setWithdrawAmount(maxWithdrawLabel())}>
+                              Max
+                            </button>
+                          </span>
+                        </div>
+                        <select
+                          id="withdraw-asset"
+                          value={withdrawAsset ?? (withdrawableRows()[0]?.symbol ?? '')}
+                          onChange={(event) => {
+                            setWithdrawAsset(event.target.value);
+                            setWithdrawAmount('');
+                          }}
+                          style={{ width: '100%', marginBottom: 8 }}
+                        >
+                          {withdrawableRows().map((row) => (
+                            <option key={row.symbol} value={row.symbol}>
+                              {row.symbol} · {Number(formatUnits(BigInt(row.amountWei), row.decimals)).toFixed(4)}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          id="withdraw-amount"
+                          inputMode="decimal"
+                          autoComplete="off"
+                          placeholder="0"
+                          value={withdrawAmount}
+                          onChange={(event) => setWithdrawAmount(event.target.value)}
+                        />
+                        <span className="swap-sub">→ {shortAddress(wallet.address)} (your wallet)</span>
+                      </div>
+                      <button
+                        type="submit"
+                        className="btn ghost block"
+                        disabled={withdrawBusy || withdrawableRows().length === 0}
+                      >
+                        {withdrawBusy ? 'Sending…' : 'Withdraw'}
+                      </button>
+                      {withdrawableRows().length === 0 ? (
+                        <p className="fine">This account holds nothing yet — deposit first.</p>
+                      ) : null}
+                      {gasTooLow(live) ? (
+                        <p className="fine">
+                          The account needs BNB for gas. Top it up on{' '}
+                          <Link to={`/portfolios/${holding.id}`}>the portfolio page</Link> first.
+                        </p>
+                      ) : null}
+                      {withdrawTx === null ? null : (
+                        <p className="fine">
+                          Withdrawn. tx <span className="mono">{withdrawTx}</span>
+                        </p>
+                      )}
+                      <ErrorNote error={withdrawError} />
+                      <p className="fine">
+                        A withdrawal moves tokens out of your own smart account — it is an owner-signed UserOp (the
+                        session key may only call <code>executeRebalance</code>). Selling positions back to USDT is a
+                        rebalance, not a withdrawal.
+                      </p>
+                    </form>
+                  )
                 ) : token === null ? (
                   <Note tone="warn">
                     <SignInButton /> to deposit.
@@ -540,6 +630,58 @@ export function FundPage(): ReactNode {
       setError(cause);
     } finally {
       setBusy(false);
+    }
+  }
+
+  /** 帳戶的 BNB 是否低於一次 UserOp 的門檻（1e16 wei = 0.01 BNB，與後端 `DEFAULT_MIN_SESSION_GAS_WEI` 一致）。 */
+  function gasTooLow(status: PortfolioStatus): boolean {
+    if (status.gas === null) return true;
+    const wei = status.gas.balanceWei;
+    if (wei === null || wei === undefined) return true;
+    return BigInt(wei) < 10n ** 16n;
+  }
+
+  function withdrawableRows(): { symbol: string; asset: string; amountWei: string; decimals: number }[] {
+    return (live?.holdings ?? []).filter((row) => BigInt(row.amountWei) > 0n);
+  }
+
+  function maxWithdrawLabel(): string {
+    const rows = withdrawableRows();
+    const symbol = withdrawAsset ?? rows[0]?.symbol;
+    const row = rows.find((entry) => entry.symbol === symbol);
+    return row === undefined ? '' : formatUnits(BigInt(row.amountWei), row.decimals);
+  }
+
+  async function withdraw(): Promise<void> {
+    if (wallet === null || token === null || holding === undefined || live === undefined) return;
+    const rows = withdrawableRows();
+    const symbol = withdrawAsset ?? rows[0]?.symbol;
+    const row = rows.find((entry) => entry.symbol === symbol);
+    const account = holding.smartAccounts[0]?.address;
+    if (row === undefined || account === undefined) return;
+    setWithdrawBusy(true);
+    setWithdrawError(null);
+    setWithdrawTx(null);
+    try {
+      const value = parseUnits(withdrawAmount === '' ? '0' : withdrawAmount, row.decimals);
+      if (value === 0n) throw new Error('amount must be greater than zero');
+      if (value > BigInt(row.amountWei)) throw new Error(`amount exceeds the ${row.symbol} balance (${formatUnits(BigInt(row.amountWei), row.decimals)})`);
+      const receipt = await sendWithdraw({
+        wallet,
+        token,
+        accountAddress: account as Address,
+        asset: row.asset as Address,
+        recipient: wallet.address as Address,
+        amountWei: value,
+      });
+      if (!receipt.success) throw new Error(`UserOp landed but reverted: ${receipt.txHash}`);
+      setWithdrawTx(receipt.txHash);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token) });
+      await queryClient.invalidateQueries({ queryKey: ['fund-status', token, holding.id] });
+    } catch (cause) {
+      setWithdrawError(cause);
+    } finally {
+      setWithdrawBusy(false);
     }
   }
 }
