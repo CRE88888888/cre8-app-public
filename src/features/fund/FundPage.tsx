@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { encodeFunctionData, formatUnits, parseUnits } from 'viem';
 import type { Address } from 'viem';
-import { enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, listStrategies } from '../../lib/api';
+import { enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, listStrategies, redeemPortfolio } from '../../lib/api';
 import { sendWithdraw } from '../../lib/kernel';
 import type { PortfolioStatus } from '../../lib/api';
 import { MOCK_FUNDS } from '../../data/mock-funds';
@@ -68,6 +68,11 @@ function VaultChart({
       <circle cx={sx(xs[xs.length - 1] ?? 0)} cy={sy(ys[ys.length - 1] ?? 0)} r="2.6" fill={tone} />
     </svg>
   );
+}
+
+/** 美元顯示（提領說明用；`$12.34`）。 */
+function formatUsd(value: number): string {
+  return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function pct(bps: number, digits = 2): string {
@@ -139,7 +144,6 @@ export function FundPage(): ReactNode {
   const [sent, setSent] = useState<string | null>(null);
   const [facts, setFacts] = useState(false);
   // 提領：預設 USDT（現金腿），可選帳戶裡任何有餘額的資產 —— 每個都只是一筆 transfer。
-  const [withdrawAsset, setWithdrawAsset] = useState<string | null>(null);
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawBusy, setWithdrawBusy] = useState(false);
   const [withdrawError, setWithdrawError] = useState<unknown>(null);
@@ -351,7 +355,7 @@ export function FundPage(): ReactNode {
                     >
                       <div className="swap-box">
                         <div className="swap-head">
-                          <label className="swap-label" htmlFor="withdraw-asset">
+                          <label className="swap-label" htmlFor="withdraw-amount">
                             You receive
                           </label>
                           <span className="swap-picks">
@@ -360,21 +364,6 @@ export function FundPage(): ReactNode {
                             </button>
                           </span>
                         </div>
-                        <select
-                          id="withdraw-asset"
-                          value={withdrawAsset ?? (withdrawableRows()[0]?.symbol ?? '')}
-                          onChange={(event) => {
-                            setWithdrawAsset(event.target.value);
-                            setWithdrawAmount('');
-                          }}
-                          style={{ width: '100%', marginBottom: 8 }}
-                        >
-                          {withdrawableRows().map((row) => (
-                            <option key={row.symbol} value={row.symbol}>
-                              {row.symbol} · {Number(formatUnits(BigInt(row.amountWei), row.decimals)).toFixed(4)}
-                            </option>
-                          ))}
-                        </select>
                         <input
                           id="withdraw-amount"
                           inputMode="decimal"
@@ -383,18 +372,27 @@ export function FundPage(): ReactNode {
                           value={withdrawAmount}
                           onChange={(event) => setWithdrawAmount(event.target.value)}
                         />
-                        <span className="swap-sub">→ {shortAddress(wallet.address)} (your wallet)</span>
+                        <span className="swap-sub">USDT → {shortAddress(wallet.address)} (your wallet)</span>
                       </div>
+                      <p className="fine">
+                        Cash {formatUsd(cashUsd())} · positions {formatUsd(Math.max(0, totalUsd() - cashUsd()))} · total{' '}
+                        {formatUsd(totalUsd())}
+                        {withdrawAmount !== '' && Number(withdrawAmount) > cashUsd() ? (
+                          <>
+                            <br />
+                            The shortfall {formatUsd(Number(withdrawAmount) - cashUsd())} is sold from every position
+                            pro-rata first, so the fund stays on its mandate.
+                          </>
+                        ) : null}
+                      </p>
                       <button
                         type="submit"
                         className="btn ghost block"
-                        disabled={withdrawBusy || withdrawableRows().length === 0}
+                        disabled={withdrawBusy || totalUsd() === 0}
                       >
-                        {withdrawBusy ? 'Sending…' : 'Withdraw'}
+                        {withdrawBusy ? 'Working…' : 'Withdraw in USDT'}
                       </button>
-                      {withdrawableRows().length === 0 ? (
-                        <p className="fine">This account holds nothing yet — deposit first.</p>
-                      ) : null}
+                      {totalUsd() === 0 ? <p className="fine">This account holds nothing yet — deposit first.</p> : null}
                       {gasTooLow(live) ? (
                         <p className="fine">
                           The account needs BNB for gas. Top it up on{' '}
@@ -408,9 +406,9 @@ export function FundPage(): ReactNode {
                       )}
                       <ErrorNote error={withdrawError} />
                       <p className="fine">
-                        A withdrawal moves tokens out of your own smart account — it is an owner-signed UserOp (the
-                        session key may only call <code>executeRebalance</code>). Selling positions back to USDT is a
-                        rebalance, not a withdrawal.
+                        Two signatures when cash is short: the fund sells pro-rata with its session key, then you sign
+                        one USDT transfer out. Selling the whole position back to cash would break the mandate and the
+                        scheduler would buy it straight back — pro-rata does not.
                       </p>
                     </form>
                   )
@@ -670,36 +668,52 @@ export function FundPage(): ReactNode {
     }
   }
 
-  function withdrawableRows(): { symbol: string; asset: string; amountWei: string; decimals: number }[] {
-    return (live?.holdings ?? []).filter((row) => BigInt(row.amountWei) > 0n);
+  /** 帳戶裡的現金（numeraire）價值（美元）。 */
+  function cashUsd(): number {
+    const row = (live?.holdings ?? []).find((entry) => entry.symbol === (usdt?.symbol ?? 'USDT'));
+    return row === undefined ? 0 : Number(row.usdValueE8) / 1e8;
+  }
+
+  /** 整個基金價值（美元）。 */
+  function totalUsd(): number {
+    return live === undefined || live.totalUsdE8 === null ? 0 : Number(live.totalUsdE8) / 1e8;
   }
 
   function maxWithdrawLabel(): string {
-    const rows = withdrawableRows();
-    const symbol = withdrawAsset ?? rows[0]?.symbol;
-    const row = rows.find((entry) => entry.symbol === symbol);
-    return row === undefined ? '' : formatUnits(BigInt(row.amountWei), row.decimals);
+    return totalUsd() === 0 ? '' : totalUsd().toFixed(2);
   }
 
   async function withdraw(): Promise<void> {
     if (wallet === null || token === null || holding === undefined || live === undefined) return;
-    const rows = withdrawableRows();
-    const symbol = withdrawAsset ?? rows[0]?.symbol;
-    const row = rows.find((entry) => entry.symbol === symbol);
     const account = holding.smartAccounts[0]?.address;
-    if (row === undefined || account === undefined) return;
+    const cash = cashUsd();
+    const requested = Number(withdrawAmount === '' ? '0' : withdrawAmount);
+    const usdtRow = (live.holdings ?? []).find((entry) => entry.symbol === (usdt?.symbol ?? 'USDT'));
+    const usdtAsset = usdt?.address;
     setWithdrawBusy(true);
     setWithdrawError(null);
     setWithdrawTx(null);
     try {
-      const value = parseUnits(withdrawAmount === '' ? '0' : withdrawAmount, row.decimals);
-      if (value === 0n) throw new Error('amount must be greater than zero');
-      if (value > BigInt(row.amountWei)) throw new Error(`amount exceeds the ${row.symbol} balance (${formatUnits(BigInt(row.amountWei), row.decimals)})`);
+      if (account === undefined || usdtAsset === undefined) throw new Error('找不到帳戶或會計資產');
+      if (!Number.isFinite(requested) || requested <= 0) throw new Error('amount must be greater than zero');
+      if (requested > totalUsd()) throw new Error(`amount exceeds the fund value (${formatUsd(totalUsd())})`);
+
+      // 現金不夠 → 先按比例賣（session key 簽），再轉出（owner 簽）。
+      const shortfall = requested - cash;
+      if (shortfall > 0.000001) {
+        const redeemed = await redeemPortfolio(token, holding.id, Math.round(shortfall * 1e6) / 1e6);
+        if (redeemed.outcome !== 'executed' && redeemed.outcome !== 'noop') {
+          throw new Error(`selling the shortfall failed: ${redeemed.reason}`);
+        }
+      }
+
+      const decimals = usdtRow?.decimals ?? 18;
+      const value = parseUnits(requested.toFixed(Math.min(decimals, 6)), decimals);
       const receipt = await sendWithdraw({
         wallet,
         token,
         accountAddress: account as Address,
-        asset: row.asset as Address,
+        asset: usdtAsset as Address,
         recipient: wallet.address as Address,
         amountWei: value,
       });
@@ -712,7 +726,7 @@ export function FundPage(): ReactNode {
     } finally {
       setWithdrawBusy(false);
     }
-  }
+    }
 }
 
 /** 用 owner 錢包把 USDT 轉進 Kernel 帳戶（dev 私鑰或注入錢包都支援）。 */

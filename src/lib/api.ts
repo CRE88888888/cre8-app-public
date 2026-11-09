@@ -447,3 +447,22 @@ export function listStrategies(token: string): Promise<{ items: StrategySummary[
   // 後端的上限是 100（超過回 400 INVALID_PAGINATION）。
   return request('/strategies?limit=100', { token });
 }
+
+/**
+ * 把部位**按比例**賣成 numeraire（提領成 USDT 的前半段）。
+ *
+ * 按比例賣 → 賣完每個資產的權重不變 → 投組仍貼著 mandate，排程器不會立刻買回來。
+ * 後半段是 owner-signed 的 USDT transfer（前端接著送）。
+ */
+export type RedeemResult = {
+  portfolioId: number;
+  outcome: 'executed' | 'noop' | 'blocked' | 'reverted' | 'failed';
+  reason: string;
+  txHash: string | null;
+  steps: { tokenIn: string; tokenOut: string; amountIn: string; amountOutMin: string }[];
+  redeemedUsdE8: string;
+};
+
+export function redeemPortfolio(token: string, id: number, usd: number): Promise<RedeemResult> {
+  return request<RedeemResult>(`/portfolios/${id}/redeem`, { token, method: 'POST', body: { usd } });
+}
