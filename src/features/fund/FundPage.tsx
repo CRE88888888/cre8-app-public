@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { encodeFunctionData, formatEther, formatUnits, parseEther, parseUnits } from 'viem';
 import type { Address } from 'viem';
-import { closePosition, enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, listStrategies, redeemPortfolio } from '../../lib/api';
+import { closePosition, enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, listStrategies, postRebalance, redeemPortfolio } from '../../lib/api';
 import { CHAIN_ID, bsc as appChain, readOnlyClient, sendGasTopUp, sendSweep, sendWithdraw } from '../../lib/kernel';
 import type { PortfolioStatus } from '../../lib/api';
 import { MOCK_FUNDS } from '../../data/mock-funds';
@@ -404,7 +404,7 @@ export function FundPage(): ReactNode {
                   `aria-selected`、`tabIndex` 管理。內容仍是同一個三元式（不改 TabsContent）——
                   那份內容很長，重排只增加 diff 而不增加正確性。 */}
               <Tabs value={tab} onValueChange={(value) => setTab(value as 'deposit' | 'withdraw')}>
-                <TabsList className="w-full">
+                <TabsList className="w-full bg-[var(--card,#eef3f7)]">
                   <TabsTrigger value="deposit" className="flex-1">
                     Deposit
                   </TabsTrigger>
@@ -626,12 +626,12 @@ export function FundPage(): ReactNode {
         Radix 這些都處理好了，而且保留原本的 .pros-head / .pros-body 內容樣式。
       */}
       <Sheet open={myPosition && live !== undefined} onOpenChange={setMyPosition}>
-        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
+        <SheetContent side="right" className="w-full gap-0 overflow-y-auto p-0 sm:max-w-xl">
           <SheetHeader>
             <p className="label">[ My position ]</p>
             <SheetTitle>Portfolio #{live?.portfolioId ?? '—'}</SheetTitle>
           </SheetHeader>
-          <div className="pros-body">
+          <div className="pros-body" style={{ padding: '20px 24px' }}>
             {live === undefined ? (
               <p className="fine">No live status for this account yet.</p>
             ) : (
@@ -717,12 +717,12 @@ export function FundPage(): ReactNode {
 
       {/* Fund facts：參考站是一個右側抽屜。 */}
       <Sheet open={facts} onOpenChange={setFacts}>
-        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
+        <SheetContent side="right" className="w-full gap-0 overflow-y-auto p-0 sm:max-w-xl">
           <SheetHeader>
             <p className="label">[ Fund facts ]</p>
             <SheetTitle>{fund.name}</SheetTitle>
           </SheetHeader>
-          <div className="pros-body">
+          <div className="pros-body" style={{ padding: '20px 24px' }}>
             <section className="panel pros-sec vault-mandate">
               <div className="panel-h">
                 <h3>Mandate</h3>
@@ -826,6 +826,8 @@ export function FundPage(): ReactNode {
       // 位址是 counterfactual 的：同一個 (owner, strategy) 永遠同一個地址，所以建好之後
       // 之後所有存款都進同一個帳戶。
       let account = holding?.smartAccounts[0]?.address;
+      // enroll 後才知道 portfolioId；deposit 結束時要對它跑一輪配置。
+      let portfolioIdAfterEnroll: number | null = holding?.id ?? null;
       if (account === undefined) {
         toast.replace(toastId, {
           tone: 'pending',
@@ -834,6 +836,7 @@ export function FundPage(): ReactNode {
         });
         const created = await enrollPortfolio(token, strategy.id);
         account = created.smartAccounts[0]?.address;
+        portfolioIdAfterEnroll = created.id;
         if (account === undefined) throw new Error('the backend returned no smart account address');
         await queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token) });
         toast.replace(toastId, { tone: 'pending', title: 'Deposit', body: 'Confirm the transfer in your wallet…' });
@@ -843,7 +846,27 @@ export function FundPage(): ReactNode {
       if (value === 0n) throw new Error('amount must be greater than zero');
       const hash = await sendUsdt(wallet, usdt.address as Address, account as Address, value);
       toast.replace(toastId, { tone: 'ok', title: `Deposited ${amount} ${usdt.symbol}`, body: hash });
-      // 成功後清空輸入框：這是按下 Deposit 之後最直接的視覺回饋（不用等 toast 出現）。\n      setAmount('');
+      setAmount('');
+
+      // 入金後**立刻**跑一輪配置。
+      //
+      // 為什麼一定要有這一步：排程器只認領 `next_run_at` 已到期的投組，而入金不會調整它 ——
+      // 實測剛存完 100 USDT，下一輪是 **23 小時後**，畫面上 drift 9500 bps 卻什麼都不會發生。
+      // 「錢進去了卻還是現金」是最容易被誤認為壞掉的行為。
+      const target = portfolioIdAfterEnroll;
+      if (target !== undefined && target !== null) {
+        toast.replace(toastId, { tone: 'pending', title: 'Configuring your deposit', body: 'Buying the target assets…' });
+        try {
+          const round = await postRebalance(token, target);
+          toast.ok(
+            round.outcome === 'executed' ? 'Deposit configured' : `Deposit recorded (${round.outcome})`,
+            round.txHash ?? round.reason ?? undefined,
+          );
+        } catch (cause) {
+          // 配置失敗不影響「錢已經到了」：部位還在，排程器之後會處理（或使用者再按一次）。
+          toast.warn('Deposited, but the first rebalance failed', (cause as Error).message.split('\n')[0].slice(0, 140));
+        }
+      }
       await queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token) });
       // 剛建立帳戶時 `holding` 還是 undefined，所以不能拿 holding.id 當 key；用 portfolio 清單重抓即可。
       await queryClient.invalidateQueries({ queryKey: ['fund-status'] });
