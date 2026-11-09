@@ -214,10 +214,21 @@ export async function sendSweep(args: {
   recipient: Address;
   /** 要掃出去的資產與金額（wei）。金額為 0 的會被忽略。 */
   balances: readonly { asset: Address; amountWei: bigint }[];
+  /**
+   * 額外要退回的原生幣（wei），與代幣轉帳放在**同一個** UserOp 裡。
+   *
+   * 為什麼不能事後再送一筆：連續兩筆 UserOp 時，第二筆的 account nonce 可能還沒推進，
+   * 模擬階段就以 `AA25 invalid account nonce` 失敗（實測清倉後掃 BNB 就是這樣掛的）。
+   * 合併成一筆同時也省一次 overhead。
+   */
+  nativeWei?: bigint;
 }): Promise<RenewalReceipt | null> {
   const calls = args.balances
     .filter((row) => row.amountWei > 0n)
     .map((row) => ({ to: row.asset, data: transferCalldata(args.recipient, row.amountWei), value: 0n }));
+  if (args.nativeWei !== undefined && args.nativeWei > 0n) {
+    calls.push({ to: args.recipient, data: '0x', value: args.nativeWei });
+  }
   if (calls.length === 0) return null;
   return sendSudoCalls({
     wallet: args.wallet,

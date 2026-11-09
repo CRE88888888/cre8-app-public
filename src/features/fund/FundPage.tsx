@@ -5,7 +5,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { encodeFunctionData, formatEther, formatUnits, parseEther, parseUnits } from 'viem';
 import type { Address } from 'viem';
 import { closePosition, enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, listStrategies, redeemPortfolio } from '../../lib/api';
-import { CHAIN_ID, bsc as appChain, readOnlyClient, sendGasTopUp, sendSudoCalls, sendSweep, sendWithdraw } from '../../lib/kernel';
+import { CHAIN_ID, bsc as appChain, readOnlyClient, sendGasTopUp, sendSweep, sendWithdraw } from '../../lib/kernel';
 import type { PortfolioStatus } from '../../lib/api';
 import { MOCK_FUNDS } from '../../data/mock-funds';
 import { MOCK_PERFORMANCE } from '../../data/mock-performance';
@@ -922,12 +922,19 @@ export function FundPage(): ReactNode {
       // 賣完重讀餘額：USDT + 所有非零餘額（含賣不掉的塵埃）一起掃回去。
       const fresh = await getPortfolioStatus(token, holding.id);
       const balances = fresh.holdings.map((row) => ({ asset: row.asset as Address, amountWei: BigInt(row.amountWei) }));
+      // 連 gas 一起：清倉的語意是「這個帳戶什麼都不剩」。
+      // 必須留一點付**這一筆** UserOp 的 gas，否則連驗證都過不了（AA21/AA51）。
+      const gasWei = live?.gas?.balanceWei;
+      const GAS_RESERVE = parseEther('0.003');
+      const nativeWei =
+        gasWei === null || gasWei === undefined ? 0n : BigInt(gasWei) > GAS_RESERVE ? BigInt(gasWei) - GAS_RESERVE : 0n;
       const receipt = await sendSweep({
         wallet,
         token,
         accountAddress: account as Address,
         recipient: wallet.address as Address,
         balances,
+        nativeWei,
       });
       toast.replace(toastId, { tone: 'pending', title: 'Sending everything back', body: 'Confirm the transfer in your wallet…' });
       if (receipt === null) {
@@ -939,22 +946,6 @@ export function FundPage(): ReactNode {
         setWithdrawNote(
           `Closed: ${sold.steps.length} sell step(s), then ${balances.filter((row) => row.amountWei > 0n).length} token(s) sent back to your wallet.`,
         );
-      }
-      // 連 gas 也掃回去：清倉的語意是「這個帳戶什麼都不剩」，留著 1 BNB 只是讓錢卡在裡面。
-      // 必須留一點付這一筆 UserOp 自己的 gas，否則交易連驗證都過不了（AA21/AA51）。
-      const gasWei = live?.gas?.balanceWei;
-      if (gasWei !== null && gasWei !== undefined) {
-        const GAS_RESERVE = parseEther('0.002');
-        const sweepable = BigInt(gasWei) - GAS_RESERVE;
-        if (sweepable > 0n) {
-          await sendSudoCalls({
-            wallet,
-            token,
-            accountAddress: account as Address,
-            calls: [{ to: wallet.address as Address, data: '0x', value: sweepable }],
-          });
-          toast.ok('Account emptied', `${Number(formatEther(sweepable)).toFixed(4)} BNB sent back too.`);
-        }
       }
       await queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token) });
       // 剛建立帳戶時 `holding` 還是 undefined，所以不能拿 holding.id 當 key；用 portfolio 清單重抓即可。
