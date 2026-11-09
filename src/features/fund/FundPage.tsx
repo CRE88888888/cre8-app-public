@@ -5,7 +5,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { encodeFunctionData, formatEther, formatUnits, parseEther, parseUnits } from 'viem';
 import type { Address } from 'viem';
 import { closePosition, enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, listStrategies, postRebalance, redeemPortfolio } from '../../lib/api';
-import { CHAIN_ID, bsc as appChain, readOnlyClient, sendGasTopUp, sendSweep, sendWithdraw } from '../../lib/kernel';
+import { CHAIN_ID, approveCalldata, bsc as appChain, readOnlyClient, sendGasTopUp, sendSudoCalls, sendSweep, sendWithdraw } from '../../lib/kernel';
 import type { PortfolioStatus } from '../../lib/api';
 import { MOCK_FUNDS } from '../../data/mock-funds';
 import { MOCK_PERFORMANCE } from '../../data/mock-performance';
@@ -895,6 +895,46 @@ export function FundPage(): ReactNode {
           title: 'Configuring your deposit',
           body: 'Buying the target assets…',
         });
+        // 先把 executor 授權好，否則第一輪一定被 ALLOWANCE_TOO_LOW 擋下（實測主網首次存款）。
+        //
+        // 這一步必須由**帳戶擁有者**簽名（approve 不在 session key 的 permit 清單裡，
+        // 只有 executeRebalance 是），所以它只能發生在使用者在場的時候 —— 存款正好是那個時刻。
+        // 一次 UserOp 打包所有 approve，不是每個資產一個簽名。
+        const executorAddress = live?.executorAddress;
+        const targets = live?.drift.assets ?? [];
+        if (executorAddress !== null && executorAddress !== undefined && targets.length > 0) {
+          try {
+            toast.replace(configuringId, {
+              tone: 'pending',
+              title: 'Approving the executor',
+              body: `One signature for ${targets.length} assets…`,
+            });
+            await sendSudoCalls({
+              wallet,
+              token,
+              accountAddress: account as Address,
+              calls: targets.map((row) => ({
+                to: row.asset as Address,
+                data: approveCalldata(executorAddress as Address),
+                value: 0n,
+              })),
+            });
+            toast.replace(configuringId, {
+              tone: 'pending',
+              title: 'Configuring your deposit',
+              body: 'Buying the target assets…',
+            });
+          } catch (cause) {
+            // 授權失敗不擋存款本身：錢已經到了，使用者可以再按一次。
+            toast.replace(configuringId, {
+              tone: 'warn',
+              title: 'Deposited, but the approval failed',
+              body: (cause as Error).message.split('\n')[0].slice(0, 140),
+            });
+            throw cause;
+          }
+        }
+
         try {
           const round = await postRebalance(token, target);
           toast.replace(configuringId, {
