@@ -106,3 +106,32 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 }
+
+/*
+ * operator 活動流的篩選列。
+ *
+ * 放這裡而不是 design.css：那是設計稿的逐字複本，我們的營運頁樣式不該混進去
+ * （這也是 `.tabs` / `.on` 可以重用的原因 —— 它們已經在 design.css 裡）。
+ */
+.activity-filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.activity-filters .tabs {
+  margin: 0;
+}
+
+.activity-filter-select {
+  margin-left: auto;
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+}

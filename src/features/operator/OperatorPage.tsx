@@ -71,7 +71,14 @@ function rowFlags(row: OperatorRow): { label: string; tone: 'ok' | 'warn' | 'bad
  * 這裡是「歷史」（誰在什麼時候被處理過）。同一個投組會在這張表出現很多次，
  * 因為它就是「每一輪的紀錄」。
  */
+/** 「失敗」的定義收在一處：state 是 failed 或 reverted（後者是「上鏈但 op 沒成功」）。 */
+function isFailure(row: OperatorActivityRow): boolean {
+  return row.state === 'failed' || row.state === 'reverted';
+}
+
 function ActivityTable({ token }: { token: string }): ReactNode {
+  const [result, setResult] = useState<'all' | 'failed' | 'ok'>('all');
+  const [strategy, setStrategy] = useState<string>('all');
   const activity = useQuery({
     queryKey: ['operator-activity', token],
     queryFn: () => getOperatorActivity(token, 50),
@@ -89,8 +96,8 @@ function ActivityTable({ token }: { token: string }): ReactNode {
   }
   if (activity.error !== null && activity.error !== undefined) return <ErrorNote error={activity.error} />;
 
-  const rows: OperatorActivityRow[] = activity.data?.activity ?? [];
-  if (rows.length === 0) {
+  const all: OperatorActivityRow[] = activity.data?.activity ?? [];
+  if (all.length === 0) {
     return (
       <div className="directory-empty">
         <strong>No activity yet</strong>
@@ -99,7 +106,57 @@ function ActivityTable({ token }: { token: string }): ReactNode {
     );
   }
 
+  // 篩選在**前端**做：一次只拉 50 筆，資料量小到手動過濾就夠了。
+  // 放到後端只會多一個 query 參數要維護，換不到什麼。
+  const failures = all.filter(isFailure);
+  const strategies = [...new Set(all.map((row) => row.strategyName ?? `Strategy ${row.strategyId}`))].sort();
+  const rows = all.filter((row) => {
+    if (result === 'failed' && !isFailure(row)) return false;
+    if (result === 'ok' && isFailure(row)) return false;
+    if (strategy !== 'all' && (row.strategyName ?? `Strategy ${row.strategyId}`) !== strategy) return false;
+    return true;
+  });
+
   return (
+    <>
+      <div className="activity-filters">
+        <span className="label">filter</span>
+        <div className="tabs" role="group" aria-label="Filter by result">
+          <button type="button" className={result === 'all' ? 'on' : ''} onClick={() => setResult('all')}>
+            All ({all.length})
+          </button>
+          <button type="button" className={result === 'failed' ? 'on' : ''} onClick={() => setResult('failed')}>
+            Failed ({failures.length})
+          </button>
+          <button type="button" className={result === 'ok' ? 'on' : ''} onClick={() => setResult('ok')}>
+            Confirmed ({all.length - failures.length})
+          </button>
+        </div>
+        <select
+          aria-label="Filter by strategy"
+          value={strategy}
+          onChange={(event) => setStrategy(event.target.value)}
+          className="activity-filter-select"
+        >
+          <option value="all">All strategies</option>
+          {strategies.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="directory-empty">
+          <strong>No matching activity</strong>
+          <p>
+            {failures.length === 0
+              ? 'Nothing failed in the last 50 operations.'
+              : 'Try clearing the strategy filter.'}
+          </p>
+        </div>
+      ) : (
     <div className="table-wrap">
       <table>
         <thead>
@@ -150,6 +207,8 @@ function ActivityTable({ token }: { token: string }): ReactNode {
         </tbody>
       </table>
     </div>
+      )}
+    </>
   );
 }
 
