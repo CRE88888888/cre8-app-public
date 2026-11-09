@@ -64,7 +64,8 @@ function MockFundRow({ fund }: { fund: MockFund }): ReactNode {
   const performance = MOCK_PERFORMANCE[fund.slug];
   return (
     <article className="fund-row">
-      <div className="fund-row-link" style={{ cursor: 'default' }}>
+      {/* 範例基金也是入口：點進去看策略介紹與（若有真實策略）存款。 */}
+      <Link className="fund-row-link" to={`/funds/${fund.slug}`}>
         <div className="fund-row-identity">
           <span className="fund-mark">
             {fund.portrait === undefined ? (
@@ -119,9 +120,10 @@ function MockFundRow({ fund }: { fund: MockFund }): ReactNode {
           </span>
         </div>
 
-        {/* mock 基金不能買，所以沒有箭頭（設計稿的箭頭是「進去看」）。留空格讓五欄對齊。 */}
-        <span className="fund-row-arrow" aria-hidden="true" />
-      </div>
+        <span className="fund-row-arrow" aria-hidden="true">
+          ↗
+        </span>
+      </Link>
       <AllocationDetails fund={fund} />
     </article>
   );

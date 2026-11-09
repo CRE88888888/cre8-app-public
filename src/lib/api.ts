@@ -430,3 +430,20 @@ export type StrategyDetail = {
 export function getStrategy(token: string, id: number): Promise<StrategyDetail> {
   return request<StrategyDetail>(`/strategies/${id}`, { token });
 }
+
+/** 策略列表（`GET /strategies`，公開資料，帶分頁）。 */
+export type StrategySummary = {
+  id: number;
+  provider: string;
+  name: string;
+  description: string;
+  isPublic: boolean;
+  swapFeeBps: number;
+  createdAt: string;
+  onchainId: number | null;
+};
+
+export function listStrategies(token: string): Promise<{ items: StrategySummary[]; total: number }> {
+  // 後端的上限是 100（超過回 400 INVALID_PAGINATION）。
+  return request('/strategies?limit=100', { token });
+}

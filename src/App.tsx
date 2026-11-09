@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { PhaseBanner } from './components/PhaseBanner';
 import { RequireSession } from './components/RequireSession';
 import { TopBar } from './components/TopBar';
+import { FundPage } from './features/fund/FundPage';
 import { OperatorPage } from './features/operator/OperatorPage';
 import { StrategyPage } from './features/strategy/StrategyPage';
 import { PortfoliosPage } from './features/portfolios/PortfoliosPage';
@@ -24,6 +25,7 @@ export function App(): ReactNode {
         <Route path="/create" element={<CreateFundPage />} />
         <Route path="/operator" element={<OperatorPage />} />
         <Route path="/strategies/:id" element={<StrategyPage />} />
+        <Route path="/funds/:slug" element={<FundPage />} />
         {/* 舊的「只有列表」頁保留：它比 vaults 更適合 debug（沒有範例資料）。 */}
         <Route
           path="/portfolios"
