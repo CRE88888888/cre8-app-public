@@ -19,6 +19,15 @@
 @import "tailwindcss/utilities.css" layer(utilities);
 
 /*
+ * ⚠ 一定要有 `@source`。
+ *
+ * 完整版的 `@import "tailwindcss"` 會連「自動偵測原始碼」一起帶進來；我們只引入
+ * theme + utilities，就少了那一步 —— 結果是 `className="h-4 w-4"` 這種工具類別**完全沒被生成**，
+ * 元件看起來「有渲染但沒樣式」（實測：sheet 的關閉鈕是瀏覽器預設灰框、寬度沒受限）。
+ */
+@source "../";
+
+/*
  * shadcn 的設計 token。
  *
  * 用 `oklch` 而不是 hex：Tailwind v4 的 theme 就是 oklch，混用會讓 `bg-primary/50`

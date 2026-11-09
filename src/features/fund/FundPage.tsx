@@ -16,6 +16,7 @@ import { useOwnerWallet } from '../../lib/use-owner-wallet';
 import { useSession } from '../../store/session';
 import { AssetLogo } from '../../components/AssetLogo';
 import { SignInButton } from '../../components/WalletMenu';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ErrorNote, Note, Spinner } from '../../components/ui';
 import { toast } from '../../components/Toast';
 
@@ -145,9 +146,10 @@ export function FundPage(): ReactNode {
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  const [facts, setFacts] = useState(false);
+  // `?facts=1` / `?position=1` 直接開抽屜：客服貼連結給使用者、或營運要截圖核對時用得到。
+  const [facts, setFacts] = useState(search.get('facts') === '1');
   // 「My position」＝這個投組的即時狀態（原本在 /portfolios/:id 才能看，現在收進基金頁）。
-  const [myPosition, setMyPosition] = useState(false);
+  const [myPosition, setMyPosition] = useState(search.get('position') === '1');
   const [toppingUp, setToppingUp] = useState(false);
   // 提領：預設 USDT（現金腿），可選帳戶裡任何有餘額的資產 —— 每個都只是一筆 transfer。
   const [withdrawAmount, setWithdrawAmount] = useState('');
@@ -612,18 +614,22 @@ export function FundPage(): ReactNode {
 
 
       {/* My position：這個投組的即時狀態。沿用 Fund facts 的抽屜樣式（dialog.pros-drawer）。 */}
-      {myPosition && live !== undefined ? (
-        <dialog className="pros-drawer" open aria-labelledby="pos-title">
-          <header className="pros-head">
-            <div>
-              <p className="label">[ My position ]</p>
-              <h2 id="pos-title">Portfolio #{live.portfolioId}</h2>
-            </div>
-            <button type="button" className="pros-x" aria-label="Close my position" onClick={() => setMyPosition(false)}>
-              ×
-            </button>
-          </header>
+      {/*
+        為什麼用 shadcn 的 Sheet 而不是自己寫 <dialog>：手寫版只有 Esc 能關，
+        沒有 focus trap（Tab 會跑到背後的頁面）、也沒有背景鎖捲動。
+        Radix 這些都處理好了，而且保留原本的 .pros-head / .pros-body 內容樣式。
+      */}
+      <Sheet open={myPosition && live !== undefined} onOpenChange={setMyPosition}>
+        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
+          <SheetHeader>
+            <p className="label">[ My position ]</p>
+            <SheetTitle>Portfolio #{live?.portfolioId ?? '—'}</SheetTitle>
+          </SheetHeader>
           <div className="pros-body">
+            {live === undefined ? (
+              <p className="fine">No live status for this account yet.</p>
+            ) : (
+              <>
             <section className="panel pros-sec">
               <div className="panel-h">
                 <h3>Status</h3>
@@ -697,22 +703,19 @@ export function FundPage(): ReactNode {
                 </table>
               </div>
             </section>
+              </>
+            )}
           </div>
-        </dialog>
-      ) : null}
+        </SheetContent>
+      </Sheet>
 
-      {/* Fund facts：參考站是一個右側抽屜（dialog.pros-drawer）。 */}
-      {facts ? (
-        <dialog className="pros-drawer" open aria-labelledby="pros-title">
-          <header className="pros-head">
-            <div>
-              <p className="label">[ Fund facts ]</p>
-              <h2 id="pros-title">{fund.name}</h2>
-            </div>
-            <button type="button" className="pros-x" aria-label="Close fund facts" onClick={() => setFacts(false)}>
-              ×
-            </button>
-          </header>
+      {/* Fund facts：參考站是一個右側抽屜。 */}
+      <Sheet open={facts} onOpenChange={setFacts}>
+        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
+          <SheetHeader>
+            <p className="label">[ Fund facts ]</p>
+            <SheetTitle>{fund.name}</SheetTitle>
+          </SheetHeader>
           <div className="pros-body">
             <section className="panel pros-sec vault-mandate">
               <div className="panel-h">
@@ -802,8 +805,8 @@ export function FundPage(): ReactNode {
               </div>
             </section>
           </div>
-        </dialog>
-      ) : null}
+        </SheetContent>
+      </Sheet>
     </>
   );
 
