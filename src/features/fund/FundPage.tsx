@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { encodeFunctionData, formatUnits, parseUnits } from 'viem';
 import type { Address } from 'viem';
-import { getAssets, getPortfolioStatus, getPortfolios, listStrategies } from '../../lib/api';
+import { enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, listStrategies } from '../../lib/api';
 import { sendWithdraw } from '../../lib/kernel';
 import type { PortfolioStatus } from '../../lib/api';
 import { MOCK_FUNDS } from '../../data/mock-funds';
@@ -144,6 +144,7 @@ export function FundPage(): ReactNode {
   const [withdrawBusy, setWithdrawBusy] = useState(false);
   const [withdrawError, setWithdrawError] = useState<unknown>(null);
   const [withdrawTx, setWithdrawTx] = useState<string | null>(null);
+  const [enrolling, setEnrolling] = useState(false);
 
   if (fund === undefined) {
     return (
@@ -425,10 +426,22 @@ export function FundPage(): ReactNode {
                     there is nothing to deposit into.
                   </Note>
                 ) : holding === undefined ? (
-                  <Note tone="warn">
-                    You do not follow this strategy yet. Create a fund from the <Link to="/create">create page</Link>{' '}
-                    to get your own smart account for it.
-                  </Note>
+                  <div className="stack" style={{ gap: 10 }}>
+                    <Note tone="warn">
+                      You do not follow this strategy yet. Following it creates <strong>your own</strong> Kernel smart
+                      account for this fund — one account per (owner, strategy), so your balance and session key are
+                      independent of every other holder.
+                    </Note>
+                    <button
+                      type="button"
+                      className="btn primary block"
+                      disabled={enrolling}
+                      onClick={() => void follow()}
+                    >
+                      {enrolling ? 'Creating your account…' : 'Follow this fund'}
+                    </button>
+                    <ErrorNote error={error} />
+                  </div>
                 ) : (
                   <form
                     className="swap"
@@ -639,6 +652,22 @@ export function FundPage(): ReactNode {
     const wei = status.gas.balanceWei;
     if (wei === null || wei === undefined) return true;
     return BigInt(wei) < 10n ** 16n;
+  }
+
+  /** 在基金頁直接建立「我的帳戶」（＝enroll），不必繞去 /create。 */
+  async function follow(): Promise<void> {
+    if (token === null || strategy === undefined) return;
+    setEnrolling(true);
+    setError(null);
+    try {
+      await enrollPortfolio(token, strategy.id);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token) });
+      await queryClient.invalidateQueries({ queryKey: ['strategies', token] });
+    } catch (cause) {
+      setError(cause);
+    } finally {
+      setEnrolling(false);
+    }
   }
 
   function withdrawableRows(): { symbol: string; asset: string; amountWei: string; decimals: number }[] {
