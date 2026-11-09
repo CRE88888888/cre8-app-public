@@ -112,6 +112,48 @@ function Dashboard({
           </span>
         </div>
         <dl className="kv">
+          <dt>scheduler</dt>
+          <dd>
+            {overview.scheduler === null ? (
+              <span className="muted">never ran (no heartbeat row)</span>
+            ) : (
+              <>
+                <Badge tone={overview.scheduler.alive ? 'ok' : 'bad'}>
+                  {overview.scheduler.alive ? 'alive' : 'stale'}
+                </Badge>
+                <span className="muted" style={{ fontSize: 12 }}>
+                  {' '}
+                  · {overview.scheduler.dryRun ? 'dry-run' : 'LIVE'} · every {overview.scheduler.intervalSeconds}s ·
+                  limit {overview.scheduler.roundLimit} · threshold {overview.scheduler.thresholdBps} bps · round{' '}
+                  {overview.scheduler.rounds} · pid {overview.scheduler.pid ?? '—'}
+                </span>
+                {overview.scheduler.lastError === null ? null : (
+                  <div className="neg" style={{ fontSize: 12 }}>
+                    last error: {overview.scheduler.lastError.slice(0, 120)}
+                  </div>
+                )}
+              </>
+            )}
+          </dd>
+          <dt>last round</dt>
+          <dd>
+            {overview.scheduler?.lastSummary === undefined || Object.keys(overview.scheduler.lastSummary).length === 0 ? (
+              <span className="muted">—</span>
+            ) : (
+              <>
+                {Object.entries(overview.scheduler.lastSummary).map(([key, value]) => (
+                  <span key={key} style={{ marginRight: 10 }}>
+                    {key} <strong>{value}</strong>
+                  </span>
+                ))}
+                <span className="muted" style={{ fontSize: 12 }}>
+                  {overview.scheduler.staleSeconds === null
+                    ? ''
+                    : `· finished ${overview.scheduler.staleSeconds}s ago`}
+                </span>
+              </>
+            )}
+          </dd>
           <dt>scheduler heartbeat</dt>
           <dd>
             <strong>{ago(overview.lastCheckedAt)}</strong>

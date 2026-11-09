@@ -388,8 +388,26 @@ export type OperatorRow = {
   lastOperation: { id: number; state: string; txHash: string | null; createdAt: string } | null;
 };
 
+export type SchedulerStatus = {
+  startedAt: string;
+  lastRoundAt: string | null;
+  lastFinishedAt: string | null;
+  rounds: number;
+  dryRun: boolean;
+  roundLimit: number;
+  thresholdBps: number;
+  intervalSeconds: number;
+  lastSummary: Record<string, number>;
+  lastError: string | null;
+  pid: number | null;
+  staleSeconds: number | null;
+  alive: boolean;
+};
+
 export type OperatorOverview = {
   generatedAt: string;
+  /** `null` = 排程器從來沒跑過（不是「死了」）。 */
+  scheduler: SchedulerStatus | null;
   alerts: { critical: number; warn: number; open: number } | null;
   lastCheckedAt: string | null;
   portfolios: OperatorRow[];
