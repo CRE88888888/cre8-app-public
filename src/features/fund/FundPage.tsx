@@ -844,6 +844,31 @@ export function FundPage(): ReactNode {
 
       const value = parseUnits(amount === '' ? '0' : amount, usdt.decimals);
       if (value === 0n) throw new Error('amount must be greater than zero');
+
+      // 動錢之前先確認這個帳戶的 gas 夠不夠。
+      //
+      // 為什麼是**這裡**：清倉時會把 BNB 掃回錢包（只留 0.003），下一次 deposit 就會碰到
+      // 「USDT 進去了、但再平衡付不出 gas」—— 實測正是這樣：
+      //   Send failed: Smart Account does not have sufficient funds
+      // 與其讓它進半套（錢到、配置失敗），不如在一開始就講清楚，並主動補 gas。
+      //
+      // 只對**已存在的帳戶**檢查：enroll 剛建好的帳戶還沒收過 BNB，gas 一定是 0，
+      // 那時不能擋（否則第一次存款永遠過不去）—— 而是靠 deposit 之後的「補 gas」路徑。
+      if (account !== undefined && account !== null && holding !== undefined) {
+        const gas = live?.gas;
+        if (gas !== null && gas !== undefined && gas.balanceWei !== undefined && gas.minimumWei !== undefined) {
+          const balance = BigInt(gas.balanceWei);
+          const minimum = BigInt(gas.minimumWei);
+          if (balance < minimum) {
+            const shortfall = Number(formatEther(minimum - balance)).toFixed(4);
+            throw new Error(
+              `This fund's account has only ${Number(formatEther(balance)).toFixed(4)} BNB for gas (needs ${Number(formatEther(minimum)).toFixed(4)}). ` +
+                `Top up ${shortfall} BNB first — your first rebalance would run out of gas.`,
+            );
+          }
+        }
+      }
+
       const hash = await sendUsdt(wallet, usdt.address as Address, account as Address, value);
       toast.replace(toastId, { tone: 'ok', title: `Deposited ${amount} ${usdt.symbol}`, body: hash });
       setAmount('');
