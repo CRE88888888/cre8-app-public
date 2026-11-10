@@ -35,6 +35,9 @@ jobs:
 
       # 先 typecheck 再 build：build script 本身也含 tsc，但分開跑才能一眼看出
       # 是型別壞了還是打包壞了。
+      - name: Unit tests
+        run: bun test tests
+
       - name: Typecheck
         run: bun run typecheck
 

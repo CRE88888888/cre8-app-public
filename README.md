@@ -1,6 +1,6 @@
 # cre8-app
 
-CRE8 ATP 的前端。Vite + React 19 + TypeScript，**純 CSS**（不引入 Tailwind 或 UI 套件）。
+CRE8 ATP 的前端。Vite + React 19 + TypeScript，公開頁保留設計稿 CSS，表單與抽屜使用 shadcn / Tailwind v4（無 preflight）。
 
 ## 技術選擇
 
@@ -9,7 +9,7 @@ CRE8 ATP 的前端。Vite + React 19 + TypeScript，**純 CSS**（不引入 Tail
 | 建置 | Vite 7 | dev server 啟動 <200ms，HMR 對「改一個表格欄位」這種工作差很多 |
 | server state | `@tanstack/react-query` | 快取、重試、`isPending`/`error` 的狀態機。手寫這些每次都會漏一個分支 |
 | client state | `zustand` | 只有錢包連線與 token 兩塊，Context 也能做但 zustand 的 selector 不會讓整個樹重繪 |
-| 樣式 | 純 CSS + design tokens | 只有幾頁，token + 少量 class 比 utility 好讀、好改 |
+| 樣式 | 設計稿 CSS + shadcn / Tailwind v4 | 公開頁保留來源 class；工具頁沿用可存取元件，token 使用 sx- 前綴 |
 | 鏈互動 | `viem` | 型別完整，且與後端同一個版本（`2.57.x`） |
 
 視覺語言（顏色、圓角、字體、卡片/按鈕形狀）取自 `bnb-agent-vaults/web` 的 app 頁；
@@ -38,7 +38,8 @@ src/
 ## 開發
 
 ```bash
-bun install
+bun install --frozen-lockfile # Bun 1.4.4
+bun test tests
 bun run dev        # http://localhost:5173
 bun run typecheck
 bun run build
@@ -178,22 +179,30 @@ TypeScript 不會有任何意見（`request<T>` 只是斷言），執行期卻�
 載入順序在 `main.tsx` 是刻意的：先 vendor（tokens + 全域 reset + 既有元件規則），再我的
 `tokens/base/components.css` 覆蓋。反過來的話他們的 `button { background:none }` 會蓋掉我的元件。
 
-### Vaults（`/vaults`，首頁）
+### 完整公開 UI（2026-11-11）
 
-兩區：**Live on this deployment**（真的投組，打 `/portfolios` + 並行 `/status`，可點進去看/執行）
-與 **Example funds**（9 個 mock 基金，來自 `src/data/mock-funds.ts`）。
+來源釘在 `cre8admin/bnb-agent-vaults@0f3196d37821561050dee1176d9d33e3b51c5d5e`：
+30 檔基金、219 個底層資產頁、218 個 Create 可選資產。來源與雜湊見
+[public-ui-source.json](docs/public-ui-source.json)，整合方式見
+[public-ui-integration.md](docs/public-ui-integration.md)。
 
-⚠ mock 基金**沒有**報酬率、回撤、走勢圖。來源站的那些數字是模擬回測的產物，而這個部署沒有那條資料管線；
-複製或自己編一個都會讓人以為那是真的績效。所以卡片右側顯示 `Risk` 與 `Rebalance period` ——
-兩者是 mock 定義本身的一部分。
+* `/vaults`：Market themes / Public figures / X voices，搜尋、排序、期間與返回篩選。
+* `/funds/:slug`：原始封面、人物介紹、持倉、資產 hover、歷史曲線、Max drawdown、
+  Performance details（Sharpe / volatility）、完整 recent trades 與來源。
+* `/asset/:slug`：底層公司／資產介紹、歷史價格；代幣化版本為次要資訊。USDT 只作現金。
+* `/leaderboard`、`/creator/:id`：來源基金排序與創作者目錄。
+* `/portfolio`、`/portfolios`：維持原生帳戶與 API 真實資料，不把模型報酬當成使用者績效。
 
-空倉投組（`totalUsdE8 === "0"`）顯示「尚未入金」而不是 `5000 bps`：那是 `drift.ts` 對 total = 0 的
-定義值，不是嚴重偏離。
+歷史曲線使用原始已發布 NAV，不會拿目前配置回填歷史。官方人物以持倉基準日重建，
+X voices 依來源的貼文模型重播；這些不是本人實盤成交證明。原始披露／貼文連結保留。
+只讀 `/reference-data/demo-funds` 可接收來源完整每日更新；資料不完整或請求失敗就保留舊截止日。
 
-### Create fund（`/create`）
+### Create fund（`/create`）與啟用（`/create/activate`）
 
-只有**一種**策略：目標權重指數基金。設計稿的 Buy & hold / Stack / Pair grid 在我們的後端沒有對應的
-執行路徑，所以不假裝有。
+`/create` 是完整來源設計器：資產、權重、策略、規則、X handle、封面、草稿與 JSON 匯出。
+設計完成可進入原生啟用表單；ATP 目前能執行的是**目標權重配置**。
+匯入只帶精確代幣地址與權重，其他規則不會被默默轉成執行策略。
+啟用前須確認配置模式，且每個地址仍必須通過後端可交易資產清單。
 
 三步都是真的後端呼叫（第 1、3 步會上鏈）：
 ```

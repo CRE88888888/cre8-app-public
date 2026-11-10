@@ -31,23 +31,10 @@ bun run build
 
 `VITE_CHAIN_ID` 會在**建置時**被寫進 bundle（`uu=56`），不是執行時讀取 —— 換鏈就要重新建置。
 
-## 部署（已實際執行）
+## 部署
 
-```bash
-wrangler pages project create cre8-atp --production-branch=main
-wrangler pages deploy dist --project-name=cre8-atp --branch=main
-```
-
-沙箱環境要注意：wrangler 要寫 `~/Library/Preferences/.wrangler`，預設不可寫。
-做法與 Railway CLI 相同 —— 把憑證複製到工作區並改 HOME：
-
-```bash
-mkdir -p .wrangler-home/Library/Preferences
-cp -R ~/Library/Preferences/.wrangler .wrangler-home/Library/Preferences/
-HOME=$PWD/.wrangler-home wrangler pages deploy dist --project-name=cre8-atp
-```
-
-（`.wrangler-home/` 含 OAuth token，已 gitignore。）
+目前唯一部署路徑是本文件下方的 **Cloudflare Git 整合**。早期手動部署已被取代；
+不要在本機複製憑證、改 HOME 或額外推送 dist 來覆蓋 Git 部署。
 
 ## 目前狀態（正式網域已上線）
 
@@ -143,24 +130,15 @@ Workers & Pages → cre8-atp → Settings → Build
 
 ### 為什麼還留著 `.github/workflows/ci.yml`
 
-它跑 `typecheck` + `build` 並標在 PR 上。Cloudflare 的建置失敗**只顯示在 Cloudflare**，
+它跑單元測試、`typecheck` + `build` 並標在 PR 上。Cloudflare 的建置失敗**只顯示在 Cloudflare**，
 PR 上看不到 —— 而 `typecheck` 抓的是「本機能過、CI 掛掉」那類問題（例如依賴只存在於某人
 的家目錄 `~/node_modules`，實際發生過兩次）。
-
-### 手動部署（備援）
-
-```bash
-bun run build
-HOME=$PWD/.wrangler-home wrangler pages deploy dist --project-name=cre8-atp --branch=main
-```
-
-`HOME=` 是必要的：沙箱不能寫 `~/.wrangler`，而 token 就住在那裡。
 
 ## CI（GitHub Actions，只有檢查、不部署）
 
 | Workflow | 觸發 | 做什麼 |
 |---|---|---|
-| `.github/workflows/ci.yml` | PR、push main、手動 | `bun install --frozen-lockfile` → `typecheck` → `build` → 上傳 `dist` artifact |
+| `.github/workflows/ci.yml` | PR、push main、手動 | `bun install --frozen-lockfile` → `bun test tests` → `typecheck` → `build` → 上傳 `dist` artifact |
 
 ### 兩個刻意的設計
 
@@ -171,11 +149,20 @@ HOME=$PWD/.wrangler-home wrangler pages deploy dist --project-name=cre8-atp --br
 
 ### 驗證 CI 會過（本機）
 
+在家目錄之外的乾淨 checkout（例如 `/private/tmp/cre8-app-check`），使用 Bun 1.4.4：
+
 ```bash
-rm -rf node_modules && bun install --frozen-lockfile
-HOME=$PWD/.fake-home bun run typecheck    # 假 HOME 隔離家目錄
-HOME=$PWD/.fake-home bun run build
+bun install --frozen-lockfile
+bun test tests
+bun run typecheck
+bun run build
 ```
 
-**必須用假 HOME**：TypeScript 與 Vite 都會往父目錄找 `node_modules`，
-家目錄若有一份就會讓本機永遠通過、CI 永遠失敗（實際發生過，見 §CI 抓到的兩個 bug）。
+僅更改 HOME 無法隔離 TypeScript 向父目錄搜尋 node_modules；必須讓原始碼本身位於家目錄之外。
+詳細原因見 [uiux-handoff.md §6.5](uiux-handoff.md)。
+
+## 完整公開資料的只讀代理
+
+`GET /reference-data/demo-funds` 固定代理到來源站的公開歷史資料，僅允許 GET/HEAD，
+不轉發錢包憑證，不改動既有 `/api/*` → Railway 的認證流程。整合及驗收見
+[public-ui-integration.md](public-ui-integration.md)。

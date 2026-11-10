@@ -1,3 +1,4 @@
+import {assetBySymbol} from '../lib/public-funds';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -13,6 +14,7 @@ function candidates(symbol: string): string[] {
   // bStock 的顯示符號常常帶尾碼 B（NVDAB / CRCLB），底層 logo 沒有那個 B。
   const underlying = lower.endsWith('b') ? lower.slice(0, -1) : lower;
   return [
+    ...(assetBySymbol(symbol)?.logo?[assetBySymbol(symbol)!.logo]:[]),
     `/logos/tokens/${lower}.png`,
     `/logos/stocks/underlying/${underlying}.png`,
     `/logos/stocks/${lower}.png`,

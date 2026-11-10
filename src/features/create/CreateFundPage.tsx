@@ -9,6 +9,7 @@ import { useWallet } from '../../store/wallet';
 import type { PriceableAsset } from '../../lib/api';
 import { queryKeys } from '../../lib/query';
 import { useBodyClass } from '../../lib/use-body-class';
+import {savedActivationDesign} from '../../lib/activation-design';
 import { useSession } from '../../store/session';
 import { SignInButton } from '../../components/WalletMenu';
 import { ErrorNote, Note, Spinner } from '../../components/ui';
@@ -47,7 +48,7 @@ const STEP_LABEL: Record<Exclude<Step, 'idle' | 'done'>, string> = {
  * Steps 1 and 3 send on-chain transactions, so progress is shown step by step — a spinner that says
  * nothing for 30 seconds makes people press the button again.
  */
-export function CreateFundPage(): ReactNode {
+export function ActivateFundPage(): ReactNode {
   // The design's create page carries its own body class (`.create-page { background: var(--panel) }`).
   useBodyClass('create-page');
   const token = useSession((state) => state.token);
@@ -62,9 +63,11 @@ export function CreateFundPage(): ReactNode {
         ? { kind: 'dev', address: walletState.devSigner.address as `0x${string}`, account: walletState.devSigner.account }
         : null;
 
-  const [name, setName] = useState('');
+  const [draft] = useState(savedActivationDesign);
+  const [allocationAgreed,setAllocationAgreed]=useState(false);
+  const [name, setName] = useState(draft?.name||'');
   const [description, setDescription] = useState('');
-  const [weights, setWeights] = useState<Record<string, number>>({});
+  const [weights, setWeights] = useState<Record<string, number>>(draft?.weights||{});
   const [intervalSeconds, setIntervalSeconds] = useState<number>(3600);
   const [step, setStep] = useState<Step>('idle');
   /**
@@ -89,14 +92,15 @@ export function CreateFundPage(): ReactNode {
   const selected = useMemo(() => Object.entries(weights).filter(([, percent]) => percent > 0), [weights]);
   /** Accumulate in bps, not floating percentages: `33.3 + 33.3 + 33.4` is not 100 in binary floating point. */
   const totalBps = selected.reduce((sum, [, percent]) => sum + Math.round(percent * 100), 0);
-  const valid = name.trim().length > 0 && totalBps === 10_000;
+  const unavailableAssets=selected.filter(([address])=>!assets.data?.some(asset=>asset.address.toLowerCase()===address.toLowerCase()&&asset.tradable!==false));
+  const valid = name.trim().length > 0 && totalBps === 10_000 && unavailableAssets.length===0 && (draft===null||allocationAgreed);
   const busy = step !== 'idle' && step !== 'done';
 
   const toggle = (asset: PriceableAsset): void => {
     setWeights((current) => {
       const next = { ...current };
-      if (next[asset.address] === undefined) next[asset.address] = 0;
-      else delete next[asset.address];
+      if (next[asset.address.toLowerCase()] === undefined) next[asset.address.toLowerCase()] = 0;
+      else delete next[asset.address.toLowerCase()];
       return next;
     });
   };
@@ -188,9 +192,9 @@ export function CreateFundPage(): ReactNode {
   if (token === null) {
     return (
       <main className="page stack">
-        <h1>Create a fund</h1>
+        <h1>Activate an allocation</h1>
         <Note tone="warn">
-          Creating a fund writes a strategy under your wallet and deploys a smart account.{' '}
+          Activation creates a target-weight strategy and a smart account under your wallet.{' '}
           <SignInButton /> first.
         </Note>
       </main>
@@ -201,12 +205,14 @@ export function CreateFundPage(): ReactNode {
     <main className="page stack">
       <div>
         <p className="eyebrow">Create</p>
-        <h1>Create a fund</h1>
+        <h1>Activate an allocation</h1>
         <p className="lead">
           One strategy: a <strong>target-weight index fund</strong>. You pick the holdings and weights; the scheduler
           swaps what is overweight into what is underweight (every leg is <em>asset ↔ USDT</em>).
         </p>
       </div>
+
+      {draft&&<section className="card stack"><h2>Allocation from your design</h2><p>Activate these holdings as a target-weight strategy. Choose the rebalance interval below. Other design rules and fee settings remain in your exported design.</p><label className="row"><input type="checkbox" checked={allocationAgreed} onChange={event=>setAllocationAgreed(event.target.checked)}/>I want to activate this allocation as a target-weight strategy.</label>{assets.data&&unavailableAssets.length>0&&<div><p>These assets are unavailable for activation:</p>{unavailableAssets.map(([address])=><p key={address}>{draft.symbols[address]||address} <button type="button" className="btn ghost sm" onClick={()=>setWeights(current=>{const next={...current};delete next[address];return next;})}>Remove</button></p>)}<p>Review the remaining weights before continuing.</p></div>}<Link to="/create">← Back to fund design</Link></section>}
 
       <section className="card stack">
         <h2>1 · Name</h2>
@@ -262,7 +268,7 @@ export function CreateFundPage(): ReactNode {
             </thead>
             <tbody>
               {assets.data.map((asset) => {
-                const isOn = weights[asset.address] !== undefined;
+                const isOn = weights[asset.address.toLowerCase()] !== undefined;
                 // `tradable === false` = router 沒有這個資產的 oracle：選了會建出一個永遠執行不了的策略
                 // （第一次再平衡才以 OracleNotSet 失敗）。null = 查不到，允許但標示未知。
                 const blocked = asset.tradable === false;
@@ -311,13 +317,13 @@ export function CreateFundPage(): ReactNode {
                         max={100}
                         step={0.01}
                         disabled={!isOn}
-                        value={weights[asset.address] ?? 0}
+                        value={weights[asset.address.toLowerCase()] ?? 0}
                         style={{ width: 96, textAlign: 'right' }}
                         onChange={(event) => {
                           const percent = Number(event.target.value);
                           setWeights((current) => ({
                             ...current,
-                            [asset.address]: Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0,
+                            [asset.address.toLowerCase()]: Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0,
                           }));
                         }}
                       />
@@ -374,7 +380,7 @@ export function CreateFundPage(): ReactNode {
             {selected.length === 0
               ? '(none selected)'
               : selected
-                  .map(([address]) => assets.data?.find((asset) => asset.address === address)?.symbol ?? address)
+                  .map(([address]) => assets.data?.find((asset) => asset.address.toLowerCase() === address.toLowerCase())?.symbol ?? address)
                   .join(' · ')}
           </dd>
           <dt>Cadence</dt>

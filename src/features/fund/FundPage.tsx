@@ -8,18 +8,23 @@ import { closePosition, enrollPortfolio, getAssets, getPortfolioStatus, getPortf
 import { CHAIN_ID, approveCalldata, bsc as appChain, readOnlyClient, sendGasTopUp, sendSudoCalls, sendSweep, sendWithdraw } from '../../lib/kernel';
 import type { PortfolioStatus } from '../../lib/api';
 import { MOCK_FUNDS } from '../../data/mock-funds';
-import { MOCK_PERFORMANCE } from '../../data/mock-performance';
-import { fundCover } from '../../data/fund-covers';
+import {safePublicReturn} from '../../lib/public-navigation';
+import {useMobile} from '../../lib/use-mobile';
+import {ReferenceSheet} from '../reference/ReferenceSheet';
+import {catalogueTargets} from '../../data/public-fund-adapter';
+import {referenceFund} from '../../lib/public-funds';
+import {periodMetrics} from '../../reference/lib/fund-explore';
+import {FundOverview} from '../reference/FundOverview';
 import { shortAddress } from '../../lib/format';
 import { queryKeys } from '../../lib/query';
 import { useBodyClass } from '../../lib/use-body-class';
 import { useOwnerWallet } from '../../lib/use-owner-wallet';
 import { useSession } from '../../store/session';
-import { AssetLogo } from '../../components/AssetLogo';
 import { SignInButton } from '../../components/WalletMenu';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge, ErrorNote, Note, Spinner } from '../../components/ui';
+import { AssetLogo } from '../../components/AssetLogo';
 import { toast } from '../../components/Toast';
 
 const ERC20_ABI = [
@@ -27,53 +32,6 @@ const ERC20_ABI = [
   { type: 'function', name: 'transfer', stateMutability: 'nonpayable', inputs: [{ name: 'to', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ name: '', type: 'bool' }] },
   { type: 'function', name: 'allowance', stateMutability: 'view', inputs: [{ name: '', type: 'address' }, { name: '', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] },
 ] as const;
-
-const PERIODS = ['7D', '30D', '90D', '1Y', 'ALL'] as const;
-type Period = (typeof PERIODS)[number];
-
-/** 參考站 `.chart` 的走勢圖：330×190、grid 線、漸層填色。 */
-function VaultChart({
-  points,
-  positive,
-  label,
-}: {
-  points: readonly (readonly [number, number])[];
-  positive: boolean;
-  label: string;
-}): ReactNode {
-  if (points.length < 2) return null;
-  // 參考站的點是 320×64 的座標，這裡縮放到 330×190 的繪圖區（留 8px 邊）。
-  const xs = points.map(([x]) => x);
-  const ys = points.map(([, y]) => y);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-  // viewBox 660×220：圖表要填滿容器寬度，用 330 會左右留白（參考站的 svg 是配合固定寬度畫的）。
-  const sx = (x: number) => 8 + ((x - minX) / (maxX - minX || 1)) * 644;
-  const sy = (y: number) => 16 + ((y - minY) / (maxY - minY || 1)) * 176;
-
-  const line = points.map(([x, y], index) => `${index === 0 ? 'M' : 'L'}${sx(x).toFixed(1)},${sy(y).toFixed(1)}`).join(' ');
-  const area = `${line} L${sx(maxX).toFixed(1)},206 L${sx(minX).toFixed(1)},206 Z`;
-  const tone = positive ? 'var(--positive)' : 'var(--negative)';
-
-  return (
-    <svg viewBox="0 0 660 220" role="img" aria-label={label} style={{ height: 220, width: '100%' }}>
-      <defs>
-        <linearGradient id="vault-chart-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="var(--fog)" stopOpacity=".28" />
-          <stop offset="1" stopColor="var(--fog)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      {[0, 1, 2, 3].map((row) => (
-        <line key={row} className="grid" x1="8" x2="652" y1={46 + row * 40} y2={46 + row * 40} />
-      ))}
-      <path d={area} fill="url(#vault-chart-fill)" stroke="none" />
-      <path d={line} fill="none" stroke={tone} strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" />
-      <circle cx={sx(xs[xs.length - 1] ?? 0)} cy={sy(ys[ys.length - 1] ?? 0)} r="2.6" fill={tone} />
-    </svg>
-  );
-}
 
 /** 美元顯示（提領說明用；`$12.34`）。 */
 function formatUsd(value: number): string {
@@ -98,15 +56,14 @@ function pct(bps: number, digits = 2): string {
  *      並讓使用者把 USDT 轉進**自己的** Kernel 帳戶（存款＝ERC-20 transfer，不需要 approve）
  */
 export function FundPage(): ReactNode {
-  useBodyClass('vault-page', 'fund-detail-redesign', 'atp-formal-fund');
+  useBodyClass('vault-page', 'fund-detail-redesign', 'atp-formal-fund', 'atp-complete-fund');
   const { slug } = useParams<{ slug: string }>();
   const token = useSession((state) => state.token);
   const wallet = useOwnerWallet();
   const queryClient = useQueryClient();
 
   const fund = MOCK_FUNDS.find((entry) => entry.slug === slug);
-  const cover = fundCover(slug ?? '');
-  const performance = fund === undefined ? undefined : MOCK_PERFORMANCE[fund.slug];
+  const reference = referenceFund(slug ?? '');
 
   const strategies = useQuery({
     queryKey: ['strategies', token],
@@ -141,14 +98,16 @@ export function FundPage(): ReactNode {
     retry: 0,
   });
 
-  const [period, setPeriod] = useState<Period>('1Y');
 
 
   // `?tab=withdraw` 直接開提領分頁 —— 分頁狀態本來只在記憶體裡，沒有網址就只能靠手動點。
-  const [search] = useSearchParams();
+  const [search,setSearch] = useSearchParams();
+  const mobile=useMobile();
+  const [mobileTicket,setMobileTicket]=useState(search.get('ticket')==='1'||search.get('tab')==='withdraw');
+  const setTicketOpen=(open:boolean)=>{setMobileTicket(open);const next=new URLSearchParams(window.location.search);if(open)next.set('ticket','1');else next.delete('ticket');setSearch(next,{replace:true});};
   // 返回目錄只接受本站路徑，保留篩選但不讓外部網址成為導向目標。
   const requestedReturn = search.get('returnTo');
-  const backTo = requestedReturn === '/vaults' || requestedReturn?.startsWith('/vaults?') === true ? requestedReturn : '/vaults';
+  const backTo = safePublicReturn(requestedReturn);
   const [tab, setTab] = useState<'deposit' | 'withdraw'>(search.get('tab') === 'withdraw' ? 'withdraw' : 'deposit');
   // 金額**不預填**：任何預設值都是猜的（使用者的餘額、他想存多少，我們都不知道），
   // 而預填超過餘額的數字會讓他一進頁面就看到紅字警告。留空，讓他自己輸入或按 Max。
@@ -222,25 +181,6 @@ export function FundPage(): ReactNode {
     };
   }, [walletAddress, usdtAddress]);
 
-  if (fund === undefined) {
-    return (
-      <main className="wrap vault-content">
-        <Note tone="bad">No fund with slug “{slug}”.</Note>
-        <p>
-          <Link to="/vaults">← All funds</Link>
-        </p>
-      </main>
-    );
-  }
-
-  // 走勢圖的期間切換：我們的序列是等距抽樣，所以「切一段」就是取尾端比例。
-  const sliced = (() => {
-    if (performance === undefined) return [];
-    const points = performance.points;
-    const keep = period === 'ALL' ? points.length : period === '7D' ? 4 : period === '30D' ? 8 : period === '90D' ? 16 : 24;
-    return points.slice(Math.max(0, points.length - keep));
-  })();
-
   const live = status.data;
 
   /**
@@ -297,108 +237,23 @@ export function FundPage(): ReactNode {
   const held =
     holding !== undefined &&
     (live === undefined || Number(live.totalUsdE8 ?? '0') > 0 || live.holdings.length > 0);
+  if (fund === undefined) {
+    return (
+      <main className="wrap vault-content">
+        <Note tone="bad">No fund with slug “{slug}”.</Note>
+        <p>
+          <Link to="/vaults">← All funds</Link>
+        </p>
+      </main>
+    );
+  }
+
   const rows = live === undefined
-    ? fund.holdings.map((row) => ({ symbol: row.symbol, targetBps: row.weightBps, currentBps: null as number | null }))
+    ? (reference?catalogueTargets(reference):fund.holdings).map((row) => ({ symbol: row.symbol, targetBps: row.weightBps, currentBps: null as number | null }))
     : (live.drift.assets ?? []).map((row) => ({ symbol: row.symbol, targetBps: row.targetBps, currentBps: row.currentBps }));
 
-  const totalBps = rows.reduce((sum, row) => sum + (row.currentBps ?? row.targetBps), 0) || 1;
 
-  return (
-    <>
-      <main className="wrap vault-content">
-        <div className="vgrid">
-          <div className="main">
-            <div className="vault-top">
-              <header className="vhead">
-                <Link className="vault-back" to={backTo}>← All funds</Link>
-                <div className="vault-heading">
-                  <div className="atp-fund-cover" id="atp-fund-cover" data-fund-cover>
-                    {cover === undefined ? null : <img src={cover.src} alt="" fetchPriority="high" />}
-                    <div className="atp-fund-cover-shade" />
-                    <h1>{fund.name}</h1>
-                  </div>
-                  <div className="atp-fund-byline">
-                    <p className="vault-manager"><span>by</span><img src="/logos/cre8-icon.svg" alt="" width="20" height="20" /><strong>CRE8</strong></p>
-                    <div className="vault-head-actions">
-                      <button ref={factsTrigger} type="button" className="atp-facts-trigger" onClick={() => setFacts(true)}>Fund facts ›</button>
-                      {!held ? null : <button type="button" className="btn ghost sm" onClick={() => setMyPosition(true)}>My position</button>}
-                    </div>
-                  </div>
-                </div>
-              </header>
-            </div>
-            <section className="panel vault-performance">
-              <p className={`atp-performance-return ${(performance?.returnBps ?? 0) >= 0 ? 'pos' : 'neg'}`}>
-                {performance === undefined ? '—' : `${performance.returnBps >= 0 ? '+' : ''}${pct(performance.returnBps)}`}
-              </p>
-              <p className="atp-performance-caption">Since inception · Simulated · Before fees</p>
-              <div className="chart">
-                <VaultChart points={sliced} positive={(performance?.returnBps ?? 0) >= 0} label={`${fund.name} simulated share price`} />
-              </div>
-              <div className="vault-chart-top">
-                <div className="seg" id="atp-chart-period" aria-label="Chart period">
-                  {PERIODS.map((entry) => (
-                    <button key={entry} type="button" className={entry === period ? 'on' : ''} aria-pressed={entry === period} onClick={() => setPeriod(entry)}>{entry}</button>
-                  ))}
-                </div>
-              </div>
-              <dl className="atp-fund-secondary">
-                <div><dt>Your position</dt><dd>{live === undefined || live.totalUsdE8 === null ? '—' : formatUsd(Number(live.totalUsdE8) / 1e8)}</dd></div>
-                <div><dt>Catalogue assets</dt><dd>{fund.holdings.length}</dd></div>
-              </dl>
-            </section>
-
-            <section className="vault-allocation dk-sec">
-              <header>
-                <h2>Where the money is</h2>
-              </header>
-              <div className="dk-wrap">
-                <table className="dk-table vault-where">
-                  <thead>
-                    <tr>
-                      <th>Asset</th>
-                      <th>{live === undefined ? 'Target weight' : 'Current weight'}</th>
-                      <th>Venue</th>
-                      <th className="dk-hide-sm">Return from</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row) => {
-                      const value = row.currentBps ?? row.targetBps;
-                      return (
-                        <tr key={row.symbol}>
-                          <td><span className="atp-holding-identity"><AssetLogo symbol={row.symbol} /><strong>{row.symbol}</strong></span></td>
-                          <td>
-                            <span className="dk-w vault-weight">
-                              <b>{((value / totalBps) * 100).toFixed(1)}%</b>
-                              <i style={{ ['--w' as string]: `${(value / totalBps) * 100}%` }} />
-                            </span>
-                          </td>
-                          <td>In the fund</td>
-                          <td className="dk-hide-sm vault-earns">{row.symbol} price</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              {live === undefined ? (
-                <p className="fine vault-info">
-                  {strategy === undefined
-                    ? 'Target weights from the catalogue — no on-chain strategy yet.'
-                    : 'Target weights from the on-chain version; sign in and open your portfolio to see live weights.'}
-                </p>
-              ) : (
-                <p className="fine vault-info">
-                  Live weights at block #{live.block} · drift {live.drift.grossDriftBps} bps (threshold{' '}
-                  {live.drift.thresholdBps} bps) ·{' '}
-                  portfolio #{holding?.id} (see “My position” above)
-                </p>
-              )}
-            </section>
-          </div>
-
-          <aside className="side">
+  const ticket = (<>
             <section className="panel ticket" id="ticket">
               {/* Radix Tabs 取代手寫的 role="tablist" + 兩顆 button：拿到鍵盤左右鍵切換、
                   `aria-selected`、`tabIndex` 管理。內容仍是同一個三元式（不改 TabsContent）——
@@ -587,7 +442,17 @@ export function FundPage(): ReactNode {
               </Tabs>
             </section>
 
-          </aside>
+
+  </>);
+
+  return (
+    <>
+      <main className="wrap vault-content">
+        <div className="vgrid">
+          <div className="main">{reference&&<FundOverview key={reference.slug} fund={reference} backTo={backTo} onFacts={()=>setFacts(true)} onPosition={()=>setMyPosition(true)} held={held}/>}</div>
+
+          {mobile?<ReferenceSheet open={mobileTicket} onOpenChange={setTicketOpen} title={tab==='deposit'?'Invest':'Withdraw'}>{ticket}</ReferenceSheet>:<aside className="side">{ticket}</aside>}
+          <div className="public-mobile-cta"><button className="btn" onClick={()=>{setTab('deposit');setTicketOpen(true);}}>Invest</button><button className="btn ghost" onClick={()=>{setTab('withdraw');setTicketOpen(true);}}>Withdraw</button></div>
         </div>
       </main>
 
@@ -728,13 +593,13 @@ export function FundPage(): ReactNode {
               <div className="panel-h"><h3>At a glance</h3></div>
               <div className="panel-b"><dl className="kv">
                 <dt>Catalogue model</dt><dd>{fund.thesis}</dd>
-                <dt>Model rebalancing</dt><dd>{fund.rebalance === 'none' ? 'No fixed schedule' : fund.rebalance === 'drift' ? 'On allocation drift' : 'Monthly'}</dd>
+                <dt>Model rebalancing</dt><dd>{reference?.sourceModel ? 'Source updates' : fund.rebalance === 'none' ? 'No fixed schedule' : fund.rebalance === 'drift' ? 'On allocation drift' : 'Monthly'}</dd>
                 <dt>Execution</dt><dd>{strategy === undefined ? 'Example only; no published strategy is connected.' : `Connected to strategy #${strategy.id}. Your account status and execution rules are shown in My position.`}</dd>
               </dl></div>
             </section>
             <section className="panel pros-sec">
               <div className="panel-h"><h3>Performance &amp; data</h3></div>
-              <div className="panel-b"><p className="fine">Simulated series copied from the design reference, before fees. It is not this deployment’s result or a forecast. Chart periods change the displayed illustration; the headline return is since inception.</p><dl className="kv"><dt>Since-inception max drop</dt><dd>{performance === undefined ? '—' : pct(performance.maxDropBps)}</dd></dl></div>
+              <div className="panel-b"><p className="fine">Simulated series copied from the design reference, before fees. It is not this deployment’s result or a forecast. Returns, drawdowns and risk statistics use the selected historical window.</p><dl className="kv"><dt>Since-inception max drop</dt><dd>{reference===undefined?'—':pct((periodMetrics(reference,'ALL').maxDrawdown??0)*100)}</dd></dl></div>
             </section>
             <section className="panel pros-sec vault-mandate">
               <div className="panel-h">

@@ -30,6 +30,21 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    if (url.pathname === '/reference-data/demo-funds') {
+      if (!['GET', 'HEAD'].includes(request.method)) return new Response('Method not allowed', {status:405,headers:{Allow:'GET, HEAD'}});
+      try {
+        // Workers 不支援 redirect:error；手動拒絕轉址，避免固定資料來源變成外部跳轉。
+        const response = await fetch('https://bnb-agent-vaults.vercel.app/api/demo-funds/', {method:request.method,headers:{Accept:'application/json'},redirect:'manual'});
+        if (response.status >= 300 && response.status < 400) return Response.json({error:'Reference redirect refused'}, {status:502});
+        const publicHeaders = new Headers(response.headers);
+        publicHeaders.delete('set-cookie');
+        publicHeaders.set('cache-control', 'public, max-age=60');
+        return new Response(response.body, {status:response.status,headers:publicHeaders});
+      } catch {
+        return Response.json({error:'Reference temporarily unavailable'}, {status:503});
+      }
+    }
+
     const isApi = url.pathname === '/api' || url.pathname.startsWith('/api/');
     if (!isApi) return env.ASSETS.fetch(request);
 

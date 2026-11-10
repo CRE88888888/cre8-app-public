@@ -343,3 +343,30 @@ Cloudflare Pages（專案 cre8-atp）+ `public/_worker.js` 代理 /api → Railw
   的目錄、兩個基金頁、Create、Operator 無整頁橫向溢出；抽屜深連結、鍵盤焦點、
   Withdraw 分頁、Close 入口、toast 顯示與到期。需要持倉的畫面使用本機 API fixture；
   沒有驗證真實錢包簽名或執行鏈上交易。
+
+
+## 13. 2026-11-11 完整公開 UI 整合（取代 §12 的九檔顯示限制）
+
+* 完整來源釘在 `cre8admin/bnb-agent-vaults@0f3196d37821561050dee1176d9d33e3b51c5d5e`。
+  30 檔基金（Themes 5 / Public figures 18 / X voices 7）、219 資產頁、218 Create 選項。
+  `docs/public-ui-source.json` 記來源、原始檔雜湊、runtime 與基金 payload 雜湊。
+* `scripts/sync-public-ui.mjs <source-repo>` 只讀取指定乾淨來源樹；產物在 `src/reference/`。
+  原始 NAV、來源調倉與人物資料皆完整保留。型別模組移除不需要的伺服器匯入。
+* 新的公開頁元件在 `features/reference/`；來源 CSS 放在 `public-fund-explore.css` /
+  `public-detail-source.css`。`complete-ui.css` 僅補整合樣式；vendor 與 shadcn tokens 不變。
+  vendor 的方角規則特異性很高，僅用 `#root` / `#atp-reference-sheet` 限定已知例外。
+* 新抽屜仍用 shadcn Sheet：`?performance=1`、`?trades=1`、`?update=<id>`、`?tokens=1`。
+  手機下單為 `?ticket=1`；`?tab=withdraw` 仍可直接進入提領。
+  舊 facts / position 深連結保留。關閉抽屜會恢復已存在入口的鍵盤焦點。
+* 財務統計沿用來源選定期間 NAV、日曆日年化及歷史無風險參考利率的前一 NAV 日對齊；Sharpe / volatility
+  需至少 90 個連續日報酬。完整計算說明放在 Performance details，不塞滿基本頁。
+* `public-funds.ts` 的目前持倉可隨日價漂移；ATP 目標配置使用 `backtest.targets`，
+  不能把漂移後權重當成目標。不支援資產不會映射成 USDT。
+* `/create` 是完整設計／匯出；原生啟用移到 `/create/activate`。只匯入精確地址的配置，
+  逐一核對 API 可交易清單；其他設計規則需明確確認不會執行。
+* `/reference-data/demo-funds` 是固定上游的 GET/HEAD 只讀代理，不轉發錢包憑證。
+  每日更新須包含同一份完整目錄、連續 NAV、吻合的統計與完整調倉結構；驗證失敗不套用。
+  資產頁行情仍顯示自身原始資料時間，不冒充即時報價。
+* Kernel、wallet、SIWE、session、API 型別與簽名實作未改；原有 mutation invalidation 保留。
+  部署繼續走 Cloudflare Git 整合，主網 chain 56；登入正式網域仍是 beta.cre8.finance。
+* 詳細驗收與限制見 `docs/public-ui-integration.md`；測試使用唯讀錢包 fixture，未送真實簽名或交易。

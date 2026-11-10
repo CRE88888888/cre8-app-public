@@ -31,3 +31,7 @@ createRoot(container).render(
     </QueryClientProvider>
   </StrictMode>,
 );
+
+import './styles/public-fund-explore.css';
+import './styles/public-detail-source.css';
+import './styles/complete-ui.css';

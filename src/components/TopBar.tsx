@@ -50,6 +50,7 @@ export function TopBar(): ReactNode {
           <NavLink to="/vaults" className={({ isActive }) => (isActive || pathname.startsWith('/funds/') ? 'active' : '')}>
             Funds
           </NavLink>
+          <NavLink to="/leaderboard" className={({isActive})=>isActive?'active':''}>Leaderboard</NavLink>
           <NavLink to="/create" className={({ isActive }) => (isActive ? 'active' : '')}>
             Create fund
           </NavLink>

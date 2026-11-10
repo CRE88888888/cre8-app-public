@@ -11,3 +11,4 @@ dist/
 
 # wrangler 的設定目錄（含 OAuth token）—— 沙箱不能寫家目錄，所以複製到工作區內
 .wrangler-home/
+.gstack/

@@ -7,6 +7,19 @@
 
 ---
 
+## 公開參考資料與 ATP 帳戶的邊界（2026-11-11）
+
+`src/reference/` 保留釘定來源的 30 檔基金、219 個底層資產頁與 218 個 Create 選項；
+`src/features/reference/` 呈現原始 NAV、人物、披露／貼文來源與期間統計。
+這些模型資料不會自動成為 Registry 策略，也不能當成使用者帳戶的持倉或實績。
+`src/lib/reference-refresh.ts` 只經 `/reference-data/demo-funds` 接收固定上游的完整公開更新，
+驗證後原子套用；失敗保留原截止日，不轉發錢包憑證。
+`/create` 負責設計／匯出，`/create/activate` 才經原生 API 啟用目標權重配置：
+精確代幣地址仍須通過後端清單，設計器其他規則不會轉成執行權限。
+真實帳戶、存提款與 Operator 沿用下述 ATP 模型，詳見 [公開 UI 整合](public-ui-integration.md)。
+
+---
+
 ## 0. 先回答一個常見誤解：**我們沒有為每個策略部署合約**
 
 portfolio 頁那張表：
