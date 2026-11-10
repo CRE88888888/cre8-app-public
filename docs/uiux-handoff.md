@@ -222,6 +222,29 @@ export const CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID ?? 1337);
 
 ---
 
+## 6.5 ⚠ 「只在我機器上能跑」——本機有 `~/node_modules`
+
+CI 第一次跑就抓到兩個**本機永遠不會發現**的錯誤：
+
+| 錯誤 | 真因 |
+|---|---|
+| `vite.config.ts: Cannot find module 'node:url'` | TypeScript 會往父目錄找 `node_modules`，撿到了 `~/node_modules/@types/node` |
+| `"EventEmitter" is not exported by "__vite-browser-external"` | 同上，撿到了 `~/node_modules/events` |
+
+**驗證方法（重要）**：用假 HOME 隔離家目錄，模擬 CI：
+
+```bash
+mkdir -p .fake-home
+HOME=$PWD/.fake-home bun run typecheck
+HOME=$PWD/.fake-home bun run build
+```
+
+如果這兩個在**移除 `node_modules` 並重新 `bun install --frozen-lockfile`** 之後仍然過，
+才算真的過。原本的 `bun run build` 一直在偷用家目錄那份 node_modules。
+
+> 如果你的機器上沒有 `~/node_modules`，這些錯誤根本不會出現 —— 但別人的機器、
+> 或 GitHub runner 上會。**這就是要有 CI 的理由。**
+
 ## 7. 目錄地圖
 
 ```
