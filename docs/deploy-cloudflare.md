@@ -49,14 +49,44 @@ HOME=$PWD/.wrangler-home wrangler pages deploy dist --project-name=cre8-atp
 
 （`.wrangler-home/` 含 OAuth token，已 gitignore。）
 
-## 目前狀態（暫時用 Pages 預設網域）
+## 目前狀態（正式網域已上線）
 
 | 項目 | 值 |
 |---|---|
-| 前端 | `https://cre8-atp.pages.dev` |
-| API（同源代理） | `https://cre8-atp.pages.dev/api/*` |
-| `AUTH_DOMAIN` | `cre8-atp.pages.dev` |
-| `AUTH_URI` | `https://cre8-atp.pages.dev` |
+| 前端 | `https://beta.cre8.finance` |
+| API（同源代理） | `https://beta.cre8.finance/api/*` |
+| `AUTH_DOMAIN` | `beta.cre8.finance` |
+| `AUTH_URI` | `https://beta.cre8.finance` |
+| 備用 | `https://cre8-atp.pages.dev`（Pages 預設網域，永遠可用）|
+
+### 為什麼不是 `app.cre8.finance`
+
+那個子網域**已經被既有的 Vercel 生產站佔用**（`app.cre8.finance` → `a8596c55…vercel-dns-016.com`）。
+搶過來等於弄壞正式站，所以用 `beta.`。
+
+### 綁定步驟（實際做過的）
+
+1. `POST /accounts/{account}/pages/projects/cre8-atp/domains {"name":"beta.cre8.finance"}`
+   —— wrangler 4.157 **沒有** `pages domain` 子指令，只能走 API。
+   狀態會停在 `pending`、驗證方式 `http`：**Cloudflare 不會自動在同一個 zone 建記錄**。
+2. 在 `cre8.finance` 的 DNS 加一筆：
+   ```
+   CNAME  beta  →  cre8-atp.pages.dev   Proxied（橘雲）
+   ```
+3. 等 TLS 簽發（實測 < 1 分鐘，憑證是 zone 的萬用憑證 `CN=cre8.finance`）。
+4. 後端 `AUTH_DOMAIN` / `AUTH_URI` 改成新網域並重新部署。
+
+### 權限註記
+
+wrangler 的 OAuth token 只有 **zone 讀取**，DNS 寫入會被拒（`error 10000 Authentication error`）。
+所以「建立 DNS 記錄」這一步只能由使用者在 Dashboard 做，或改用帶 `dns_records:edit` 的 API token。
+
+### 驗證（不需要登入）
+
+```bash
+curl -s https://beta.cre8.finance/api/health
+curl -s -X POST https://beta.cre8.finance/api/auth/nonce   # domain 必須是新網域
+```
 
 ### 換成 app.cre8.xyz 時要改三處
 
