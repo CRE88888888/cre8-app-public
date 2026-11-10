@@ -119,22 +119,48 @@ curl -s -X POST https://api-production-7f13.up.railway.app/auth/nonce
 
 ---
 
-## CI/CD（GitHub Actions）
+## 部署路徑：Cloudflare Git 整合（唯一一條）
+
+**決定：部署交給 Cloudflare 的 Git 整合，不用 GitHub Actions 部署。**
+
+理由：兩條部署路徑會互相覆蓋（Cloudflare 的 Git 部署 vs Actions 的 `wrangler pages deploy`），
+誰最後跑誰贏 —— 「不確定哪個版本在線上」是最難查的狀態。而 Git 整合還免費給 PR 預覽網址。
+
+### Cloudflare 那邊的設定
+
+```
+Workers & Pages → cre8-atp → Settings → Build
+  Git repository          cre8-protocol/cre8-app
+  Production branch       main
+  Build command           bun run build
+  Build output directory  dist
+  Root directory          /                  （repo 根目錄就是 app）
+  Environment variable    BUN_VERSION = 1.4.4（可選，釘住與本機一致）
+```
+
+`.env.production`（`VITE_CHAIN_ID=56`）**已進版控**，所以不需要在 Cloudflare 設任何變數。
+`public/_worker.js` 會在 `vite build` 時被複製進 `dist/`，那是 `/api` 代理的實作。
+
+### 為什麼還留著 `.github/workflows/ci.yml`
+
+它跑 `typecheck` + `build` 並標在 PR 上。Cloudflare 的建置失敗**只顯示在 Cloudflare**，
+PR 上看不到 —— 而 `typecheck` 抓的是「本機能過、CI 掛掉」那類問題（例如依賴只存在於某人
+的家目錄 `~/node_modules`，實際發生過兩次）。
+
+### 手動部署（備援）
+
+```bash
+bun run build
+HOME=$PWD/.wrangler-home wrangler pages deploy dist --project-name=cre8-atp --branch=main
+```
+
+`HOME=` 是必要的：沙箱不能寫 `~/.wrangler`，而 token 就住在那裡。
+
+## CI（GitHub Actions，只有檢查、不部署）
 
 | Workflow | 觸發 | 做什麼 |
 |---|---|---|
 | `.github/workflows/ci.yml` | PR、push main、手動 | `bun install --frozen-lockfile` → `typecheck` → `build` → 上傳 `dist` artifact |
-| `.github/workflows/deploy.yml` | push main、手動 | 同上 + `wrangler pages deploy dist --project-name=cre8-atp --branch=main` |
-
-### 需要的 repo secrets
-
-```
-CLOUDFLARE_API_TOKEN     Cloudflare → My Profile → API Tokens → 「Edit Cloudflare Pages」
-CLOUDFLARE_ACCOUNT_ID    3d1ec1d3d41428aa8d0e2ea54aff5523（wrangler whoami 可查）
-```
-
-**沒設 secrets 時 deploy job 會跳過並印 warning，不會紅燈** —— 這樣 fork 的 PR 與新環境
-不會因為「還沒接上部署」而看起來壞掉。
 
 ### 兩個刻意的設計
 
@@ -143,7 +169,13 @@ CLOUDFLARE_ACCOUNT_ID    3d1ec1d3d41428aa8d0e2ea54aff5523（wrangler whoami 可�
 * 建置設定只來自 `.env.production`（已進版控），CI **不注入** `VITE_CHAIN_ID` ——
   避免「CI 與本機產生不同 bundle」這種最難查的差異
 
-### 為什麼不把部署交給 Cloudflare 的 Git 整合
+### 驗證 CI 會過（本機）
 
-用 GitHub Actions 部署，artifact 就是 CI 驗過的那一份（`typecheck` 通過才可能上線）。
-Cloudflare 的 Git 整合會自己 build 一次，等於多一個不受 CI 管轄的建置路徑。
+```bash
+rm -rf node_modules && bun install --frozen-lockfile
+HOME=$PWD/.fake-home bun run typecheck    # 假 HOME 隔離家目錄
+HOME=$PWD/.fake-home bun run build
+```
+
+**必須用假 HOME**：TypeScript 與 Vite 都會往父目錄找 `node_modules`，
+家目錄若有一份就會讓本機永遠通過、CI 永遠失敗（實際發生過，見 §CI 抓到的兩個 bug）。
