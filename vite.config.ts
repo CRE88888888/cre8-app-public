@@ -13,8 +13,22 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
-    // shadcn 的元件一律用 `@/…` 匯入，Vite 與 TypeScript 都要知道這個別名。
-    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+    alias: {
+      // shadcn 的元件一律用 `@/…` 匯入，Vite 與 TypeScript 都要知道這個別名。
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      /**
+       * `events` → 瀏覽器 polyfill。
+       *
+       * 為什麼需要：`@zerodev/sdk` 的 `KernelEIP1193Provider` 從 **node 內建** `"events"`
+       * 匯入 `EventEmitter`。Vite 對瀏覽器建置會把 node 內建外部化成空的
+       * `__vite-browser-external`，於是 rollup 在打包時才知道 `EventEmitter` 不存在
+       * （本機曾經「剛好」能過，是因為家目錄有一份 `~/node_modules/events` —— 乾淨環境必炸）。
+       *
+       * 指到套件本體而不是靠自動解析：`events` 這個名字同時是 node 內建，
+       * 不明確指路徑就仍有被外部化的風險。
+       */
+      events: fileURLToPath(new URL('./node_modules/events/events.js', import.meta.url)),
+    },
   },
   server: {
     port: 5173,
