@@ -16,6 +16,8 @@ import './styles/shadcn.css';
 import './styles/base.css';
 import './styles/components.css';
 import './styles/phase-banner.css';
+// 公開市集的新版版面獨立疊加；vendor 設計稿與 sx- 工具頁 token 保持原樣。
+import './styles/formal-ui.css';
 
 const container = document.getElementById('root');
 if (container === null) throw new Error('#root is missing: index.html was modified');

@@ -3,7 +3,7 @@
 > 給接手這個前端的 agent（或下一輪的自己）。
 > 讀完這份你應該能：改一個頁面而不弄壞另一個、知道哪些 class 不能碰、知道改完要驗什麼。
 >
-> 最後更新：2026-11-10 · 對應 commit：見 `git log --oneline -5`
+> 最後更新：2026-11-11 · 對應 commit：見 `git log --oneline -5`
 
 ---
 
@@ -231,16 +231,18 @@ CI 第一次跑就抓到兩個**本機永遠不會發現**的錯誤：
 | `vite.config.ts: Cannot find module 'node:url'` | TypeScript 會往父目錄找 `node_modules`，撿到了 `~/node_modules/@types/node` |
 | `"EventEmitter" is not exported by "__vite-browser-external"` | 同上，撿到了 `~/node_modules/events` |
 
-**驗證方法（重要）**：用假 HOME 隔離家目錄，模擬 CI：
+**驗證方法（重要）**：把原始碼複製到家目錄之外的乾淨目錄，例如
+`/private/tmp/cre8-app-check.XXXXXX`，排除根目錄的 `.git/`、`node_modules/`、`dist/`
+與 `.bun-cache/`，使用與 CI 相同的 **Bun 1.4.4** 執行：
 
 ```bash
-mkdir -p .fake-home
-HOME=$PWD/.fake-home bun run typecheck
-HOME=$PWD/.fake-home bun run build
+bun install --frozen-lockfile
+bun run typecheck
+bun run build
 ```
 
-如果這兩個在**移除 `node_modules` 並重新 `bun install --frozen-lockfile`** 之後仍然過，
-才算真的過。原本的 `bun run build` 一直在偷用家目錄那份 node_modules。
+不要只更改 `HOME`：TypeScript 的父目錄模組解析取決於原始碼所在位置，
+原始碼仍在家目錄底下時，依然可能讀到 `~/node_modules`。
 
 > 如果你的機器上沒有 `~/node_modules`，這些錯誤根本不會出現 —— 但別人的機器、
 > 或 GitHub runner 上會。**這就是要有 CI 的理由。**
@@ -319,3 +321,25 @@ Cloudflare Pages（專案 cre8-atp）+ `public/_worker.js` 代理 /api → Railw
 2. **不要覆寫 `design.css`**，也不要跟它的 class/變數撞名 —— shadcn token 用 `sx-` 前綴。
 3. **非同步狀態要接續完整**：toast 的 `replace` 要接住 id、mutation 後要失效整條依賴鏈。
    這兩件事各自造成過「永遠在轉的 toast」與「要重整才看得到按鈕」。
+
+
+## 12. 2026-11-11 正式 UI 同步
+
+* 正式 UI 來源：`cre8admin/bnb-agent-vaults` 的已合併 commit
+  `4045d854402090255cb36b8b4a84d4f4a30f5561`。沒有帶入來源工作區的未提交修改。
+* `styles/formal-ui.css` 只作用在 `atp-formal-market` / `atp-formal-fund` 公開頁。
+  vendor CSS、shadcn token 與交易／錢包／API 邏輯未修改。
+  vendor 的全域方角規則優先序很高，封面、縮圖與期間按鈕使用頁面內的 id 限定覆蓋。
+* 九檔封面和縮圖由 `data/fund-covers.ts` 配對。素材版本、大小與 SHA-256 記在
+  `docs/ui-sync-assets-2026-11-11.json`。
+* 目錄的搜尋、分類、資產與排序保存在 query string；基金頁的 All funds 會帶回篩選。
+  Fund facts 收納模型、資料說明及 Creator，關閉後焦點回到原入口。
+* 績效仍是既有的 since-inception 模擬資料；切換期間只改曲線顯示，不產生新報酬。
+  Your position 使用現有帳戶估值，不能當成全基金規模。
+* `.env.production` 現已實際納入版控：`VITE_CHAIN_ID=56`、`VITE_API_BASE=/api`。
+  兩者都是公開建置設定。部署沿用 Cloudflare Git 整合，不新增部署 workflow。
+* Operator 的持倉表改用既有 shadcn Table 容器，窄螢幕時表格內捲動。
+* 本機驗收：家目錄外 frozen install、typecheck、production build；320/390/1280px
+  的目錄、兩個基金頁、Create、Operator 無整頁橫向溢出；抽屜深連結、鍵盤焦點、
+  Withdraw 分頁、Close 入口、toast 顯示與到期。需要持倉的畫面使用本機 API fixture；
+  沒有驗證真實錢包簽名或執行鏈上交易。

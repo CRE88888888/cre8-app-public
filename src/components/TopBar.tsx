@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { WalletMenu } from './WalletMenu';
 
 /**
@@ -38,6 +38,7 @@ function C8Logo(): ReactNode {
  * 放上去就是死連結，比少一個項目更糟。
  */
 export function TopBar(): ReactNode {
+  const { pathname } = useLocation();
   return (
     <header className="masthead app-masthead">
       <div className="wrap">
@@ -46,7 +47,7 @@ export function TopBar(): ReactNode {
         </Link>
 
         <nav className="nav" aria-label="Main navigation">
-          <NavLink to="/vaults" className={({ isActive }) => (isActive ? 'active' : '')}>
+          <NavLink to="/vaults" className={({ isActive }) => (isActive || pathname.startsWith('/funds/') ? 'active' : '')}>
             Funds
           </NavLink>
           <NavLink to="/create" className={({ isActive }) => (isActive ? 'active' : '')}>

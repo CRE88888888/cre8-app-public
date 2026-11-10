@@ -339,7 +339,7 @@ function Dashboard({
             include paused / idle
           </label>
         </div>
-        <table className="table">
+        <Table className="table">
           <thead>
             <tr>
               <th>#</th>
@@ -442,7 +442,7 @@ function Dashboard({
               );
             })}
           </tbody>
-        </table>
+        </Table>
       </div>
 
       <div className="panel" style={{ marginTop: 20 }}>

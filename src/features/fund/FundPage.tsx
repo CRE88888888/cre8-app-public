@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { encodeFunctionData, formatEther, formatUnits, parseEther, parseUnits } from 'viem';
@@ -9,6 +9,7 @@ import { CHAIN_ID, approveCalldata, bsc as appChain, readOnlyClient, sendGasTopU
 import type { PortfolioStatus } from '../../lib/api';
 import { MOCK_FUNDS } from '../../data/mock-funds';
 import { MOCK_PERFORMANCE } from '../../data/mock-performance';
+import { fundCover } from '../../data/fund-covers';
 import { shortAddress } from '../../lib/format';
 import { queryKeys } from '../../lib/query';
 import { useBodyClass } from '../../lib/use-body-class';
@@ -97,13 +98,14 @@ function pct(bps: number, digits = 2): string {
  *      並讓使用者把 USDT 轉進**自己的** Kernel 帳戶（存款＝ERC-20 transfer，不需要 approve）
  */
 export function FundPage(): ReactNode {
-  useBodyClass('vault-page');
+  useBodyClass('vault-page', 'fund-detail-redesign', 'atp-formal-fund');
   const { slug } = useParams<{ slug: string }>();
   const token = useSession((state) => state.token);
   const wallet = useOwnerWallet();
   const queryClient = useQueryClient();
 
   const fund = MOCK_FUNDS.find((entry) => entry.slug === slug);
+  const cover = fundCover(slug ?? '');
   const performance = fund === undefined ? undefined : MOCK_PERFORMANCE[fund.slug];
 
   const strategies = useQuery({
@@ -144,6 +146,9 @@ export function FundPage(): ReactNode {
 
   // `?tab=withdraw` 直接開提領分頁 —— 分頁狀態本來只在記憶體裡，沒有網址就只能靠手動點。
   const [search] = useSearchParams();
+  // 返回目錄只接受本站路徑，保留篩選但不讓外部網址成為導向目標。
+  const requestedReturn = search.get('returnTo');
+  const backTo = requestedReturn === '/vaults' || requestedReturn?.startsWith('/vaults?') === true ? requestedReturn : '/vaults';
   const [tab, setTab] = useState<'deposit' | 'withdraw'>(search.get('tab') === 'withdraw' ? 'withdraw' : 'deposit');
   // 金額**不預填**：任何預設值都是猜的（使用者的餘額、他想存多少，我們都不知道），
   // 而預填超過餘額的數字會讓他一進頁面就看到紅字警告。留空，讓他自己輸入或按 Max。
@@ -152,6 +157,7 @@ export function FundPage(): ReactNode {
   const [error, setError] = useState<unknown>(null);
   // `?facts=1` / `?position=1` 直接開抽屜：客服貼連結給使用者、或營運要截圖核對時用得到。
   const [facts, setFacts] = useState(search.get('facts') === '1');
+  const factsTrigger = useRef<HTMLButtonElement>(null);
   // 「My position」＝這個投組的即時狀態（原本在 /portfolios/:id 才能看，現在收進基金頁）。
   const [myPosition, setMyPosition] = useState(search.get('position') === '1');
   const [toppingUp, setToppingUp] = useState(false);
@@ -304,96 +310,42 @@ export function FundPage(): ReactNode {
           <div className="main">
             <div className="vault-top">
               <header className="vhead">
-                <Link className="vault-back" to="/vaults">
-                  ← All funds
-                </Link>
+                <Link className="vault-back" to={backTo}>← All funds</Link>
                 <div className="vault-heading">
-                  <h1>{fund.name}</h1>
-                  <p className="vault-manager fact-row">
-                    {strategy === undefined ? 'Example fund · not published on-chain' : `Run by CRE8 operator · strategy #${strategy.id}`}
-                  </p>
-                  <p className="strat dk-sr">{fund.thesis}</p>
-                  <dl className="vault-strip">
-                    <div>
-                      <dt>Run by</dt>
-                      <dd>
-                        Plan: {fund.rebalance === 'none' ? 'Buy & hold' : fund.rebalance === 'drift' ? 'Rebalance on drift' : 'Monthly rebalance'}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Assets</dt>
-                      <dd>{rows.map((row) => row.symbol).filter((symbol) => symbol !== (usdt?.symbol ?? 'USDT')).join(', ')}</dd>
-                    </div>
-                    <div>
-                      <dt>Lending on</dt>
-                      <dd>None</dd>
-                    </div>
-                  </dl>
-                  <div className="vault-head-actions">
-                    <button type="button" className="btn ghost" onClick={() => setFacts(true)}>
-                      Fund facts
-                    </button>
-                    {/* 只有持有這個基金時才有「My position」——沒有部位時那顆按鈕只會是空的。 */}
-                    {!held ? null : (
-                      <button type="button" className="btn ghost" onClick={() => setMyPosition(true)}>
-                        My position
-                      </button>
-                    )}
-                    <div className="tags">
-                      <span className="tag pos">{strategy === undefined ? 'Example' : 'Open'}</span>
-                      <span className="tag accounting-chip">Accounting asset: {usdt?.symbol ?? 'USDT'}</span>
+                  <div className="atp-fund-cover" id="atp-fund-cover" data-fund-cover>
+                    {cover === undefined ? null : <img src={cover.src} alt="" fetchPriority="high" />}
+                    <div className="atp-fund-cover-shade" />
+                    <h1>{fund.name}</h1>
+                  </div>
+                  <div className="atp-fund-byline">
+                    <p className="vault-manager"><span>by</span><img src="/logos/cre8-icon.svg" alt="" width="20" height="20" /><strong>CRE8</strong></p>
+                    <div className="vault-head-actions">
+                      <button ref={factsTrigger} type="button" className="atp-facts-trigger" onClick={() => setFacts(true)}>Fund facts ›</button>
+                      {!held ? null : <button type="button" className="btn ghost sm" onClick={() => setMyPosition(true)}>My position</button>}
                     </div>
                   </div>
                 </div>
               </header>
-
-              <dl className="keyfig dk-kpis">
-                <div>
-                  <dt>Fund size</dt>
-                  <dd>
-                    {live === undefined || live.totalUsdE8 === null ? '—' : (Number(live.totalUsdE8) / 1e8).toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                    <small>{usdt?.symbol ?? 'USDT'}</small>
-                  </dd>
-                </div>
-                <div>
-                  <dt>Performance Since inception</dt>
-                  <dd>
-                    <span className={performance === undefined || performance.returnBps >= 0 ? 'pos' : 'neg'}>
-                      {performance === undefined ? '—' : pct(performance.returnBps)}
-                    </span>
-                  </dd>
-                </div>
-                <div>
-                  <dt>Following</dt>
-                  <dd>{(portfolios.data ?? []).filter((row) => row.strategyId === strategy?.id).length}</dd>
-                </div>
-              </dl>
             </div>
-
             <section className="panel vault-performance">
+              <p className={`atp-performance-return ${(performance?.returnBps ?? 0) >= 0 ? 'pos' : 'neg'}`}>
+                {performance === undefined ? '—' : `${performance.returnBps >= 0 ? '+' : ''}${pct(performance.returnBps)}`}
+              </p>
+              <p className="atp-performance-caption">Since inception · Simulated · Before fees</p>
+              <div className="chart">
+                <VaultChart points={sliced} positive={(performance?.returnBps ?? 0) >= 0} label={`${fund.name} simulated share price`} />
+              </div>
               <div className="vault-chart-top">
-                <p className="vault-chart-drop">
-                  <span>Max drop Since inception</span> <b>{performance === undefined ? '—' : pct(performance.maxDropBps)}</b>
-                </p>
-                <div className="seg">
+                <div className="seg" id="atp-chart-period" aria-label="Chart period">
                   {PERIODS.map((entry) => (
-                    <button key={entry} type="button" className={entry === period ? 'on' : ''} onClick={() => setPeriod(entry)}>
-                      {entry}
-                    </button>
+                    <button key={entry} type="button" className={entry === period ? 'on' : ''} aria-pressed={entry === period} onClick={() => setPeriod(entry)}>{entry}</button>
                   ))}
                 </div>
               </div>
-              <div className="chart">
-                <VaultChart
-                  points={sliced}
-                  positive={(performance?.returnBps ?? 0) >= 0}
-                  label={`${fund.name} simulated share price`}
-                />
-              </div>
-              <p className="vault-data-note">
-                Simulated series copied from the design reference — it is <strong>not</strong> this deployment&apos;s
-                result and not a forecast. The live fund starts when you deposit.
-              </p>
+              <dl className="atp-fund-secondary">
+                <div><dt>Your position</dt><dd>{live === undefined || live.totalUsdE8 === null ? '—' : formatUsd(Number(live.totalUsdE8) / 1e8)}</dd></div>
+                <div><dt>Catalogue assets</dt><dd>{fund.holdings.length}</dd></div>
+              </dl>
             </section>
 
             <section className="vault-allocation dk-sec">
@@ -415,9 +367,7 @@ export function FundPage(): ReactNode {
                       const value = row.currentBps ?? row.targetBps;
                       return (
                         <tr key={row.symbol}>
-                          <td className="mono">
-                            <strong>{row.symbol}</strong>
-                          </td>
+                          <td><span className="atp-holding-identity"><AssetLogo symbol={row.symbol} /><strong>{row.symbol}</strong></span></td>
                           <td>
                             <span className="dk-w vault-weight">
                               <b>{((value / totalBps) * 100).toFixed(1)}%</b>
@@ -449,7 +399,7 @@ export function FundPage(): ReactNode {
           </div>
 
           <aside className="side">
-            <section className="panel ticket">
+            <section className="panel ticket" id="ticket">
               {/* Radix Tabs 取代手寫的 role="tablist" + 兩顆 button：拿到鍵盤左右鍵切換、
                   `aria-selected`、`tabIndex` 管理。內容仍是同一個三元式（不改 TabsContent）——
                   那份內容很長，重排只增加 diff 而不增加正確性。 */}
@@ -637,33 +587,6 @@ export function FundPage(): ReactNode {
               </Tabs>
             </section>
 
-            <section className="panel vault-creator-card">
-              <div className="panel-h">
-                <h3>Creator</h3>
-              </div>
-              <div className="panel-b">
-                <p className="vcc-id">
-                  {/* public/logos 沒有 cre8-icon.svg；放一個壞掉的 <img> 比不放更糟，所以用文字標記。 */}
-                  <span className="fund-mark" aria-hidden="true">
-                    C8
-                  </span>
-                  <span>
-                    <b>{strategy === undefined ? 'CRE8 catalogue' : shortAddress(strategy.provider)}</b>
-                    <small>{strategy === undefined ? 'Design reference only' : `Strategy #${strategy.id}`}</small>
-                  </span>
-                </p>
-                <dl className="vcc-stats">
-                  <div>
-                    <dt>Funds created</dt>
-                    <dd>{strategies.data?.items.length ?? '—'}</dd>
-                  </div>
-                  <div>
-                    <dt>Followers</dt>
-                    <dd>{(portfolios.data ?? []).filter((row) => row.strategyId === strategy?.id).length}</dd>
-                  </div>
-                </dl>
-              </div>
-            </section>
           </aside>
         </div>
       </main>
@@ -792,12 +715,27 @@ export function FundPage(): ReactNode {
 
       {/* Fund facts：參考站是一個右側抽屜。 */}
       <Sheet open={facts} onOpenChange={setFacts}>
-        <SheetContent side="right" className="w-full gap-0 overflow-y-auto p-0 sm:max-w-xl">
+        <SheetContent side="right" className="w-full gap-0 overflow-y-auto p-0 sm:max-w-xl" onCloseAutoFocus={(event) => {
+          // 開啟按鈕在頁面標頭，不在 Sheet 內；關閉時明確把焦點還給原入口。
+          if (factsTrigger.current !== null) { event.preventDefault(); factsTrigger.current.focus(); }
+        }}>
           <SheetHeader>
             <p className="label">[ Fund facts ]</p>
             <SheetTitle>{fund.name}</SheetTitle>
           </SheetHeader>
           <div className="pros-body" style={{ padding: '20px 24px' }}>
+            <section className="panel pros-sec">
+              <div className="panel-h"><h3>At a glance</h3></div>
+              <div className="panel-b"><dl className="kv">
+                <dt>Catalogue model</dt><dd>{fund.thesis}</dd>
+                <dt>Model rebalancing</dt><dd>{fund.rebalance === 'none' ? 'No fixed schedule' : fund.rebalance === 'drift' ? 'On allocation drift' : 'Monthly'}</dd>
+                <dt>Execution</dt><dd>{strategy === undefined ? 'Example only; no published strategy is connected.' : `Connected to strategy #${strategy.id}. Your account status and execution rules are shown in My position.`}</dd>
+              </dl></div>
+            </section>
+            <section className="panel pros-sec">
+              <div className="panel-h"><h3>Performance &amp; data</h3></div>
+              <div className="panel-b"><p className="fine">Simulated series copied from the design reference, before fees. It is not this deployment’s result or a forecast. Chart periods change the displayed illustration; the headline return is since inception.</p><dl className="kv"><dt>Since-inception max drop</dt><dd>{performance === undefined ? '—' : pct(performance.maxDropBps)}</dd></dl></div>
+            </section>
             <section className="panel pros-sec vault-mandate">
               <div className="panel-h">
                 <h3>Mandate</h3>
@@ -865,6 +803,31 @@ export function FundPage(): ReactNode {
                     </tbody>
                   </table>
                 )}
+              </div>
+            </section>
+
+            <section className="panel vault-creator-card">
+              <div className="panel-h">
+                <h3>Creator</h3>
+              </div>
+              <div className="panel-b">
+                <p className="vcc-id">
+                  <img src="/logos/cre8-icon.svg" alt="" width="32" height="32" />
+                  <span>
+                    <b>{strategy === undefined ? 'CRE8 catalogue' : shortAddress(strategy.provider)}</b>
+                    <small>{strategy === undefined ? 'Design reference only' : `Strategy #${strategy.id}`}</small>
+                  </span>
+                </p>
+                <dl className="vcc-stats">
+                  <div>
+                    <dt>Funds created</dt>
+                    <dd>{strategies.data?.items.length ?? '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>Followers</dt>
+                    <dd>{(portfolios.data ?? []).filter((row) => row.strategyId === strategy?.id).length}</dd>
+                  </div>
+                </dl>
               </div>
             </section>
 
