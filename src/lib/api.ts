@@ -381,6 +381,13 @@ export type OperatorRow = {
   /** 最新快照的觀測點；`null` = 從來沒跑過一輪（不是「0 漂移」）。 */
   observedAt: string | null;
   driftBps: number | null;
+  /**
+   * 帳戶價值是 0（資金已全部提出，或還沒入金）。
+   *
+   * 空倉時 `driftBps` 仍然是公式算出來的大數字（空帳戶「完全不在目標上」），
+   * 但把它顯示成「9999 bps / rebalance due」會讓人以為壞了 —— 它只是空。
+   */
+  isEmpty: boolean;
   totalUsdE8: string | null;
   needsRebalance: boolean | null;
   gasWei: string | null;

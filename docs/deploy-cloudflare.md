@@ -116,3 +116,34 @@ curl -s -X POST https://api-production-7f13.up.railway.app/auth/nonce
 
 `CORS_ALLOWED_ORIGINS` 刻意**不設** —— 同源不需要 CORS，而預設值只允許
 `localhost:5173`（dev 用），生產環境不會有任何跨域來源被放行。這比「為了方便把 `*` 加進去」安全得多。
+
+---
+
+## CI/CD（GitHub Actions）
+
+| Workflow | 觸發 | 做什麼 |
+|---|---|---|
+| `.github/workflows/ci.yml` | PR、push main、手動 | `bun install --frozen-lockfile` → `typecheck` → `build` → 上傳 `dist` artifact |
+| `.github/workflows/deploy.yml` | push main、手動 | 同上 + `wrangler pages deploy dist --project-name=cre8-atp --branch=main` |
+
+### 需要的 repo secrets
+
+```
+CLOUDFLARE_API_TOKEN     Cloudflare → My Profile → API Tokens → 「Edit Cloudflare Pages」
+CLOUDFLARE_ACCOUNT_ID    3d1ec1d3d41428aa8d0e2ea54aff5523（wrangler whoami 可查）
+```
+
+**沒設 secrets 時 deploy job 會跳過並印 warning，不會紅燈** —— 這樣 fork 的 PR 與新環境
+不會因為「還沒接上部署」而看起來壞掉。
+
+### 兩個刻意的設計
+
+* `--frozen-lockfile`：lockfile 與 `package.json` 不一致就**直接失敗**，
+  而不是安靜地裝一組新的依賴
+* 建置設定只來自 `.env.production`（已進版控），CI **不注入** `VITE_CHAIN_ID` ——
+  避免「CI 與本機產生不同 bundle」這種最難查的差異
+
+### 為什麼不把部署交給 Cloudflare 的 Git 整合
+
+用 GitHub Actions 部署，artifact 就是 CI 驗過的那一份（`typecheck` 通過才可能上線）。
+Cloudflare 的 Git 整合會自己 build 一次，等於多一個不受 CI 管轄的建置路徑。

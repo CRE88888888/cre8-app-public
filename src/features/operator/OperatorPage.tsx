@@ -52,6 +52,9 @@ function until(iso: string | null): { text: string; tone: string } {
 /** 一列的「該不該有人去看」訊號：gas 沒了、key 快過期、連續失敗、需要再平衡但沒動。 */
 function rowFlags(row: OperatorRow): { label: string; tone: 'ok' | 'warn' | 'bad' }[] {
   const flags: { label: string; tone: 'ok' | 'warn' | 'bad' }[] = [];
+  // 空倉：什麼都不用處理。不顯示 gas low / rebalance due —— 那些對一個 $0 的帳戶沒有意義，
+  // 只會讓 operator 以為有事要追（實測：清倉後兩列都掛著「gas low + rebalance due」）。
+  if (row.isEmpty) return [{ label: 'closed (no funds)', tone: 'ok' }];
   const gas = row.gasWei === null ? null : BigInt(row.gasWei);
   if (row.gasWei === null) flags.push({ label: 'gas unknown', tone: 'warn' });
   else if (gas !== null && gas < 10n ** 16n) flags.push({ label: 'gas low', tone: 'bad' });
@@ -375,7 +378,8 @@ function Dashboard({
                   </td>
                   <td className="num">{row.totalUsdE8 === null ? '—' : formatUsdE8(row.totalUsdE8)}</td>
                   <td className={`num ${row.needsRebalance === true ? 'neg' : ''}`}>
-                    {row.driftBps === null ? '—' : `${row.driftBps} bps`}
+                    {/* 空倉不顯示漂移數字：那是公式對「完全不在目標上」的結果，不是可處理的偏離。 */}
+                    {row.isEmpty ? '—' : row.driftBps === null ? '—' : `${row.driftBps} bps`}
                   </td>
                   <td className="muted" style={{ fontSize: 12 }}>
                     {ago(row.observedAt)}
