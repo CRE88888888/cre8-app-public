@@ -21,7 +21,9 @@ export function RecentTrades({ fund }: { fund: ReferenceFund }) {
   const [params, setParams] = useSearchParams();
   const isTheme = collectionOf(fund) === "themes";
   const isReplay = fund.sourceModel?.historyKind === "post-replay";
-  const updates = REFERENCE_METADATA[fund.slug].updates
+  // 社群策略（`community-N`）沒有參考目錄的 updates；直接存取 undefined 會讓整頁崩掉
+  // （實測：`/funds/strategy/2` 白屏，錯誤是 `Cannot read properties of undefined`）。
+  const updates = (REFERENCE_METADATA[fund.slug]?.updates ?? [])
     .filter(
       (update) =>
         isTheme ||
