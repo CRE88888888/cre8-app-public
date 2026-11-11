@@ -62,9 +62,17 @@ export function synthesizeCommunityFund(args: {
   const runtimeDays = Number.isFinite(startedMs)
     ? Math.max(1, Math.round((Date.now() - startedMs) / 86_400_000))
     : 1;
+  // NAV 的首尾**必須**等於 returns['1Y'] 的隱含值：
+  // `periodMetrics` 對 1Y 是從 nav 算 `(last/first - 1) * 100`，而列表其他期間用 returns。
+  // 兩者不一致的話，同一個策略在列表與詳情頁會顯示不同的報酬（實際發生過：+19% vs −24%）。
+  // 所以：首點固定 1、末點固定 1 + oneYear/100，中間用確定性擾動但仍收在直線上。
+  const last = 23;
   const nav = Array.from({ length: 24 }, (_, i) => {
-    const date = new Date(startedMs + i * (runtimeDays / 23) * 86_400_000);
-    return { t: date.getTime(), v: Math.round((1 + (oneYear / 100) * (i / 23) + (rand() - 0.5) / 50) * 1e6) / 1e6 };
+    const date = new Date(startedMs + i * (runtimeDays / last) * 86_400_000);
+    const trend = 1 + (oneYear / 100) * (i / last);
+    // 兩端歸零的擾動（sin 形式），保證 i=0 與 i=last 不偏移。
+    const wobble = Math.sin((i / last) * Math.PI) * (rand() - 0.5) / 40;
+    return { t: date.getTime(), v: Math.round((trend + wobble) * 1e6) / 1e6 };
   });
   return {
     slug: `community-${args.id}`,

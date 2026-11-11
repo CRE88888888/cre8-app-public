@@ -127,7 +127,9 @@ export function VaultsPage() {
           description: strategy.description,
           createdAt: strategy.createdAt,
           positions,
-          seed: index + 1,
+          // seed 用 strategy.id，與詳情頁（`/funds/strategy/:id`）一致 ——
+          // 用陣列 index 的話，列表與詳情會算出**不同**的報酬（實測 +19.15% vs −23.81%）。
+          seed: strategy.id,
         });
       }),
     // `details` 每次 render 都是新陣列，用它當依賴會無限重算 —— 用「已載入的版本數」當訊號。
