@@ -1,7 +1,7 @@
 import { test, expect } from "bun:test";
 import worker from "../public/_worker.js";
 
-test("Pages opens Explore at the root while the custom domain serves the landing page", async () => {
+test("the root serves the landing page on every host, while filtered root links stay in the app", async () => {
   const env = {
     ASSETS: {
       fetch: (request: Request) => {
@@ -11,9 +11,11 @@ test("Pages opens Explore at the root while the custom domain serves the landing
     },
   };
   const app = await worker.fetch(new Request("https://cre8-atp.pages.dev/?period=30D"), env);
+  const pagesRoot = await worker.fetch(new Request("https://cre8-atp.pages.dev/"), env);
   const marketing = await worker.fetch(new Request("https://beta.cre8.finance/"), env);
   const landing = await worker.fetch(new Request("https://cre8-atp.pages.dev/landing/"), env);
   expect(await app.text()).toBe("/?period=30D");
+  expect(await pagesRoot.text()).toBe("/landing/");
   expect(await marketing.text()).toBe("/landing/");
   expect(await landing.text()).toBe("/landing/");
 });

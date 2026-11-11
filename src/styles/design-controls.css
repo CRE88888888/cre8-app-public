@@ -201,8 +201,11 @@ body.atp-complete-create #root button[data-fund-cover] img { border-radius: 8px 
   /* 頁首：未連錢包時 Connect wallet 是唯一的主要動作（深色）；連上後是淺色帳戶膠囊。Studio 是次要文字按鈕。 */
   #root .masthead .header-wallet[data-wallet-state="disconnected"] { border-color: var(--ink); background: var(--ink); color: var(--snow); }
   #root .masthead .header-wallet[data-wallet-state="disconnected"]:hover { border-color: var(--deep); background: var(--deep); }
-  #root .app-masthead .app-mode-switch { border-color: transparent; background: transparent; color: var(--deep); }
-  #root .app-masthead .app-mode-switch:hover { border-color: transparent; background: var(--snow); color: var(--ink); }
+  /* 進 Studio：品牌藍灰淡色底，跟一般文字按鈕區分；離開 Studio：中性的文字按鈕。都不搶 Connect wallet。 */
+  #root .app-masthead .app-mode-switch { gap: 6px; border-color: transparent; background: transparent; color: var(--deep); font-weight: 600; }
+  #root .app-masthead .app-mode-switch[data-target="studio"] { background: rgb(111 147 174 / 16%); color: var(--deep); }
+  #root .app-masthead .app-mode-switch[data-target="studio"]:hover { background: rgb(111 147 174 / 26%); color: var(--ink); }
+  #root .app-masthead .app-mode-switch[data-target="invest"]:hover { background: var(--snow); color: var(--ink); }
 }
 @media (min-width: 720px) and (max-width: 1023px) {
   :root { --page-gutter: 24px; }

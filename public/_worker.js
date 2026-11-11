@@ -30,7 +30,9 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    if (url.hostname === 'beta.cre8.finance' && url.pathname === '/' &&
+    // 首頁是 landing（所有網域）。帶查詢參數的 `/?…` 仍交給 App：那是 Funds 的篩選深連結，
+    // 已分享出去的連結不能因為首頁換成 landing 而失效。landing 的按鈕都連到 /vaults、/create、/funds/…。
+    if (url.pathname === '/' && url.search === '' &&
         (request.method === 'GET' || request.method === 'HEAD')) {
       url.pathname = '/landing/';
       return env.ASSETS.fetch(new Request(url, request));

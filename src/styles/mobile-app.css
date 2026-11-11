@@ -1416,6 +1416,7 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   min-height: 40px;
   padding: 0 14px;
   border: 1px solid var(--hair-2);
@@ -1474,6 +1475,8 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
     backdrop-filter: var(--glass-blur);
   }
   #root .app-nav-bar .app-mode-switch:active { transform: scale(.96); }
+  /* 手機也是同一個語言：進 Studio 帶品牌藍灰淡色，離開 Studio 是中性玻璃膠囊。 */
+  #root .app-nav-bar .app-mode-switch[data-target="studio"] { padding: 0 14px 0 12px; background: rgb(225 234 241 / 78%); color: var(--deep); }
   .app-studio-section { margin-top: 22px; }
   /* Studio 的列沒有封面圖，覆蓋 Portfolio 列表替封面保留的第一欄。 */
   #root .app-studio-ledger > li.app-holding-row { grid-template-columns: minmax(0, 1fr) auto; }
