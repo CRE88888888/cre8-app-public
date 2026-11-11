@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   chartGeometry,
@@ -15,11 +16,14 @@ export function FundRow({
   returnTo,
   showSource = true,
   href,
+  meta,
 }: {
   fund: ReferenceFund;
   period: Period;
   returnTo: string;
   showSource?: boolean;
+  /** 取代 `FundSource` 的說明行（社群策略沒有 X handle，但要顯示 owner 與鏈上 id）。 */
+  meta?: ReactNode;
   /**
    * 覆寫列的目標網址。
    *
@@ -42,7 +46,11 @@ export function FundRow({
           <h3>
             <FundName fund={fund} url={url} />
           </h3>
-          {showSource && <FundSource fund={fund} />}
+          {meta !== undefined ? (
+            <span className="fund-row-creator">{meta}</span>
+          ) : (
+            showSource && <FundSource fund={fund} />
+          )}
         </div>
         {trend && (
           <svg className={`fund-list-trend ${tone}`} viewBox="0 0 72 32" aria-hidden="true">

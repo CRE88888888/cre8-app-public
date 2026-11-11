@@ -327,15 +327,25 @@ export function VaultsPage() {
                 <span>Assets</span>
               </div>
               <div className="fund-list">
-                {community.map((fund) => (
-                  <FundRow
-                    key={fund.slug}
-                    fund={fund}
-                    period={filters.period}
-                    returnTo={returnTo}
-                    href={`/strategies/${fund.slug.replace("community-", "")}`}
-                  />
-                ))}
+                {community.map((fund, index) => {
+                  const onchainId = live[index]?.onchainId;
+                  return (
+                    <FundRow
+                      key={fund.slug}
+                      fund={fund}
+                      period={filters.period}
+                      returnTo={returnTo}
+                      href={`/strategies/${fund.slug.replace("community-", "")}`}
+                      // 說明行平常放 X handle；社群策略沒有 X，換成「建立者 · 鏈上 id」。
+                      meta={
+                        <>
+                          {fund.manager}
+                          {onchainId != null ? ` · On-chain #${onchainId}` : ''}
+                        </>
+                      }
+                    />
+                  );
+                })}
               </div>
             </>
           )}
