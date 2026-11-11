@@ -449,7 +449,7 @@ export function FundPage(): ReactNode {
     <>
       <main className="wrap vault-content">
         <div className="vgrid">
-          <div className="main">{reference&&<FundOverview key={reference.slug} fund={reference} backTo={backTo} onFacts={()=>setFacts(true)} onPosition={()=>setMyPosition(true)} held={held}/>}</div>
+          <div className="main">{reference&&<FundOverview key={reference.slug} fund={reference} backTo={backTo} factsTrigger={factsTrigger} onFacts={()=>setFacts(true)} onPosition={()=>setMyPosition(true)} held={held}/>}</div>
 
           {mobile?<ReferenceSheet open={mobileTicket} onOpenChange={setTicketOpen} title={tab==='deposit'?'Invest':'Withdraw'}>{ticket}</ReferenceSheet>:<aside className="side">{ticket}</aside>}
           <div className="public-mobile-cta"><button className="btn" onClick={()=>{setTab('deposit');setTicketOpen(true);}}>Invest</button><button className="btn ghost" onClick={()=>{setTab('withdraw');setTicketOpen(true);}}>Withdraw</button></div>

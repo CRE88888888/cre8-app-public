@@ -14,7 +14,7 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--sans);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
@@ -32,7 +32,7 @@ button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: 2px solid var(--gold);
+  outline: 2px solid var(--fog);
   outline-offset: 3px;
 }
 
@@ -45,12 +45,12 @@ h3 {
 }
 
 h1 {
-  font-size: 28px;
+  font-size: 32px;
   line-height: 1.15;
 }
 
 h2 {
-  font-size: 19px;
+  font-size: 22px;
 }
 
 a {
@@ -74,4 +74,13 @@ a {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+@media (max-width: 719px) {
+  .page { padding-inline: 16px; }
+  .page h1 { font-size: 26px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
 }

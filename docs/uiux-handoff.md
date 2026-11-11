@@ -370,3 +370,20 @@ Cloudflare Pages（專案 cre8-atp）+ `public/_worker.js` 代理 /api → Railw
 * Kernel、wallet、SIWE、session、API 型別與簽名實作未改；原有 mutation invalidation 保留。
   部署繼續走 Cloudflare Git 整合，主網 chain 56；登入正式網域仍是 beta.cre8.finance。
 * 詳細驗收與限制見 `docs/public-ui-integration.md`；測試使用唯讀錢包 fixture，未送真實簽名或交易。
+
+
+## 14. 2026-11-11 DESIGN 對齊與 Creator Leaderboard
+
+* ATP 適用的已核准規格整理於根目錄 `DESIGN.md`，來源仍釘在公開 UI 的同一 commit。
+  `design-controls.css` 為控制項整合層，保留 vendor、`src/reference/` 與 shadcn 的既有機制。
+* 全站移除 `PhaseBanner` 與專用樣式；不刪除模型／歷史資料的短標示。
+* 修正舊 token 覆蓋造成的藍底、表面色、非品牌正負色；一般主次按鈕與兩種既有 class 拼法共用規格。
+  錢包 40px／10px、期間 36px 方角（coarse pointer 40px）、票內動作 52px／11px、手機主操作 56px。
+* Sheet close 加上明確 data-slot，圖示仍 16px、點擊範圍 40px，保留原有 Escape、focus trap 與焦點恢復。
+* X voices 角標移至 `.public-portrait` 下，與裁切照片的 `.fund-thumb` 並列；只裁切照片，不裁切 X。
+* Leaderboard 現在一列一個 creator address。30 檔參考模型目前同屬 CRE8，所以只顯示一位 creator。
+  題材人物與 X voices 不能當成建立者。`lib/creators.ts` 正規化地址、去重基金，將缺值排到最後。
+* 排名口徑是所選期間可用模型報酬的等權平均，短於一年的 1Y 使用該模型成立以來資料；畫面明示樣本數與短歷史。
+  這不是持有人收益或真實 AUM。沒有相加基金 followers 以冒充去重人數。
+* Creator 詳情只顯示該地址的基金；搜尋、期間與返回路徑保留，沿用本站返回 URL 驗證。
+* Kernel、API、wallet、SIWE、session 與交易 handler 均未變動。UI 驗收不簽名、不送出交易。

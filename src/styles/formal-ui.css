@@ -80,8 +80,8 @@ body.atp-formal-fund #ticket { border: 1px solid rgba(22, 34, 45, .08); border-r
 body.atp-formal-fund #ticket [data-slot="tabs-list"] { display: flex; width: 100%; padding: 0; min-height: 56px; background: var(--white); border-bottom: 1px solid var(--hair); }
 body.atp-formal-fund #ticket [data-slot="tabs-trigger"] { min-height: 56px; border: 0; border-radius: 0 !important; background: transparent; color: var(--steel); font: 500 16px var(--sans); }
 body.atp-formal-fund #ticket [data-slot="tabs-trigger"][data-state="active"] { color: var(--ink); border-bottom: 2px solid var(--ink); box-shadow: none; }
-body.atp-formal-fund #ticket .btn { border-radius: 13px !important; min-height: 48px; }
-body.atp-formal-fund #ticket .swap-box { border-radius: 16px !important; }
+body.atp-formal-fund #ticket .btn { border-radius: 11px !important; min-height: 52px; }
+body.atp-formal-fund #ticket .swap-box { border-radius: 11px !important; }
 
 @media (max-width: 960px) and (min-width: 720px) {
   body.atp-formal-fund .vgrid { grid-template-columns: minmax(0, 1fr) 290px; gap: 28px; }

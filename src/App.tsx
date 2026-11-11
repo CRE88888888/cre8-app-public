@@ -2,7 +2,6 @@ import {lazy,Suspense,useEffect,useSyncExternalStore} from 'react';
 import {refreshReferenceData,subscribeReference,referenceRevision} from './lib/reference-refresh';
 import type { ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { PhaseBanner } from './components/PhaseBanner';
 import { Toaster } from './components/Toast';
 import { RequireSession } from './components/RequireSession';
 import { TopBar } from './components/TopBar';
@@ -28,7 +27,6 @@ export function App(): ReactNode {
   return (
     <>
       <Toaster />
-      <PhaseBanner />
       <TopBar />
       <Suspense fallback={<main className="page"><p role="status">Loading page…</p></main>}>
       <Routes>

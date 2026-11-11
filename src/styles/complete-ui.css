@@ -32,7 +32,7 @@ body.atp-complete-market .fund-row-link {
 }
 .fund-list-result > small {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 400;
   color: var(--steel);
   margin-top: 6px;
@@ -279,9 +279,7 @@ body.atp-complete-market .fund-row-link {
   font-size: 13px;
   color: var(--steel);
 }
-.public-create-actions .btn {
-  border-radius: 12px !important;
-}
+
 @media (max-width: 719px) {
   .public-create-actions {
     padding: 16px 20px 0;
@@ -292,9 +290,7 @@ body.atp-complete-market .fund-row-link {
   }
 }
 
-.masthead.app-masthead :is(button, .btn) {
-  border-radius: 13px !important;
-}
+
 body.atp-complete-market .explore-wrap {
   max-width: 1344px;
   padding: 48px 40px 80px;
@@ -325,17 +321,13 @@ body:is(
   background: #16222d;
   border-radius: 22% !important;
 }
-body .masthead.app-masthead .head-right button.btn {
-  border-radius: 13px !important;
-}
+
 
 #root .public-periods button,
 #atp-reference-sheet .public-periods button {
   border-radius: 24px !important;
 }
-#root .masthead .head-right button {
-  border-radius: 13px !important;
-}
+
 #root .fund-profile-card,
 #root .asset-preview-card {
   border-radius: 14px !important;
@@ -377,8 +369,8 @@ body .masthead.app-masthead .head-right button.btn {
     border-top: 1px solid var(--hair);
   }
   #root .public-mobile-cta .btn {
-    border-radius: 13px !important;
-    min-height: 48px;
+    border-radius: 11px !important;
+    min-height: 56px;
     flex: 1;
   }
   .public-mobile-cta .btn.ghost {

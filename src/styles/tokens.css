@@ -4,25 +4,25 @@
  */
 :root {
   /* 底色與表面 */
-  --bg: #b7cdde;
-  --bg-2: #c6d7e4;
-  --card: #eef3f7;
+  --bg: var(--paper);
+  --bg-2: var(--snow);
+  --card: var(--white);
   --white: #ffffff;
 
   /* 文字 */
   --ink: #16222d;
   --ink-2: #2b4254;
-  --muted: #5b7186;
+  --muted: var(--steel);
   --gold: #4e6a7f;
 
   /* 線與邊框 */
-  --line: #b7cdde;
+  --line: var(--hair);
   --hair: rgba(22, 34, 45, 0.14);
   --hair-2: rgba(22, 34, 45, 0.3);
 
   /* 語意色 */
-  --pos: #1f7a55;
-  --neg: #b23b3b;
+  --pos: var(--positive);
+  --neg: var(--negative);
   --warn: #8a5a1f;
 
   /* 字體：Geist/Archivo 沒自帶就在系統字體上退回，不引入第三方 stylesheet */
@@ -31,8 +31,8 @@
   --mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
   /* 圓角與間距 */
-  --r: 16px;
-  --r-sm: 10px;
+  --r: 0;
+  --r-sm: 0;
   --sp-1: 4px;
   --sp-2: 8px;
   --sp-3: 12px;
@@ -41,6 +41,6 @@
   --sp-6: 32px;
   --sp-7: 48px;
 
-  --shadow: 0 1px 2px rgba(22, 34, 45, 0.06), 0 8px 24px rgba(22, 34, 45, 0.06);
-  --maxw: 1120px;
+  --shadow: none;
+  --maxw: 1240px;
 }

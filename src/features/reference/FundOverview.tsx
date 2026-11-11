@@ -1,3 +1,4 @@
+import type { Ref } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { REFERENCE_METADATA, editorial } from "../../lib/public-funds";
 import type { ReferenceFund } from "../../lib/public-funds";
@@ -10,12 +11,14 @@ export function FundOverview({
   fund,
   backTo,
   onFacts,
+  factsTrigger,
   onPosition,
   held,
 }: {
   fund: ReferenceFund;
   backTo: string;
   onFacts: () => void;
+  factsTrigger: Ref<HTMLButtonElement>;
   onPosition: () => void;
   held: boolean;
 }) {
@@ -49,7 +52,7 @@ export function FundOverview({
                 <FundByline fund={fund} />
               </span>
               <div className="vault-head-actions">
-                <button className="atp-facts-trigger" onClick={onFacts}>
+                <button ref={factsTrigger} type="button" className="atp-facts-trigger" onClick={onFacts}>
                   Fund facts ›
                 </button>
                 {held && (

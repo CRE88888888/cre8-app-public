@@ -44,11 +44,7 @@ export function FundPortrait({
         loading="lazy"
         style={{ objectPosition: `50% ${meta.cover.thumbnailPosition}%` }}
       />
-      {fund.group === "x-voices" && (
-        <span className="fund-x-badge">
-          <XLogo />
-        </span>
-      )}
+
     </>
   );
   return (
@@ -68,6 +64,11 @@ export function FundPortrait({
         <Link className="fund-thumb" to={url || `/funds/${fund.slug}`}>
           {image}
         </Link>
+      )}
+      {fund.group === "x-voices" && (
+        <span className="fund-x-badge" aria-hidden="true">
+          <XLogo />
+        </span>
       )}
       <aside
         ref={card}

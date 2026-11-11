@@ -232,7 +232,7 @@ export function AssetDetail({
                     <span>{date(last!.t)}</span>
                   </div>
                   <div
-                    className={styles.periods}
+                    className={`${styles.periods} public-periods`}
                     role="group"
                     aria-label="Price history period"
                   >
