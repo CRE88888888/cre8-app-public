@@ -62,6 +62,23 @@ export function PortfoliosPage(): ReactNode {
   merged.sort((left, right) => right.entry.id - left.entry.id);
 
   const nameOf = new Map((portfolios.data ?? []).map((portfolio) => [portfolio.id, portfolio.strategyName]));
+  /**
+   * 這個 portfolio 應該連到哪裡。
+   *
+   * 為什麼不是一律連 `/funds/:slug`：那條路由只認**參考基金**（30 檔示範資料，來自
+   * `bnb-public` 的目錄）。使用者自己建的策略（例如「BNB 生態平衡」）在裡面找不到同名條目，
+   * 於是舊程式把它連到 `/vaults` —— 等於把使用者丟回一個**不含他的基金**的目錄，看起來就像
+   * 「我建的基金不見了」（實測回報）。
+   *
+   * 有參考基金 → 走 `/funds/:slug`（含參考版面與說明）；沒有 → 走 `/strategies/:id`
+   * （那頁本來就會顯示策略的版本與目標配置）。
+   */
+  const linkFor = (id: number): string => {
+    const slug = MOCK_FUNDS.find((fund) => fund.name === nameOf.get(id))?.slug;
+    const strategyId = (portfolios.data ?? []).find((portfolio) => portfolio.id === id)?.strategyId;
+    if (slug !== undefined) return `/funds/${slug}`;
+    return strategyId === undefined ? '/vaults' : `/strategies/${strategyId}`;
+  };
 
   return (
     <main className="explore-wrap">
@@ -142,13 +159,17 @@ export function PortfoliosPage(): ReactNode {
                           {/* 名稱 → 目錄 slug：細節頁移除後，這裡是使用者唯一能點進去看基金的地方。 */}
                           {(() => {
                             const name = nameOf.get(id);
-                            const slug = MOCK_FUNDS.find((fund) => fund.name === name)?.slug;
                             return name === undefined ? (
                               `Strategy ${id}`
                             ) : (
-                              <Link to={slug === undefined ? '/vaults' : `/funds/${slug}`}>{name}</Link>
+                              <Link to={linkFor(id)}>{name}</Link>
                             );
                           })()}
+                          {/* 這檔基金不在參考目錄裡 = 使用者（或營運端）自己建的策略。
+                              標一下，否則「為什麼這檔的頁面長得不一樣」會讓人以為壞了。 */}
+                          {MOCK_FUNDS.some((fund) => fund.name === nameOf.get(id)) ? null : (
+                            <span className="muted" style={{ fontSize: 11 }}> your strategy</span>
+                          )}
                         </td>
                         <td className="mono muted" style={{ fontSize: 12 }}>
                           {status === undefined ? '—' : shortAddress(status.account)}
@@ -169,14 +190,9 @@ export function PortfoliosPage(): ReactNode {
                           )}
                         </td>
                         <td>
-                          {(() => {
-                            const slug = MOCK_FUNDS.find((fund) => fund.name === nameOf.get(id))?.slug;
-                            return slug === undefined ? (
-                              <span className="muted">—</span>
-                            ) : (
-                              <Link to={`/funds/${slug}`}>Open →</Link>
-                            );
-                          })()}
+                          {/* 一律給得出目的地：參考基金走 `/funds/:slug`，自建策略走 `/strategies/:id`。
+                              以前這裡對自建策略顯示 `—`（等於「沒有細節可看」），但它其實有策略頁。 */}
+                          <Link to={linkFor(id)}>Open →</Link>
                         </td>
                       </tr>
                     );
