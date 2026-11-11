@@ -375,6 +375,8 @@ export type OperatorRow = {
   strategyName: string | null;
   version: number;
   scheduleState: string;
+  /** 擁有人的錢包地址。與 `account`（Kernel counterfactual 地址）是**兩個不同**的地址。 */
+  wallet: string;
   account: string | null;
   nextRunAt: string | null;
   lastCheckedAt: string | null;

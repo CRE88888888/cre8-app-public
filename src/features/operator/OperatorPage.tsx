@@ -375,6 +375,12 @@ function Dashboard({
                         {shortAddress(row.account)}
                       </div>
                     )}
+                    {/* 擁有人與 Kernel 帳戶是**兩個不同**的地址：帳戶是 (owner, strategy) 推導出來的
+                        counterfactual 地址。只顯示帳戶時，兩個投組用了同一個策略、不同 owner 會看起來
+                        一模一樣 —— 排查「這筆錢是誰的」就得多繞一圈。 */}
+                    <div className="mono muted" style={{ fontSize: 11 }} title={row.wallet}>
+                      owner {shortAddress(row.wallet)}
+                    </div>
                   </td>
                   <td className="num">{row.totalUsdE8 === null ? '—' : formatUsdE8(row.totalUsdE8)}</td>
                   <td className={`num ${row.needsRebalance === true ? 'neg' : ''}`}>
