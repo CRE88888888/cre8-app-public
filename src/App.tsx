@@ -31,6 +31,7 @@ export function App(): ReactNode {
       <Routes>
         {/* 登入改由標頭的錢包選單處理；舊連結仍然可用，只是把使用者帶回目錄。 */}
         <Route path="/login" element={<Navigate to="/vaults" replace />} />
+        <Route path="/" element={<VaultsPage />} />
         <Route path="/vaults" element={<VaultsPage />} />
         <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/creator/:id" element={<CreatorPage />} />

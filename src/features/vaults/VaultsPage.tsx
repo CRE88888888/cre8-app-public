@@ -82,7 +82,10 @@ export function VaultsPage() {
     select: (data) => data.items,
   });
   const wallet = useWallet((state) => state.address);
-  const live = strategies.data ?? [];
+  const strategySearch = filters.q.trim().toLowerCase();
+  const live = filters.category === "all"
+    ? (strategies.data ?? []).filter((strategy) => strategy.name.toLowerCase().includes(strategySearch))
+    : [];
 
   const returnTo = location.pathname + location.search;
   const controls = mobile && draft ? draft : filters;
@@ -228,7 +231,7 @@ export function VaultsPage() {
         )}
       </div>
       {mobile && categories}
-      {visible.length === 0 && (
+      {visible.length === 0 && live.length === 0 && (
         <div className="directory-empty app-search-empty">
           <h2>No matches</h2>
         </div>
@@ -237,50 +240,28 @@ export function VaultsPage() {
         <section className="explore-collection" aria-label="Live on CRE8">
           <header>
             <div>
-              <h2>
-                Live on CRE8<span>{live.length}</span>
-              </h2>
-              <p>
-                Strategies created on CRE8. Each one has an on-chain id and a published target
-                allocation — open one to see its versions and holdings.
-              </p>
+              <h2>Live on CRE8{!mobile && <span>{live.length}</span>}</h2>
             </div>
           </header>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Strategy</th>
-                <th>Creator</th>
-                <th>On-chain id</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {live.map((strategy) => {
-                const yours =
-                  wallet !== null && strategy.provider?.toLowerCase() === wallet.toLowerCase();
-                return (
-                  <tr key={strategy.id}>
-                    <td>
-                      {strategy.name}
-                      {yours ? (
-                        <span className="muted" style={{ fontSize: 11 }}> yours</span>
-                      ) : null}
-                    </td>
-                    <td className="mono muted" style={{ fontSize: 12 }}>
-                      {shortAddress(strategy.provider)}
-                    </td>
-                    <td className="num muted" style={{ fontSize: 12 }}>
-                      {strategy.onchainId ?? '—'}
-                    </td>
-                    <td>
-                      <Link to={`/strategies/${strategy.id}`}>Open →</Link>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <ul className="app-live-strategies" role="list">
+            {live.map((strategy) => {
+              const yours = wallet !== null && strategy.provider?.toLowerCase() === wallet.toLowerCase();
+              return (
+                <li key={strategy.id}>
+                  <Link to={`/strategies/${strategy.id}`}>
+                    <div>
+                      <h3>{strategy.name}</h3>
+                      <div className="app-live-strategy-meta">
+                        <span>{yours ? "Yours" : shortAddress(strategy.provider)}</span>
+                        {strategy.onchainId != null && <span>On-chain #{strategy.onchainId}</span>}
+                      </div>
+                    </div>
+                    <AppIcon name="right" size={16} />
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         </section>
       )}
       {COLLECTIONS.map((c) => {

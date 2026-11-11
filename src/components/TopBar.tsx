@@ -56,7 +56,7 @@ export function TopBar(): ReactNode {
             </a>
 
             <nav className="nav" aria-label="Main navigation">
-              <NavLink to="/vaults" className={({ isActive }) => (isActive || pathname.startsWith('/funds/') ? 'active' : '')}>
+              <NavLink to="/vaults" className={({ isActive }) => (isActive || pathname === '/' || pathname.startsWith('/funds/') ? 'active' : '')}>
                 Funds
               </NavLink>
               <NavLink to="/leaderboard" className={({isActive})=>isActive?'active':''}>Leaderboard</NavLink>

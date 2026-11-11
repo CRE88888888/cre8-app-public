@@ -1,5 +1,23 @@
 import { test, expect } from "bun:test";
 import worker from "../public/_worker.js";
+
+test("Pages opens Explore at the root while the custom domain serves the landing page", async () => {
+  const env = {
+    ASSETS: {
+      fetch: (request: Request) => {
+        const { pathname, search } = new URL(request.url);
+        return new Response(pathname + search);
+      },
+    },
+  };
+  const app = await worker.fetch(new Request("https://cre8-atp.pages.dev/?period=30D"), env);
+  const marketing = await worker.fetch(new Request("https://beta.cre8.finance/"), env);
+  const landing = await worker.fetch(new Request("https://cre8-atp.pages.dev/landing/"), env);
+  expect(await app.text()).toBe("/?period=30D");
+  expect(await marketing.text()).toBe("/landing/");
+  expect(await landing.text()).toBe("/landing/");
+});
+
 test("public history proxy is fixed, read-only and strips wallet credentials", async () => {
   const original = globalThis.fetch,
     calls: { url: string; init?: RequestInit }[] = [];
