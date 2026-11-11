@@ -1,13 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { getOperatorActivity, getOperatorOverview, operatorForceRebalance } from '../../lib/api';
+import { ApiError, getOperatorActivity, getOperatorOverview, operatorForceRebalance } from '../../lib/api';
 import type { OperatorActivityRow, OperatorOverview, OperatorRow } from '../../lib/api';
 import { formatEther } from 'viem';
 import { formatUsdE8, shortAddress } from '../../lib/format';
 import { useBodyClass } from '../../lib/use-body-class';
-import { useConnectedSessionToken } from '../../lib/use-connected-session';
 import { isCre8CreatorWallet } from '../../lib/creators';
+import { sessionIsLive, useSession } from '../../store/session';
 import { useWallet } from '../../store/wallet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -473,7 +473,14 @@ function Dashboard({
 export function OperatorPage(): ReactNode {
   useBodyClass('portfolio-page', 'fund-explore');
   const address = useWallet((state) => state.address);
-  if (isCre8CreatorWallet(address)) return <CreatorOperatorPage />;
+  const token = useSession((state) =>
+    isCre8CreatorWallet(state.address) && sessionIsLive(state) ? state.token : null,
+  );
+  const walletMatches = address === null || isCre8CreatorWallet(address);
+  // The dashboard uses the verified server session. A connected wallet is only needed to sign in.
+  if (token !== null && walletMatches) {
+    return <CreatorOperatorPage token={token} />;
+  }
 
   return (
     <main className="explore-wrap">
@@ -482,11 +489,11 @@ export function OperatorPage(): ReactNode {
       </header>
       <div className="directory-empty">
         <p>
-          {address === null
-            ? 'Connect the CRE8 creator wallet to manage rebalancing.'
+          {walletMatches
+            ? 'Sign in with the CRE8 creator wallet to manage rebalancing.'
             : 'Switch to the CRE8 creator wallet in your wallet app to manage rebalancing.'}
         </p>
-        {address === null && (
+        {walletMatches && (
           <div className="directory-empty-actions"><WalletMenu inline /></div>
         )}
       </div>
@@ -494,15 +501,18 @@ export function OperatorPage(): ReactNode {
   );
 }
 
-function CreatorOperatorPage(): ReactNode {
-  const token = useConnectedSessionToken();
-
+function CreatorOperatorPage({ token }: { token: string }): ReactNode {
   const overview = useQuery({
     queryKey: ['operator-overview', token],
-    queryFn: () => getOperatorOverview(token as string),
-    enabled: token !== null,
+    queryFn: () => getOperatorOverview(token),
     refetchInterval: 15_000,
   });
+  useEffect(() => {
+    const session = useSession.getState();
+    if (overview.error instanceof ApiError && overview.error.status === 401 && session.token === token) {
+      session.clear();
+    }
+  }, [overview.error, token]);
 
   return (
     <main className="explore-wrap">
@@ -516,21 +526,14 @@ function CreatorOperatorPage(): ReactNode {
             ones need attention. Auto-refreshes every 15 seconds.
           </p>
         </div>
-        {token !== null && (
-          <div className="explore-heading-actions">
-            <button type="button" className="btn" disabled={overview.isFetching} onClick={() => void overview.refetch()}>
-              {overview.isFetching ? 'Refreshing…' : 'Refresh'}
-            </button>
-          </div>
-        )}
+        <div className="explore-heading-actions">
+          <button type="button" className="btn" disabled={overview.isFetching} onClick={() => void overview.refetch()}>
+            {overview.isFetching ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
       </header>
 
-      {token === null ? (
-        <div className="directory-empty">
-          <p>Verify your wallet to manage rebalancing.</p>
-          <div className="directory-empty-actions"><WalletMenu inline /></div>
-        </div>
-      ) : overview.isPending ? (
+      {overview.isPending ? (
         <div className="card row">
           <Spinner /> <span className="muted">Loading overview…</span>
         </div>
