@@ -1492,6 +1492,10 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
     border-radius: 12px !important;
   }
   :is(#root, body) .app-whitelist-note { border-radius: 12px !important; }
+  @media (min-width: 720px) {
+    body.atp-formal-market #fund-explore .fund-thumb { border-radius: 14px !important; }
+    body.atp-formal-fund #ticket .swap-box { border-radius: 12px !important; }
+  }
   /* 搜尋欄本身是膠囊，裡面的輸入框不再自帶一層圓角矩形。 */
   :is(#root, body) :is(.explore-search, .creator-search) input { border-radius: 0 !important; }
   #root .app-masthead .app-mode-label { border-radius: 6px !important; }

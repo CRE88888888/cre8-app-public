@@ -56,7 +56,7 @@
 ## 2026-11-11 版面與 App 殼層調整
 
 - 桌面（≥720px）頁首、Funds、Creators、Portfolio、Manage、Create、基金詳情共用同一條左緣：1344px／40px gutter（720–1023px 為 24px）。規則集中在 `design-controls.css` 末段。
-- 基金列表桌面版：縮圖 64px、列距 16px，並顯示與手機相同的走勢小圖；720–1023px 隱藏資產圖示欄。
+- 基金列表桌面版是封面卡片格（720–1023px 兩欄、1024px 起三欄、1680px 起四欄）：16:10 封面為主角，下方名稱＋機構、報酬＋走勢、資產圖示；整張卡片是連結，人物介紹由滑過名字觸發。分類標籤與 Assets／Advanced／搜尋壓成同一列。手機維持列表。
 - 頁標題一律使用 fog 句點（Explore funds. / Creators. / Portfolio. / Manage.），手機隱藏句點。桌面主導覽「Leaderboard」改稱 Creators，與頁標題及手機分頁一致。
 - 手機分頁根目錄（Funds、Creators、Create、Portfolio、Manage）不顯示網站 logo 列：頁面 h1 作大標題，右上為玻璃圓鈕錢包。捲過約 56px 後出現 scroll edge 霧化與置中小標題。頁面已有大型連線按鈕時，右上錢包隱藏。
 - 手機控制層採 Liquid Glass 語言：分頁列與基金頁 Deposit／Withdraw 為浮動玻璃膠囊（半透明白、模糊＋飽和＋提亮、內緣高光、柔和陰影），選中分頁為膠囊內的淡色膠囊。玻璃只用於浮在內容上的控制層，內容本身不用。瀏覽器無法在 iOS Safari 做真正折射，故不使用 SVG displacement；`prefers-reduced-transparency` 或不支援 `backdrop-filter` 時退回實心白。
@@ -67,3 +67,6 @@
 - Studio 資料：My funds = `GET /strategies` 中 provider 等於目前錢包的策略；狀態取自使用者在該策略的帳戶（`/portfolios/:id/status`）。Today 只列需要處理的項目（無帳戶、權限到期／七天內到期、gas 不足、估值不完整、需要入金、需要再平衡），讀不到的值不當成正常或 0。Earnings 後端尚無資料，顯示說明，不放數字。
 - 形狀系統（2026-11-11 使用者決定，取代原本的直角按鈕）：會按的東西一律膠囊（只有圖示時為正圓）；文字框與下拉選單為 12px 圓角矩形；卡片、抽屜、封面沿用各自較大的圓角；圖片縮圖維持既有比例。規則集中在 `mobile-app.css` 的 app-shapes layer 末段。
 - 不用外框卡片堆版面：摘要區不加灰底外框與頂部粗線，只用底部細線；清單是連續列表、列間細線；狀態標籤為「色點＋文字」，不用外框等寬字小方塊；不放重複的裝飾圖示。
+- 桌面頁首：未連錢包時 Connect wallet 為深色主要按鈕，連上後為淺色帳戶膠囊；Studio／Investing 為次要文字按鈕。桌面主要按鈕一律深色（ink）。
+- 基金頁（桌面）：報酬標籤在數字上方（「Model return · 期間」），Max drawdown 與 Share price 並排；交易面板內的輸入區不再是框中框。
+- Demo 期間只有 `VITE_LIVE_FUNDS` 列出的基金走真實存入／提領；其餘基金可操作到送出，送出時顯示 whitelist 提示，不簽名、不送交易。
