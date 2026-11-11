@@ -14,17 +14,17 @@
 
 | Control | Approved appearance |
 | --- | --- |
-| Main action | Ink background, snow text, ink border; 46px minimum, 22px horizontal padding; square |
+| Main action | Ink background, snow text, ink border; 46px minimum, 22px horizontal padding; capsule |
 | Secondary action | Transparent background, ink text, hair-2 border; hover ink border |
 | Small action | 38px minimum, 16px horizontal padding, 14px type; coarse pointer 40px |
-| Connect wallet | Shared across pages: 40px height, 10px radius, 16px horizontal padding, 14px Geist 500; ink/snow |
-| Ticket action | 52px; 11px radius; 15px Geist 500 |
+| Connect wallet | Shared across pages: 40px height, capsule, 16px horizontal padding, 14px Geist 500; ink/snow |
+| Ticket action | 52px; capsule; 15px Geist 500 |
 | Mobile fund action bar | 56px actions; existing ticket opens in a modal sheet |
-| Segmented control | 36px; coarse pointer 40px; 14px horizontal padding; 12px Geist Mono, .04em letter spacing; square joined segments; active ink/snow |
+| Segmented control | 32px options in a 3px-padded snow capsule (coarse pointer 36px); 14px horizontal padding; 12px Geist Mono, .04em letter spacing; capsule options; active ink/snow |
 | Disabled | Snow background, slate text, hair border; no hover action |
 | Focus | 2px fog outline, offset 3px; do not leave a focus ring after pointer-only clicks |
 
-主導覽選中為平直 2px 底線、0px 圓角。不要把錢包圓角套到全部 header 控制項。
+主導覽與桌面分頁標籤選中為平直 2px 底線（沒有外框，不需要形狀）。
 
 ## Layout, images and dialogs
 
@@ -65,3 +65,5 @@
 - 「人名 · 機構」在手機列表中拆成兩行。
 - 支援加到主畫面：`public/manifest.webmanifest`（standalone、start_url `/vaults`）與 `public/app-icons/`。
 - Studio 資料：My funds = `GET /strategies` 中 provider 等於目前錢包的策略；狀態取自使用者在該策略的帳戶（`/portfolios/:id/status`）。Today 只列需要處理的項目（無帳戶、權限到期／七天內到期、gas 不足、估值不完整、需要入金、需要再平衡），讀不到的值不當成正常或 0。Earnings 後端尚無資料，顯示說明，不放數字。
+- 形狀系統（2026-11-11 使用者決定，取代原本的直角按鈕）：會按的東西一律膠囊（只有圖示時為正圓）；文字框與下拉選單為 12px 圓角矩形；卡片、抽屜、封面沿用各自較大的圓角；圖片縮圖維持既有比例。規則集中在 `mobile-app.css` 的 app-shapes layer 末段。
+- 不用外框卡片堆版面：摘要區不加灰底外框與頂部粗線，只用底部細線；清單是連續列表、列間細線；狀態標籤為「色點＋文字」，不用外框等寬字小方塊；不放重複的裝飾圖示。

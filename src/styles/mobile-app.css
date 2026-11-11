@@ -335,15 +335,15 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
 /* 寬度交給全站版面格線（design-controls.css），不在這裡另訂。 */
 .app-portfolio .explore-heading { margin-bottom: 20px; }
 .app-portfolio-create { gap: 7px; }
+/* 摘要不再是灰底外框卡片：數字本身就是重點，只用底部一條細線和下方內容分開。 */
 .app-portfolio-summary {
   display: grid;
   gap: 8px;
-  padding: 24px;
-  margin: 0 0 20px;
-  border: 1px solid var(--hair);
-  border-top: 2px solid var(--deep);
-  background: var(--paper);
+  padding: 4px 0 28px;
+  margin: 0 0 8px;
+  border-bottom: 1px solid var(--hair);
 }
+.app-portfolio-guest { border-bottom: 0; }
 .app-portfolio-summary :is(h2, p) { margin: 0; }
 .app-portfolio-summary p { font: 400 14px/1.55 var(--sans); color: var(--steel); }
 .app-portfolio-summary h2 { font: 600 22px/1.25 var(--sans); letter-spacing: -.45px; }
@@ -378,11 +378,10 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
 .app-portfolio-pane .directory-empty .btn { margin-top: 14px; }
 .app-portfolio-caption { margin: 9px 0; color: var(--steel); font-size: 13px; }
 .app-portfolio-ledger { padding: 0; margin: 6px 0; list-style: none; }
+/* 清單是一條連續的列表，列與列之間一條細線，不是一張張有框的卡片。 */
 .app-portfolio-ledger > li {
-  margin-bottom: 8px;
-  padding: 13px;
-  border: 1px solid var(--hair);
-  border-radius: 8px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--hair);
 }
 .app-ledger-heading, .app-ledger-meta { display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 6px 12px; }
 .app-ledger-heading h3 { margin: 0; font: 600 15px/1.35 var(--sans); }
@@ -1410,17 +1409,17 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
   font: 600 12px/1.2 var(--sans);
   letter-spacing: .02em;
 }
-.app-studio-eyebrow { margin: 0 0 6px; color: var(--steel); font: 600 13px/1.3 var(--sans); letter-spacing: .02em; }
 .app-studio-section { display: grid; gap: 4px; margin-top: 28px; }
 .app-studio-section > h2 { margin: 0 0 4px; font: 600 20px/1.25 var(--sans); letter-spacing: -.3px; }
 .app-studio-detail { margin: 4px 0 0; color: var(--steel); font: 400 13px/1.45 var(--sans); }
 .app-studio-ledger .app-holding-status { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.app-studio-ledger > li { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto 15px; gap: 12px; align-items: center; }
+.app-studio-ledger > li { display: grid; grid-template-columns: minmax(0, 1fr) auto 15px; gap: 16px; align-items: center; }
+.app-studio-ledger h3 { margin: 0 0 4px; font: 600 17px/1.3 var(--sans); letter-spacing: -.2px; }
 .app-studio-ledger > li > strong { font: 550 15px/1.3 var(--sans); font-variant-numeric: tabular-nums; }
 .app-studio-ledger > li > .app-icon:last-child { color: var(--steel); }
 .app-studio-clear { display: grid; justify-items: start; gap: 6px; padding: 18px 0; }
 .app-studio-clear p { margin: 0; color: var(--steel); font-size: 14px; }
-.app-studio-clear .app-icon-tile { color: var(--positive); }
+.app-studio-clear > strong::before { display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--positive); vertical-align: middle; content: ""; }
 .app-studio-more { display: inline-flex; align-items: center; gap: 6px; width: fit-content; min-height: 44px; color: var(--deep); font: 500 14px/1.3 var(--sans); }
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .28s; }
 @media (prefers-reduced-motion: reduce) {
@@ -1447,10 +1446,9 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
     backdrop-filter: var(--glass-blur);
   }
   #root .app-nav-bar .app-mode-switch:active { transform: scale(.96); }
-  /* 手機頂部列已經有 Studio 標記，頁標題上方不再重複。 */
-  .app-studio-eyebrow { display: none; }
   .app-studio-section { margin-top: 22px; }
-  .app-studio-ledger > li { grid-template-columns: 46px minmax(0, 1fr) auto; }
+  /* Studio 的列沒有封面圖，覆蓋 Portfolio 列表替封面保留的第一欄。 */
+  #root .app-studio-ledger > li.app-holding-row { grid-template-columns: minmax(0, 1fr) auto; }
   .app-studio-ledger > li > .app-icon:last-child { display: none; }
 
   /* Studio 的分頁列是深色玻璃：換了工作區，最常看的地方就要不一樣。 */
@@ -1465,17 +1463,36 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
   body.studio-mode #root .app-mobile-nav a:active { background: rgb(255 255 255 / 12%); }
 }
 
-/* 圓角規則在 app-shapes layer 內用 !important，覆蓋也必須寫在同一個 layer 才會生效。 */
+/*
+ * ── 形狀系統（全站，2026-11-11）──
+ * 原本同一頁裡按鈕有直角、10px、12px、膠囊四種形狀。改成跟 iOS 一樣的單一規則：
+ *   - 會按的東西（按鈕、模式切換、錢包、分段控制、搜尋欄、分類標籤）＝ 膠囊；只有圖示的按鈕＝正圓。
+ *   - 要輸入的欄位（文字框、下拉選單）＝ 12px 圓角矩形。
+ *   - 容器（卡片、抽屜、封面）沿用各自較大的圓角；圖片縮圖維持既有比例。
+ * vendor 有一條把全站圓角歸零的 !important，而 app-shapes layer 內的 !important 又優先於未分層的規則，
+ * 所以形狀一律寫在這個 layer 的最後。`:is(#root, body)` 讓這些規則的權重高於 layer 內前面的同類規則，
+ * 也涵蓋 portal 到 body 的抽屜與對話框。
+ */
 @layer app-shapes {
-  @media (max-width: 719px) {
-    #root :is(.app-mobile-nav, .public-mobile-cta, .app-mobile-nav a, .public-mobile-cta .btn,
-        .app-nav-bar .header-wallet, .app-nav-bar .app-mode-switch, .app-nav-bar .app-mode-label),
-    #fund-explore > .collection-tabs > a {
-      border-radius: 999px !important;
-    }
+  :is(#root, body) :is(.btn, [data-slot="button"], .app-mode-switch, .header-wallet, .app-wallet-toolbar,
+      .app-filter-trigger, .creator-filter-trigger, .explore-search, .creator-search, .creator-periods,
+      .creator-periods button, .public-periods, .public-periods button, .collection-tabs > a,
+      .atp-facts-trigger, .app-ticket-presets button, .wallet-menu__item,
+      [data-slot="sheet-close"], .app-fund-toolbar > :is(a, button), .fund-cover-nav > :is(a, button),
+      .explore-filter > summary, .app-mobile-nav, .app-mobile-nav a, .public-mobile-cta,
+      .app-nav-bar .app-mode-label) {
+    border-radius: 999px !important;
   }
-  /* vendor 有一條把全站圓角歸零的 !important；模式切換與錢包按鈕同為 10px（DESIGN.md 的錢包規格）。 */
-  #root .app-masthead .app-mode-switch { border-radius: 10px !important; }
+  /* 分頁標籤：桌面是底線式導覽（沒有外框，跟主導覽一樣不需要形狀）；手機是分段控制，跟按鈕一樣是膠囊。 */
+  :is(#root, body) [data-slot="tabs-trigger"] { border-radius: 0 !important; }
+  @media (max-width: 719px) {
+    :is(#root, body) :is([data-slot="tabs-trigger"], [data-slot="tabs-list"]) { border-radius: 999px !important; }
+  }
+  :is(#root, body) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+    border-radius: 12px !important;
+  }
+  /* 搜尋欄本身是膠囊，裡面的輸入框不再自帶一層圓角矩形。 */
+  :is(#root, body) :is(.explore-search, .creator-search) input { border-radius: 0 !important; }
   #root .app-masthead .app-mode-label { border-radius: 6px !important; }
 }
 @media (max-width: 719px) and (prefers-reduced-transparency: reduce) {

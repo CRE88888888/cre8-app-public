@@ -115,10 +115,7 @@ function StudioHeader({ title, action = true }: { title: string; action?: boolea
   const mobile = useMobile();
   return (
     <header className="explore-heading">
-      <div>
-        <p className="app-studio-eyebrow">Studio</p>
-        <h1>{title}<span>.</span></h1>
-      </div>
+      <h1>{title}<span>.</span></h1>
       {action && !mobile && (
         <Link className="btn ghost app-portfolio-create" to="/create">Create fund <AppIcon name="create" size={18} /></Link>
       )}
@@ -155,7 +152,6 @@ function FundLedger({ funds, detail }: { funds: StudioFund[]; detail: 'flags' | 
     <ul className="app-portfolio-ledger app-studio-ledger">
       {funds.map(({ strategy, status, statusPending, flags }) => (
         <li key={strategy.id} className="app-holding-row app-ledger-link">
-          <span className="app-icon-tile app-holding-cover"><AppIcon name="holdings" size={21} /></span>
           <div className="app-holding-main">
             <h3><Link to={`/strategies/${strategy.id}`}>{strategy.name}</Link></h3>
             <div className="app-holding-status">
@@ -210,7 +206,6 @@ export function StudioTodayPage(): ReactNode {
             <FundLedger funds={attention} detail="flags" />
           ) : (
             <div className="directory-empty app-studio-clear">
-              <span className="app-icon-tile"><AppIcon name="check" size={20} /></span>
               <strong>Everything is running</strong>
               <p>No fund needs funding, a rebalance or a permission renewal right now.</p>
             </div>
