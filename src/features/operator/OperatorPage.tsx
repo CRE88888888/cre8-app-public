@@ -6,9 +6,7 @@ import type { OperatorActivityRow, OperatorOverview, OperatorRow } from '../../l
 import { formatEther } from 'viem';
 import { formatUsdE8, shortAddress } from '../../lib/format';
 import { useBodyClass } from '../../lib/use-body-class';
-import { isCre8CreatorWallet } from '../../lib/creators';
 import { sessionIsLive, useSession } from '../../store/session';
-import { useWallet } from '../../store/wallet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge, ErrorNote, Spinner } from '../../components/ui';
@@ -472,13 +470,17 @@ function Dashboard({
  */
 export function OperatorPage(): ReactNode {
   useBodyClass('portfolio-page', 'fund-explore');
-  const address = useWallet((state) => state.address);
-  const token = useSession((state) =>
-    isCre8CreatorWallet(state.address) && sessionIsLive(state) ? state.token : null,
-  );
-  const walletMatches = address === null || isCre8CreatorWallet(address);
-  // The dashboard uses the verified server session. A connected wallet is only needed to sign in.
-  if (token !== null && walletMatches) {
+  // 守門只有一件事：有沒有**有效的後端 session**。
+  //
+  // 為什麼不能在前端硬編碼「creator 錢包」：
+  // 後端 `/operator/*` 的授權是「authenticate 通過」（見 server.ts 的 operator 路由），
+  // 註解明說「只要求登入，不依 owner 過濾：這是內部儀表板」。前端再綁一個公開榜單的
+  // creator 地址（0x7b29…）等於另立一套跟後端無關、又與「營運端」語意不符的門檻 ——
+  // 結果是任何錢包只要不是那個榜單地址，就被「Switch to the CRE8 creator wallet」擋住
+  // （實測：使用者因此看不到原本能看的 Rebalance dashboard）。
+  const token = useSession((state) => (sessionIsLive(state) ? state.token : null));
+
+  if (token !== null) {
     return <CreatorOperatorPage token={token} />;
   }
 
@@ -488,14 +490,8 @@ export function OperatorPage(): ReactNode {
         <h1>Rebalance<span>.</span></h1>
       </header>
       <div className="directory-empty">
-        <p>
-          {walletMatches
-            ? 'Sign in with the CRE8 creator wallet to manage rebalancing.'
-            : 'Switch to the CRE8 creator wallet in your wallet app to manage rebalancing.'}
-        </p>
-        {walletMatches && (
-          <div className="directory-empty-actions"><WalletMenu inline /></div>
-        )}
+        <p>Sign in to see the operator view.</p>
+        <div className="directory-empty-actions"><WalletMenu inline /></div>
       </div>
     </main>
   );
