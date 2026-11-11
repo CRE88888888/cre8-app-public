@@ -109,8 +109,9 @@ export function FundSource({ fund }: { fund: ReferenceFund }) {
 }
 export function FundIntroduction({ fund }: { fund: ReferenceFund }) {
   const [open, setOpen] = useState(false);
-  const { profile, cover } = REFERENCE_METADATA[fund.slug];
-  if (!profile) return <FundSource fund={fund} />;
+  const meta = REFERENCE_METADATA[fund.slug] as (typeof REFERENCE_METADATA)[string] | undefined;
+  if (meta === undefined || !meta.profile) return <FundSource fund={fund} />;
+  const { profile, cover } = meta;
   return (
     <>
       <button type="button" className="fund-introduction-trigger" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>

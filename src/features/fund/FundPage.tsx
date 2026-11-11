@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { encodeFunctionData, formatEther, formatUnits, parseEther, parseUnits } from 'viem';
 import type { Address } from 'viem';
-import { closePosition, enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, listStrategies, postRebalance, redeemPortfolio } from '../../lib/api';
+import { closePosition, enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, getStrategy, listStrategies, postRebalance, redeemPortfolio } from '../../lib/api';
 import { CHAIN_ID, approveCalldata, bsc as appChain, publicClientFor, readOnlyClient, sendGasTopUp, sendSudoCalls, sendSweep, sendWithdraw } from '../../lib/kernel';
 import type { PortfolioStatus } from '../../lib/api';
 import { MOCK_FUNDS } from '../../data/mock-funds';
@@ -15,6 +15,7 @@ import { TicketFund, TicketReceipt, TicketReview } from './TicketReview';
 import type { TicketAction, TicketProgress } from './TicketReview';
 import {catalogueTargets} from '../../data/public-fund-adapter';
 import { REFERENCE_METADATA, referenceFund } from '../../lib/public-funds';
+import { symbolOf, synthesizeCommunityFund } from '../../lib/community-fund';
 import {periodMetrics} from '../../reference/lib/fund-explore';
 import {FundOverview} from '../reference/FundOverview';
 import { shortAddress } from '../../lib/format';
@@ -59,7 +60,8 @@ function pct(bps: number, digits = 2): string {
  */
 export function FundPage(): ReactNode {
   useBodyClass('vault-page', 'fund-detail-redesign', 'atp-formal-fund', 'atp-complete-fund');
-  const { slug } = useParams<{ slug: string }>();
+  const { slug, id: strategyIdParam } = useParams<{ slug: string; id: string }>();
+  const strategyId = strategyIdParam === undefined ? null : Number(strategyIdParam);
   const { pathname } = useLocation();
   useLayoutEffect(() => {
     const resetScroll = () => window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
@@ -73,8 +75,17 @@ export function FundPage(): ReactNode {
   const wallet = useOwnerWallet();
   const queryClient = useQueryClient();
 
-  const fund = MOCK_FUNDS.find((entry) => entry.slug === slug);
-  const reference = referenceFund(slug ?? '');
+  let fund = MOCK_FUNDS.find((entry) => entry.slug === slug);
+  let reference = referenceFund(slug ?? '');
+  /**
+   * id 模式（`/funds/strategy/:id`）：Community 策略沒有參考目錄的 slug，
+   * 所以 `fund` / `reference` 都得現場合成 —— 但版面與下單流程完全同一套。
+   */
+  const communityStrategy = useQuery({
+    queryKey: ['strategy', 'public', strategyId],
+    queryFn: () => getStrategy('', strategyId as number),
+    enabled: strategyId !== null && Number.isInteger(strategyId) && strategyId > 0,
+  });
   const modelFees = reference?.fees;
   const modelPerformanceFee = modelFees
     ? Number((modelFees.perf + modelFees.platform).toFixed(2))
@@ -97,10 +108,77 @@ export function FundPage(): ReactNode {
     enabled: token !== null,
   });
 
-  const strategy = useMemo(
-    () => (fund === undefined ? undefined : (strategies.data?.items ?? []).find((item) => item.name === fund.name)),
-    [fund, strategies.data],
-  );
+  /**
+   * id 模式（`/funds/strategy/:id`）的合成 fund：Community 策略沒有參考目錄的 slug，
+   * 用 `synthesizeCommunityFund` 現場合成一個 ReferenceFund，餵給 FundOverview。
+   *
+   * 與 `/vaults` 的 Community 區塊共用同一個合成器，所以「列表看到的報酬」與「詳情頁看到的報酬」
+   * 是同一組確定性數字（seed = id）。
+   */
+  const communityFund = useMemo(() => {
+    const detail = communityStrategy.data;
+    if (detail === undefined) return undefined;
+    const version = detail.versions[0];
+    const allocation = version?.allocation?.assets ?? [];
+    const symbols = allocation.map((asset) => symbolOf(asset.address));
+    const positions = allocation.map((asset, i) => ({
+      p: symbols[i] ?? 'USDT',
+      loc: symbols[i] ?? 'USDT',
+      w: asset.weightBps / 100,
+    }));
+    return synthesizeCommunityFund({
+      id: detail.id,
+      name: detail.name,
+      provider: detail.provider,
+      onchainId: detail.onchainId,
+      description: detail.description,
+      createdAt: detail.createdAt,
+      positions,
+      seed: detail.id,
+    });
+  }, [communityStrategy.data]);
+
+  // id 模式（`/funds/strategy/:id`）：用合成值覆寫 slug 模式的 fund / reference，
+  // 讓後續的 FundOverview、ticket、facts 抽屜**完全走同一套程式碼**。
+  if (strategyId !== null && communityFund !== undefined) {
+    reference = communityFund;
+    const detail = communityStrategy.data!;
+    const version = detail.versions[0];
+    fund = {
+      slug: communityFund.slug,
+      name: communityFund.name,
+      symbol: 'CRE8',
+      thesis: communityFund.strategy,
+      subtitle: communityFund.strategy,
+      kind: 'Community',
+      mark: communityFund.name.replace(/[^A-Za-z\u4e00-\u9fff]/g, '').slice(0, 2).toUpperCase() || 'C8',
+      risk: communityFund.risk,
+      rebalance: 'drift',
+      holdings: (version?.allocation?.assets ?? []).map((asset) => ({
+        symbol: symbolOf(asset.address),
+        weightBps: asset.weightBps,
+      })),
+    };
+  }
+
+  const strategy = useMemo(() => {
+    // id 模式：策略就是這個 id 的那一檔（不再靠名稱對應 —— 名稱對應正是「Elon 同名」的根源）。
+    if (strategyId !== null && communityStrategy.data !== undefined) {
+      // StrategyDetail 是 StrategySummary 的超集，多出來的 versions 用不到，
+      // 這裡直接以 StrategySummary 的形狀回傳（欄位都齊）。
+      return {
+        id: communityStrategy.data.id,
+        provider: communityStrategy.data.provider,
+        name: communityStrategy.data.name,
+        description: communityStrategy.data.description,
+        isPublic: communityStrategy.data.isPublic,
+        swapFeeBps: communityStrategy.data.swapFeeBps,
+        createdAt: communityStrategy.data.createdAt,
+        onchainId: communityStrategy.data.onchainId,
+      };
+    }
+    return fund === undefined ? undefined : (strategies.data?.items ?? []).find((item) => item.name === fund.name);
+  }, [fund, strategies.data, strategyId, communityStrategy.data]);
   const holding = (portfolios.data ?? []).find((portfolio) => portfolio.strategyId === strategy?.id);
 
   const usdt = (assets.data ?? []).find((asset) => asset.isNumeraire);
