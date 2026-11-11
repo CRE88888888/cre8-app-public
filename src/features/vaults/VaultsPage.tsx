@@ -13,6 +13,10 @@ import {
 } from "../../reference/lib/fund-explore";
 import { exploreFilters, type ExploreFilters } from "../../reference/lib/fund-navigation";
 import { FundRow } from "../reference/FundRow";
+import { useQuery } from "@tanstack/react-query";
+import { listStrategies } from "../../lib/api";
+import { shortAddress } from "../../lib/format";
+import { useWallet } from "../../store/wallet";
 export function VaultsPage() {
   useBodyClass(
     "vault-directory",
@@ -61,6 +65,25 @@ export function VaultsPage() {
   );
   if (filters.sort === "name")
     visible.sort((a, b) => a.name.localeCompare(b.name));
+  /**
+   * 「Live on CRE8」= 鏈上真的存在、有人可以認購的 ATP 策略。
+   *
+   * 為什麼要另開一個區塊，而不是塞進下面的參考基金目錄：
+   * `REFERENCE_FUNDS` 是 30 檔**示範資料**（`Example funds · Reconstructed or simulated
+   * performance`）。使用者在 `/create` 建出來的策略是另一種東西 —— 它有自己的鏈上 id、
+   * 自己的版本與目標配置。把兩者混在同一份清單裡，會讓人以為示範基金也能下單。
+   *
+   * `GET /strategies` 是公開端點（實測未帶 token 也回 200），所以這裡用空 token 呼叫；
+   * `request()` 在 token 是空字串時不會送 Authorization 標頭。
+   */
+  const strategies = useQuery({
+    queryKey: ["strategies", "public"],
+    queryFn: () => listStrategies(""),
+    select: (data) => data.items,
+  });
+  const wallet = useWallet((state) => state.address);
+  const live = strategies.data ?? [];
+
   const returnTo = location.pathname + location.search;
   const controls = mobile && draft ? draft : filters;
   const countFilters = (value: ExploreFilters) => value.assets.length + Number(value.period !== "1Y") + Number(value.sort !== "perf");
@@ -209,6 +232,56 @@ export function VaultsPage() {
         <div className="directory-empty app-search-empty">
           <h2>No matches</h2>
         </div>
+      )}
+      {live.length > 0 && (
+        <section className="explore-collection" aria-label="Live on CRE8">
+          <header>
+            <div>
+              <h2>
+                Live on CRE8<span>{live.length}</span>
+              </h2>
+              <p>
+                Strategies created on CRE8. Each one has an on-chain id and a published target
+                allocation — open one to see its versions and holdings.
+              </p>
+            </div>
+          </header>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Strategy</th>
+                <th>Creator</th>
+                <th>On-chain id</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {live.map((strategy) => {
+                const yours =
+                  wallet !== null && strategy.provider?.toLowerCase() === wallet.toLowerCase();
+                return (
+                  <tr key={strategy.id}>
+                    <td>
+                      {strategy.name}
+                      {yours ? (
+                        <span className="muted" style={{ fontSize: 11 }}> yours</span>
+                      ) : null}
+                    </td>
+                    <td className="mono muted" style={{ fontSize: 12 }}>
+                      {shortAddress(strategy.provider)}
+                    </td>
+                    <td className="num muted" style={{ fontSize: 12 }}>
+                      {strategy.onchainId ?? '—'}
+                    </td>
+                    <td>
+                      <Link to={`/strategies/${strategy.id}`}>Open →</Link>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
       )}
       {COLLECTIONS.map((c) => {
         const funds = visible.filter((f) => collectionOf(f) === c.id);
