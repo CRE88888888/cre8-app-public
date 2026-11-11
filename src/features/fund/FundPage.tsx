@@ -823,7 +823,7 @@ export function FundPage(): ReactNode {
                         disabled={toppingUp}
                         onClick={() => void topUpGas()}
                       >
-                        {toppingUp ? 'Topping up…' : 'Top up 0.002 BNB'}
+                        {toppingUp ? 'Topping up…' : 'Top up 0.0005 BNB'}
                       </button>
                     )}
                   </dd>
@@ -1108,9 +1108,10 @@ export function FundPage(): ReactNode {
       if (account !== undefined && account !== null) {
         const gas = live?.gas;
         const balance = gas !== null && gas !== undefined && gas.balanceWei !== undefined ? BigInt(gas.balanceWei) : 0n;
-        // 最低 gas：後端算的 `minimumWei`，或退而求其次用 0.01 BNB（新帳戶查不到 minimum 時）。
+        // 最低 gas：後端算的 `minimumWei`，或退而求其次用 0.0005 BNB（與後端
+        // `DEFAULT_MIN_SESSION_GAS_WEI` 一致；新帳戶查不到 minimum 時走這個 fallback）。
         const minimum =
-          gas !== null && gas !== undefined && gas.minimumWei !== undefined ? BigInt(gas.minimumWei) : parseEther('0.002');
+          gas !== null && gas !== undefined && gas.minimumWei !== undefined ? BigInt(gas.minimumWei) : parseEther('0.0005');
         if (balance < minimum) {
           // 補到 minimum + 一小段餘裕（約 1 筆交易的 gas），避免補完立刻又低於門檻。
           // 緩衝只留 0.0005 BNB（約 20 筆 UserOp）—— 原本是 0.01，等於每次補 5 倍的量。
@@ -1307,12 +1308,12 @@ export function FundPage(): ReactNode {
     }
   }
 
-  /** 帳戶的 BNB 是否低於一次 UserOp 的門檻（1e16 wei = 0.01 BNB，與後端 `DEFAULT_MIN_SESSION_GAS_WEI` 一致）。 */
+  /** 帳戶的 BNB 是否低於可執行門檻（5e14 wei = 0.0005 BNB，與後端 `DEFAULT_MIN_SESSION_GAS_WEI` 一致）。 */
   function gasTooLow(status: PortfolioStatus): boolean {
     if (status.gas === null) return true;
     const wei = status.gas.balanceWei;
     if (wei === null || wei === undefined) return true;
-    return BigInt(wei) < 10n ** 16n;
+    return BigInt(wei) < 5n * 10n ** 14n;
   }
 
 
@@ -1411,7 +1412,7 @@ export function FundPage(): ReactNode {
     setToppingUp(true);
     setError(null);
     try {
-      await sendGasTopUp({ wallet, to: account as Address, valueWei: parseEther('0.002') });
+      await sendGasTopUp({ wallet, to: account as Address, valueWei: parseEther('0.0005') });
       await queryClient.invalidateQueries({ queryKey: ['fund-status', token, holding.id] });
     } catch (cause) {
       setError(cause);
