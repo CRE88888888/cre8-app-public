@@ -3,6 +3,7 @@
 .page { padding-bottom: 72px; }
 .head { padding: 40px 0 26px; display: grid; gap: 10px; }
 .head h1 { font-size: 32px; line-height: 1.1; letter-spacing: -.02em; }
+.headAction a { display: inline-flex; align-items: center; min-height: 44px; color: var(--deep); }
 .head p { color: var(--deep); font-size: 16px; max-width: 62ch; }
 .label { font-family: var(--sans); font-size: 13px; font-weight: 400; color: var(--steel); }
 .note { font-size: 12.5px; line-height: 1.5; color: var(--steel); }
@@ -333,7 +334,17 @@
   .drawer[open], .modal[open], .picker[open] { animation: none; }
   .bar span { transition: none; }
 }
-@media (max-width: 640px) { .head h1 { font-size: 26px; } }
+@media (max-width: 719px) {
+  .page:not(.embedded) .head { padding: 15px 0 12px; gap: 4px; }
+  .head h1 { font: var(--app-page-title); }
+  .head p { font: var(--app-secondary); }
+  .headAction a { font: var(--app-secondary); }
+  .page:not(.embedded) .panel { border: 0; border-top: 1px solid var(--app-card-line); }
+  .page:not(.embedded) .ptop { padding: 14px 0; border: 0; }
+  .page:not(.embedded) .ptop h2 { font: var(--app-section-title); }
+  .page:not(.embedded) .empty { padding: 0 0 14px; justify-items: start; }
+  .page:not(.embedded) .label, .page:not(.embedded) .note { font: var(--app-caption); }
+}
 
 /* Match the shared app controls without relying on the global .seg class. */
 @media (pointer: coarse) {

@@ -254,28 +254,6 @@ body.atp-complete-fund .vault-performance .public-chart.neg {
   cursor: help;
 }
 
-.public-create-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  max-width: 1240px;
-  padding: 20px 28px 0;
-  margin: auto;
-  font-size: 13px;
-  color: var(--steel);
-}
-
-@media (max-width: 719px) {
-  .public-create-actions {
-    padding: 16px 20px 0;
-    font-size: 12px;
-  }
-  .public-create-actions .btn {
-    font-size: 12px;
-  }
-}
-
 body.atp-complete-market .explore-wrap {
   max-width: 1344px;
   padding: 48px 40px 80px;

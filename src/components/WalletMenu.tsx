@@ -10,7 +10,11 @@ import { useSession } from '../store/session';
 import { useWallet } from '../store/wallet';
 import { siwePhaseLabel, useSiweSignIn } from '../features/auth/use-siwe-signin';
 import { useWalletDiagnostics } from '../lib/use-wallet-diagnostics';
+import { useMobile } from '../lib/use-mobile';
+import { pairWalletConnect, rememberWalletConnectApp, WALLETCONNECT_RDNS, walletConnectAvailable } from '../lib/wallet-connect';
 import { ErrorNote } from './ui';
+import { AppIcon } from './AppIcon';
+import { WalletConnectPairing } from './WalletConnectPairing';
 
 /** 任何地方都可以叫出錢包選單。 */
 export const OPEN_WALLET_MENU = 'cre8:open-wallet-menu';
@@ -20,12 +24,15 @@ export function openWalletMenu(): void {
 }
 
 /** 標頭與頁面內共用錢包選擇及驗證流程。 */
-export function WalletMenu({ inline = false }: { inline?: boolean }): ReactNode {
+export function WalletMenu({ inline = false, showIcon = false, iconOnly = false }: { inline?: boolean; showIcon?: boolean; iconOnly?: boolean }): ReactNode {
   const wallet = useWallet();
+  const mobile = useMobile();
   const token = useConnectedSessionToken();
   const clearSession = useSession((state) => state.clear);
 
   const [open, setOpen] = useState(false);
+  const [showBrowserWallets, setShowBrowserWallets] = useState(false);
+  const [pairingUri, setPairingUri] = useState<string | null>(null);
   const [providers, setProviders] = useState<ProviderDetail[] | null>(null);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<unknown>(null);
@@ -43,10 +50,11 @@ export function WalletMenu({ inline = false }: { inline?: boolean }): ReactNode 
     }
   }, []);
 
-  // 打開時才偵測：EIP-6963 是擴充功能主動廣播，關著的時候沒有理由一直問。
-  useEffect(() => {
-    if (open && providers === null) void refreshProviders();
-  }, [open, providers, refreshProviders]);
+  function toggleBrowserWallets() {
+    const show = !showBrowserWallets;
+    setShowBrowserWallets(show);
+    if (show) void refreshProviders();
+  }
 
   // 外面點一下、按 Esc 都要關掉（下拉選單的基本期待）。
   useEffect(() => {
@@ -111,6 +119,35 @@ export function WalletMenu({ inline = false }: { inline?: boolean }): ReactNode 
     [wallet],
   );
 
+  async function connectWithWalletConnect() {
+    setConnecting(WALLETCONNECT_RDNS);
+    setConnectError(null);
+    try {
+      const connection = await pairWalletConnect(setPairingUri);
+      const current = useWallet.getState();
+      if (current.address === null) {
+        current.connectInjected(connection);
+      } else if (current.provider !== connection.provider) {
+        await connection.provider.disconnect?.();
+      }
+    } catch (cause) {
+      setConnectError(cause);
+    } finally {
+      setConnecting(null);
+      setPairingUri(null);
+    }
+  }
+
+  function disconnectWallet() {
+    const { provider, rdns } = useWallet.getState();
+    clearSession();
+    wallet.disconnect();
+    if (rdns === WALLETCONNECT_RDNS) {
+      rememberWalletConnectApp(null);
+      void provider?.disconnect?.().catch(setConnectError);
+    }
+  }
+
   let label = 'Connect wallet';
   if (wallet.address !== null) {
     label = token !== null ? shortAddress(wallet.address) : inline ? 'Verify wallet' : 'Sign in';
@@ -120,12 +157,15 @@ export function WalletMenu({ inline = false }: { inline?: boolean }): ReactNode 
     <div className={inline ? "wallet-menu wallet-menu--inline" : "wallet-menu"} ref={rootRef}>
       <button
         type="button"
-        className={inline ? "btn primary block" : "btn sm header-wallet"}
+        className={inline ? "btn primary block" : `btn sm header-wallet${iconOnly ? " app-wallet-toolbar" : ""}`}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label={iconOnly ? label : undefined}
+        data-wallet-state={wallet.address === null ? 'disconnected' : token === null ? 'unverified' : 'verified'}
         onClick={() => setOpen((current) => !current)}
       >
-        {label}
+        {(showIcon || iconOnly) && <AppIcon name="wallet" size={iconOnly ? 23 : 19} />}
+        {!iconOnly && label}
       </button>
 
       {open ? (
@@ -139,28 +179,36 @@ export function WalletMenu({ inline = false }: { inline?: boolean }): ReactNode 
       {wallet.address === null ? (
             <>
               <p className="wallet-menu__title">Connect a wallet</p>
-              {providers === null ? (
-                <p className="wallet-menu__hint">Detecting wallets…</p>
-              ) : providers.length === 0 ? (
-                <p className="wallet-menu__hint">
-                  No EIP-6963 wallet detected. Install a browser wallet, or reload the page if one is already
-                  installed.
-                </p>
+              {connecting === WALLETCONNECT_RDNS ? (
+                pairingUri ? <WalletConnectPairing uri={pairingUri} mobile={mobile} /> :
+                  <p className="wallet-menu__hint" role="status">Preparing WalletConnect…</p>
               ) : (
-                providers.map((detail) => (
-                  <button
-                    key={detail.info.rdns}
-                    type="button"
-                    className="wallet-menu__item"
-                    role="menuitem"
-                    disabled={connecting !== null}
-                    onClick={() => void connect(detail)}
-                  >
-                    {detail.info.icon === undefined ? null : <img src={detail.info.icon} alt="" />}
-                    <span>{detail.info.name}</span>
-                    {connecting === detail.info.rdns ? <span className="wallet-menu__hint">Connecting…</span> : null}
+                <>
+                  {walletConnectAvailable && (
+                    <button type="button" className="wallet-menu__item wallet-menu__walletconnect" role="menuitem"
+                      disabled={connecting !== null} onClick={() => void connectWithWalletConnect()}>
+                      <AppIcon name="wallet" size={19} />
+                      <span>WalletConnect</span>
+                      <AppIcon name="right" size={16} />
+                    </button>
+                  )}
+                  <button type="button" className="wallet-menu__item" role="menuitem"
+                    aria-expanded={showBrowserWallets} onClick={toggleBrowserWallets}>
+                    Browser wallets
                   </button>
-                ))
+                  {showBrowserWallets && (providers === null ? (
+                    <p className="wallet-menu__hint" role="status">Looking for browser wallets…</p>
+                  ) : providers.length === 0 ? (
+                    <p className="wallet-menu__hint">No browser wallets available.</p>
+                  ) : providers.map((detail) => (
+                    <button key={detail.info.rdns} type="button" className="wallet-menu__item" role="menuitem"
+                      disabled={connecting !== null} onClick={() => void connect(detail)}>
+                      {detail.info.icon && <img src={detail.info.icon} alt="" />}
+                      <span>{detail.info.name}</span>
+                      {connecting === detail.info.rdns && <span className="wallet-menu__hint">Connecting…</span>}
+                    </button>
+                  )))}
+                </>
               )}
               <ErrorNote error={connectError} />
             </>
@@ -180,7 +228,7 @@ export function WalletMenu({ inline = false }: { inline?: boolean }): ReactNode 
                 {inline && siwe.phase === "idle" ? "Sign message" : siwePhaseLabel(siwe.phase)}
               </button>
               <ErrorNote error={siwe.error} />
-              <button type="button" className="wallet-menu__link" onClick={() => { clearSession(); wallet.disconnect(); }}>
+              <button type="button" className="wallet-menu__link" onClick={disconnectWallet}>
                 Disconnect
               </button>
             </>
@@ -201,6 +249,9 @@ export function WalletMenu({ inline = false }: { inline?: boolean }): ReactNode 
               >
                 Sign out
               </button>
+              {wallet.rdns === WALLETCONNECT_RDNS && (
+                <button type="button" className="wallet-menu__link" onClick={disconnectWallet}>Disconnect wallet</button>
+              )}
             </>
           )}
         </div>

@@ -1,5 +1,5 @@
 import { useState, type Ref } from "react";
-import { ChevronLeft } from "lucide-react";
+import { AppIcon } from "../../components/AppIcon";
 import { toast } from "../../components/Toast";
 import { ReferenceSheet } from "./ReferenceSheet";
 import { Link, useSearchParams } from "react-router-dom";
@@ -9,7 +9,7 @@ import { performancePeriod } from "../../reference/lib/fund-navigation";
 import { Performance } from "./Performance";
 import { RecentTrades } from "./RecentTrades";
 import { Assets } from "./Assets";
-import { FundByline, FundName } from "./Profile";
+import { FundIntroduction, FundName } from "./Profile";
 export function FundOverview({
   fund,
   backTo,
@@ -29,6 +29,7 @@ export function FundOverview({
     period = performancePeriod(params.get("period")),
     meta = REFERENCE_METADATA[fund.slug],
     copy = editorial(fund);
+  const fromPortfolio = /^\/portfolios?(?:[?#]|$)/.test(backTo);
   const [shareLink, setShareLink] = useState<string | null>(null);
   async function shareFund() {
     const url = new URL(`/funds/${fund.slug}`, window.location.origin);
@@ -51,7 +52,7 @@ export function FundOverview({
       <div className="vault-top">
         <header className="vhead">
           <Link className="vault-back" to={backTo}>
-            ← All funds
+            <AppIcon name="left" size={16} /> {fromPortfolio ? "Portfolio" : "All funds"}
           </Link>
           <div className="vault-heading">
             <div className="atp-fund-cover" id="atp-fund-cover" data-fund-cover>
@@ -62,12 +63,12 @@ export function FundOverview({
                 style={{ objectPosition: `50% ${meta.cover.position}%` }}
               />
               <div className="atp-fund-cover-shade" />
-              <nav className="fund-cover-nav" aria-label="Fund navigation">
-                <Link to={backTo} aria-label="Back to funds">
-                  <ChevronLeft aria-hidden="true" size={21} />
+              <nav className="app-fund-toolbar" aria-label="Fund navigation">
+                <Link to={backTo} aria-label={fromPortfolio ? "Back to portfolio" : "Back to funds"}>
+                  <AppIcon name="left" size={21} />
                 </Link>
-                <button type="button" onClick={() => void shareFund()}>
-                  Share
+                <button type="button" aria-label="Share fund" onClick={() => void shareFund()}>
+                  <AppIcon name="share" size={21} />
                 </button>
               </nav>
               <h1>
@@ -75,21 +76,19 @@ export function FundOverview({
               </h1>
             </div>
             <div className="atp-fund-byline">
-              <span className="vault-manager">
-                <small>by</small>
-                <FundByline fund={fund} />
-              </span>
+              <FundIntroduction fund={fund} />
               <div className="vault-head-actions">
                 <button
                   ref={factsTrigger}
                   type="button"
-                  className="atp-facts-trigger"
+                  className="btn ghost sm atp-facts-trigger"
+                  aria-haspopup="dialog"
                   onClick={onFacts}
                 >
-                  Fund facts ›
+                  Fund facts
                 </button>
                 {held && (
-                  <button className="btn ghost sm" onClick={onPosition}>
+                  <button className="btn ghost sm app-position-trigger" onClick={onPosition}>
                     My position
                   </button>
                 )}
@@ -130,7 +129,7 @@ export function FundOverview({
           <p key={i}>{p}</p>
         ))}
         <details className="vault-details">
-          <summary>Sources &amp; methodology</summary>
+          <summary><AppIcon name="document" size={17} /> Sources &amp; methodology</summary>
           {copy.methodology.map((p, i) => (
             <p key={i}>{p}</p>
           ))}
@@ -141,7 +140,7 @@ export function FundOverview({
               target="_blank"
               rel="noopener noreferrer"
             >
-              Primary source ↗
+              Primary source <AppIcon name="external" size={14} />
             </a>
           )}
         </details>

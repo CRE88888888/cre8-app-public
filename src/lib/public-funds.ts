@@ -14,6 +14,7 @@ export type ReferenceFund = Omit<ExploreFund, "backtest"> & {
   creator?: string;
   risk: "Low" | "Medium" | "High";
   sharePrice: number;
+  fees?: { perf: number; mgmt: number; platform: number };
   manager: string;
   backtest: {
     start: string;

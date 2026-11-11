@@ -2,3 +2,17 @@
 @media(max-width:900px){.layout{gap:32px;grid-template-columns:minmax(0,1fr) 240px}.page{padding-inline:24px}}@media(max-width:700px){.page{padding:22px 18px 56px}.back{margin-bottom:26px}.layout{display:flex;flex-direction:column;gap:32px}.identity{gap:14px;margin-bottom:26px}.identity h1{font-size:27px}.identity>img,.blankLogo{width:56px;height:56px}.about>p{font-size:14px}.priceHeader strong{font-size:26px}.priceHeader{gap:12px}.priceHeader>span{font-size:16px}.chart svg{height:200px}.side{display:grid;gap:18px;grid-template-columns:1fr}.create{margin-top:0}.token dl>div{grid-template-columns:55px minmax(0,1fr)}.fund{font-size:13px}.fund span{font-size:11px}}
 .priceHeader>span small{display:block;margin:5px 0 0;text-align:right}
 .priceHeader>span,.fund>span{flex:none}.priceHeader>div,.fund>strong{min-width:0}.fund>strong{overflow-wrap:anywhere}
+
+@media (max-width: 719px) {
+  .page { padding-inline: var(--app-inset); }
+  .back { display: inline-flex; align-items: center; min-height: 44px; margin-bottom: 12px; font: var(--app-secondary); }
+  .identity h1 { font: var(--app-page-title); }
+  .page h2 { margin-bottom: 10px; font: var(--app-section-title); }
+  .about > p { font: var(--app-body); }
+  .source, .about > p.source { font: var(--app-caption); }
+  .tags > :is(span, a) { padding: 0; border: 0; font: var(--app-caption); }
+  .tags { gap: 8px 14px; }
+  .fund { font: var(--app-row-title); }
+  .fund span, .facts dt { font: var(--app-caption); }
+  .facts, .create { padding: 16px 0 0; border: 0; border-top: 1px solid var(--app-card-line); background: transparent; }
+}

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AppIcon } from "../../components/AppIcon";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   modelPositionGroups,
@@ -207,7 +208,7 @@ export function RecentTrades({ fund }: { fund: ReferenceFund }) {
           setSelected(null);
         }}
       >
-        See more <span>›</span>
+        See more <AppIcon name="right" size={16} />
       </button>
       <p className="recent-trades-asof">Through {fund.backtest.through}</p>
       <ReferenceSheet
@@ -229,7 +230,7 @@ export function RecentTrades({ fund }: { fund: ReferenceFund }) {
               className="trade-updates-back"
               onClick={() => setSelected(null)}
             >
-              ← All updates
+              <AppIcon name="left" size={16} /> All updates
             </button>
             <time className="trade-detail-date">{date(selected.date)}</time>
             <p className="trade-detail-summary">{selected.summary}</p>

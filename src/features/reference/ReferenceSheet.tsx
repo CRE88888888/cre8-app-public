@@ -1,4 +1,6 @@
 import { useRef, type ReactNode } from "react";
+import { AppBottomSheet } from "../../components/AppBottomSheet";
+import { useMobile } from "../../lib/use-mobile";
 import {
   Sheet,
   SheetContent,
@@ -17,7 +19,15 @@ export function ReferenceSheet({
   title: string;
   children: ReactNode;
 }) {
+  const mobile = useMobile();
   const previousFocus = useRef<HTMLElement | null>(null);
+  if (mobile) {
+    return (
+      <AppBottomSheet id="atp-reference-sheet" open={open} onOpenChange={onOpenChange} title={title}>
+        <div className="public-sheet-body">{children}</div>
+      </AppBottomSheet>
+    );
+  }
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent

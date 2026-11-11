@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
+import { ReferenceSheet } from "./ReferenceSheet";
 import { attachFundProfiles } from "../../reference/lib/fund-profile";
 import { normalizeXHandle, xProfileUrl } from "../../reference/lib/x-profile";
 import { REFERENCE_METADATA } from "../../lib/public-funds";
@@ -81,28 +82,38 @@ export function FundPortrait({
     </span>
   );
 }
-export function FundByline({ fund }: { fund: ReferenceFund }) {
+export function FundSource({ fund }: { fund: ReferenceFund }) {
   const handle = normalizeXHandle(fund.xHandle);
+  const url = handle && xProfileUrl(handle);
+  if (!url) return null;
   return (
     <span className="fund-row-creator">
-      <img src="/logos/cre8-icon.svg" alt="" width="17" height="17" />
-      <Link className="public-creator-link" to="/creator/cre8">
-        CRE8
-      </Link>
-      {handle && (
-        <span className="fund-source-caption">
-          · Tracking{" "}
-          <a
-            className="fund-x-link"
-            href={xProfileUrl(handle)!}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            @{handle} ↗
-          </a>
-        </span>
-      )}
+      <a className="fund-x-link" href={url} target="_blank" rel="noopener noreferrer">
+        @{handle}
+      </a>
     </span>
+  );
+}
+export function FundIntroduction({ fund }: { fund: ReferenceFund }) {
+  const [open, setOpen] = useState(false);
+  const { profile, cover } = REFERENCE_METADATA[fund.slug];
+  if (!profile) return <FundSource fund={fund} />;
+  return (
+    <>
+      <button type="button" className="fund-introduction-trigger" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
+        Who is {profile.name}?
+      </button>
+      <ReferenceSheet open={open} onOpenChange={setOpen} title={profile.name}>
+        <div className="fund-introduction">
+          <div className="fund-introduction-identity">
+            <img src={cover.thumbnailSrc} alt="" width={48} height={48} />
+            <span>{profile.role}</span>
+          </div>
+          <p>{profile.bio}</p>
+          <FundSource fund={fund} />
+        </div>
+      </ReferenceSheet>
+    </>
   );
 }
 export function FundName({ fund, url }: { fund: ReferenceFund; url?: string }) {

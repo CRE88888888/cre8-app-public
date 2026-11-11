@@ -57,6 +57,7 @@ body.atp-formal-fund .atp-fund-cover > img { position: absolute; inset: 0; width
 body.atp-formal-fund .atp-fund-cover-shade { position: absolute; inset: 0; background: linear-gradient(180deg, transparent 48%, rgba(22, 34, 45, .8) 100%); }
 body.atp-formal-fund .atp-fund-cover h1 { position: absolute; left: 24px; right: 24px; bottom: 24px; margin: 0; font: 600 38px/1.12 var(--sans); letter-spacing: -1px; color: var(--white); text-wrap: balance; }
 body.atp-formal-fund .atp-fund-byline { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; min-height: 64px; }
+body.atp-formal-fund .atp-fund-byline .vault-head-actions { margin-inline-start: auto; }
 body.atp-formal-fund .vault-manager { display: flex; align-items: center; gap: 7px; margin: 0; font: 400 14px var(--sans); color: var(--steel); }
 body.atp-formal-fund .vault-manager strong { color: var(--ink); font-weight: 500; }
 body.atp-formal-fund .vault-manager img { flex: none; }

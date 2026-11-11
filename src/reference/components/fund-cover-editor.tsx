@@ -49,7 +49,7 @@ export default function FundCoverEditor({ value, name, onNameChange, onChange }:
     finally { if (url) URL.revokeObjectURL(url); if (request.current === job) setBusy(false); }
   }
   return <section className={styles.editor} aria-label="Fund cover">
-    <div className={styles.heading}><div><h2>Fund cover</h2><p>Give your fund a visual identity.</p></div><button type="button" className="btn ghost sm" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? "Done" : "Change cover"}</button></div>
+    <div className={styles.heading}><h2>Fund cover</h2><button type="button" className="btn ghost sm" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? "Done" : "Change cover"}</button></div>
     <label className={styles.nameField}><span>Fund name</span><input type="text" aria-label="Fund name" placeholder="Name your fund" maxLength={64} value={name} onChange={e => onNameChange(e.target.value)} /></label>
     <FundCoverPreview cover={value} name={name} />
     {expanded && <div className={styles.controls}>

@@ -1,9 +1,10 @@
 import { useId, useState } from "react";
+import { AppIcon } from "../../components/AppIcon";
+import { useMobile } from "../../lib/use-mobile";
 import { useSearchParams } from "react-router-dom";
 import {
   periodSeries,
   periodMetrics,
-  periodLabel,
   analyzeFundPerformance,
 } from "../../reference/lib/fund-explore";
 import type { Period } from "../../reference/lib/fund-explore";
@@ -31,7 +32,7 @@ function PeriodPicker({
           aria-pressed={p === period}
           onClick={() => onChange(p)}
         >
-          {p}
+          {p === "ALL" ? "All" : p}
         </button>
       ))}
     </div>
@@ -47,6 +48,7 @@ export function Performance({
   onChange: (p: Period) => void;
 }) {
   const fillId = useId();
+  const mobile = useMobile();
   const [params, setParams] = useSearchParams(),
     open = params.get("performance") === "1";
   const setOpen = (value: boolean) => {
@@ -59,7 +61,6 @@ export function Performance({
     points = periodSeries(fund, period),
     metrics = periodMetrics(fund, period),
     stats = analyzeFundPerformance(points, RISK_FREE),
-    label = periodLabel(fund, period),
     first = points[0],
     last = points.at(-1);
   const values = points.map((p) => (p.v / (first?.v || 1) - 1) * 100),
@@ -101,8 +102,18 @@ export function Performance({
       <dd>{value}</dd>
     </div>
   );
+  const chartPeriods = (
+    <PeriodPicker
+      period={period}
+      onChange={(next) => {
+        setHover(null);
+        onChange(next);
+      }}
+    />
+  );
   return (
     <>
+      <div className="app-performance-card">
       <section className="vault-performance">
         <div className="performance-head">
           <p className={`performance-return ${positive ? "pos" : "neg"}`}>
@@ -110,9 +121,10 @@ export function Performance({
           </p>
           <div className="performance-meta">
             <p className="performance-dates">{range}</p>
-            <p className="performance-description">{basis} · Before fees</p>
+            <p className="performance-description">Model return</p>
           </div>
         </div>
+        {mobile && chartPeriods}
         <div
           className={`chart public-chart ${positive ? "pos" : "neg"}`}
           tabIndex={0}
@@ -224,13 +236,7 @@ export function Performance({
             </span>
           )}
         </div>
-        <PeriodPicker
-          period={period}
-          onChange={(p) => {
-            setHover(null);
-            onChange(p);
-          }}
-        />
+        {!mobile && chartPeriods}
       </section>
       <dl id="keyfig" className="keyfig dk-kpis public-kpis">
         <div>
@@ -249,16 +255,15 @@ export function Performance({
         className="performance-details-open"
         onClick={() => setOpen(true)}
       >
-        Performance details ↗
+        Performance details <AppIcon name="right" size={15} />
       </button>
+      </div>
       <ReferenceSheet
         open={open}
         onOpenChange={setOpen}
         title="Performance details"
       >
-        <p>
-          {label} · {range}
-        </p>
+        <p>{range}</p>
         <PeriodPicker period={period} onChange={onChange} />
         <dl className="performance-detail-metrics">
           {metric("Return", pct(metrics.returnPct), "Change over this period")}

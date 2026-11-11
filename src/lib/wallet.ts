@@ -9,6 +9,7 @@ import type { Hex, LocalAccount } from 'viem';
 
 export type Eip1193Provider = {
   request(args: { method: string; params?: unknown[] }): Promise<unknown>;
+  disconnect?: () => Promise<void>;
   /** EIP-1193 事件（可選：某些錢包只提供 request）。 */
   on?: (event: string, handler: (...args: unknown[]) => void) => void;
   removeListener?: (event: string, handler: (...args: unknown[]) => void) => void;

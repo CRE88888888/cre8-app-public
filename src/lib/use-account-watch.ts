@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useSession } from '../store/session';
 import { useWallet } from '../store/wallet';
+import { WALLETCONNECT_RDNS } from './wallet-connect';
 
 /** 連線後即開始監聽。切換或鎖定帳戶時，舊 session 不再用於目前的錢包。 */
 export function useAccountWatch(): void {
@@ -34,7 +35,14 @@ export function useAccountWatch(): void {
       receivedEvent = true;
       applyAccounts(accounts);
     };
+    const onDisconnect = (): void => {
+      const wallet = useWallet.getState();
+      if (wallet.provider !== provider || wallet.rdns !== WALLETCONNECT_RDNS) return;
+      receivedEvent = true;
+      applyAccounts([]);
+    };
     provider.on?.('accountsChanged', onAccountsChanged);
+    provider.on?.('disconnect', onDisconnect);
     void provider.request({ method: 'eth_accounts' }).then((accounts) => {
       if (!receivedEvent) applyAccounts(accounts);
     }).catch(() => {
@@ -44,6 +52,7 @@ export function useAccountWatch(): void {
     return () => {
       disposed = true;
       provider.removeListener?.('accountsChanged', onAccountsChanged);
+      provider.removeListener?.('disconnect', onDisconnect);
     };
   }, [provider]);
 }

@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
+import { AppIcon, type AppTab } from './AppIcon';
 import { WalletMenu } from './WalletMenu';
+import { useMobile } from '../lib/use-mobile';
 
 /**
  * CRE8 字標：`CRE` + 一個滾動的骰子轉盤停在 8。
@@ -30,35 +32,63 @@ function C8Logo(): ReactNode {
   );
 }
 
+const mobileDestinations: { to: string; label: string; icon: AppTab; paths: string[] }[] = [
+  { to: '/leaderboard', label: 'Creators', icon: 'creators', paths: ['/leaderboard', '/creator'] },
+  { to: '/portfolios', label: 'Portfolio', icon: 'portfolio', paths: ['/portfolios', '/portfolio'] },
+  { to: '/vaults', label: 'Explore', icon: 'explore', paths: ['/vaults', '/funds', '/vault', '/assets', '/asset'] },
+  { to: '/create', label: 'Create', icon: 'create', paths: ['/create'] },
+  { to: '/operator', label: 'Manage', icon: 'manage', paths: ['/operator', '/rebalance', '/strategies'] },
+];
+
 export function TopBar(): ReactNode {
   const { pathname } = useLocation();
+  const mobile = useMobile();
+  const pageOwnsHeader = mobile && ['/portfolio', '/portfolios'].includes(pathname.replace(/\/$/, '') || '/');
   return (
-    <header className="masthead app-masthead">
-      <div className="wrap">
-        <a className="brand" href="/" aria-label="CRE8 home">
-          <C8Logo />
-        </a>
+    <>
+      {pageOwnsHeader ? (
+        <header className="app-page-wallet"><WalletMenu iconOnly /></header>
+      ) : (
+        <header className="masthead app-masthead">
+          <div className="wrap">
+            <a className="brand" href="/" aria-label="CRE8 home">
+              <C8Logo />
+            </a>
 
-        <nav className="nav" aria-label="Main navigation">
-          <NavLink to="/vaults" className={({ isActive }) => (isActive || pathname.startsWith('/funds/') ? 'active' : '')}>
-            Funds
-          </NavLink>
-          <NavLink to="/leaderboard" className={({isActive})=>isActive?'active':''}>Leaderboard</NavLink>
-          <NavLink to="/create" className={({ isActive }) => (isActive ? 'active' : '')}>
-            Create fund
-          </NavLink>
-          <NavLink to="/operator" className={({ isActive }) => (isActive ? 'active' : '')}>
-            Rebalance
-          </NavLink>
-        </nav>
+            <nav className="nav" aria-label="Main navigation">
+              <NavLink to="/vaults" className={({ isActive }) => (isActive || pathname.startsWith('/funds/') ? 'active' : '')}>
+                Funds
+              </NavLink>
+              <NavLink to="/leaderboard" className={({isActive})=>isActive?'active':''}>Leaderboard</NavLink>
+              <NavLink to="/create" className={({ isActive }) => (isActive ? 'active' : '')}>
+                Create fund
+              </NavLink>
+              <NavLink to="/operator" className={({ isActive }) => (isActive ? 'active' : '')}>
+                Manage
+              </NavLink>
+            </nav>
 
-        <div className="head-right">
-          <NavLink to="/portfolios" className={({ isActive }) => `head-link ${isActive ? 'active' : ''}`}>
-            Portfolio
-          </NavLink>
-          <WalletMenu />
-        </div>
-      </div>
-    </header>
+            <div className="head-right">
+              <NavLink to="/portfolios" className={({ isActive }) => `head-link ${isActive ? 'active' : ''}`}>
+                Portfolio
+              </NavLink>
+              <WalletMenu iconOnly={mobile} />
+            </div>
+          </div>
+        </header>
+      )}
+      <nav className="app-mobile-nav" aria-label="Main navigation">
+        {mobileDestinations.map(({ to, label, icon, paths }) => {
+          const active = (to === '/vaults' && pathname === '/') ||
+            paths.some((path) => pathname === path || pathname.startsWith(path + '/'));
+          return (
+            <Link key={to} to={to} aria-current={active ? 'page' : undefined}>
+              <AppIcon name={icon} active={active} size={23} />
+              <span>{label}</span>
+            </Link>
+          );
+        })}
+      </nav>
+    </>
   );
 }

@@ -204,11 +204,9 @@ export function ActivateFundPage(): ReactNode {
   return (
     <main className="page stack">
       <div>
-        <p className="eyebrow">Create</p>
         <h1>Activate an allocation</h1>
         <p className="lead">
-          One strategy: a <strong>target-weight index fund</strong>. You pick the holdings and weights; the scheduler
-          swaps what is overweight into what is underweight (every leg is <em>asset ↔ USDT</em>).
+          Choose holdings and target weights. The fund trades through USDT to restore those weights.
         </p>
       </div>
 

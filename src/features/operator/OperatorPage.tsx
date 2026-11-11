@@ -105,8 +105,7 @@ function ActivityTable({ token }: { token: string }): ReactNode {
   if (all.length === 0) {
     return (
       <div className="directory-empty">
-        <strong>No activity yet</strong>
-        <p>The scheduler has not touched any portfolio on this deployment.</p>
+        <strong>No rebalance rounds yet</strong>
       </div>
     );
   }
@@ -454,7 +453,6 @@ function Dashboard({
       <div className="panel" style={{ marginTop: 20 }}>
         <div className="panel-h">
           <h2>Recent activity</h2>
-          <span className="label">who was rebalanced, and how it went</span>
         </div>
         <div className="panel-b">
           <ActivityTable token={token} />
@@ -491,12 +489,11 @@ export function OperatorPage(): ReactNode {
   }
 
   return (
-    <main className="explore-wrap">
+    <main className="explore-wrap app-manage">
       <header className="explore-heading">
-        <h1>Rebalance<span>.</span></h1>
+        <h1>Manage</h1>
       </header>
       <div className="directory-empty">
-        <p>Sign in to see the operator view.</p>
         <div className="directory-empty-actions"><WalletMenu inline /></div>
       </div>
     </main>
@@ -517,16 +514,10 @@ function CreatorOperatorPage({ token }: { token: string }): ReactNode {
   }, [overview.error, token]);
 
   return (
-    <main className="explore-wrap">
+    <main className="explore-wrap app-manage">
       <header className="explore-heading">
         <div>
-          <h1>
-            Rebalance<span>.</span>
-          </h1>
-          <p>
-            Operator view: every portfolio, how stale its last observation is, whether it can pay for gas, and which
-            ones need attention. Auto-refreshes every 15 seconds.
-          </p>
+          <h1>Manage</h1>
         </div>
         <div className="explore-heading-actions">
           <button type="button" className="btn" disabled={overview.isFetching} onClick={() => void overview.refetch()}>

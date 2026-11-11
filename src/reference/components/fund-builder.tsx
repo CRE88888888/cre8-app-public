@@ -176,12 +176,13 @@ type Drawer = null | { mode: "edit"; id: number };
  * Without props this is the Create page. CRE8 AI embeds it beside its chat: `value`/`onChange` hand the design to the
  * chat, `embedded` drops the page heading, and `flash` highlights the rows a reply just changed.
  */
-export default function FundBuilder({ embedded = false, value, onChange, flash = [], testnet = null }: {
+export default function FundBuilder({ embedded = false, value, onChange, flash = [], testnet = null, headingAction }: {
   embedded?: boolean;
   value?: B.Builder;
   onChange?: (next: B.Builder) => void;
   flash?: readonly number[];
   testnet?: TestnetMode | null;
+  headingAction?: ReactNode;
 } = {}) {
   // Testnet keeps its own draft: on a site with both pages, a mainnet design can hold assets testnet does not have,
   // and a redeployed testnet factory can admit other venues than the previous one.
@@ -282,11 +283,12 @@ export default function FundBuilder({ embedded = false, value, onChange, flash =
         <div className={styles.head}>
           <h1>Create a fund</h1>
           <p>
-            Add the assets your fund holds and give each one a strategy. Once it&apos;s live, the rules run on their own.
+            Choose holdings and a strategy for each asset.
             {testnet && (testnet.sandbox
               ? <> On BNB Chain testnet every asset is a sandbox copy at its real price, paid for with free {testnet.cash}.</>
               : <> On BNB Chain testnet the fund runs on Venus, Aave, Lista and PancakeSwap deployed there, with test tokens at their real prices, paid for with free test {testnet.cash}.</>)}
           </p>
+          {headingAction && <div className={styles.headAction}>{headingAction}</div>}
           {testnet?.unavailable && <p className={styles.issue} role="alert">{testnet.unavailable}</p>}
         </div>
       )}
@@ -304,8 +306,6 @@ export default function FundBuilder({ embedded = false, value, onChange, flash =
             </div>
             {state.rows.length === 0 ? (
               <div className={styles.empty}>
-                <span className={styles.label}>No assets yet</span>
-                <p>Add the first asset your fund will hold. You&apos;ll pick its strategy next.</p>
                 <button className={cx("btn", "sm", styles.lineBtn)} type="button" onClick={openAdd} disabled={!!testnet && !testnet.offered}>{testnet && !testnet.offered ? "Reading the testnet catalog…" : "+ Add asset"}</button>
               </div>
             ) : (
@@ -387,7 +387,6 @@ export default function FundBuilder({ embedded = false, value, onChange, flash =
             {(issue || sourceIssue) && <p className={styles.issue} role="status">{issue || sourceIssue}</p>}
             {notice && <p className={styles.note} role="status">{notice}</p>}
             <button className={cx("btn", styles.wide)} type="button" disabled={!state.rows.length || !!issue || !!sourceIssue} onClick={openReview}>Review fund</button>
-            <p className={styles.note}>Next you set your fee and stake. Nothing is signed here.</p>
           </div>
         </aside>
       </div>

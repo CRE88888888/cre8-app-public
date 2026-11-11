@@ -1,24 +1,29 @@
 import { Link } from "react-router-dom";
 import {
+  chartGeometry,
   periodMetrics,
-  periodLabel,
+  periodSeries,
   currentFundAssets,
 } from "../../reference/lib/fund-explore";
 import type { Period } from "../../reference/lib/fund-explore";
 import { assetBySymbol, pct } from "../../lib/public-funds";
 import type { ReferenceFund } from "../../lib/public-funds";
-import { FundByline, FundPortrait, FundName } from "./Profile";
+import { FundSource, FundPortrait, FundName } from "./Profile";
 export function FundRow({
   fund,
   period,
   returnTo,
+  showSource = true,
 }: {
   fund: ReferenceFund;
   period: Period;
   returnTo: string;
+  showSource?: boolean;
 }) {
   const metrics = periodMetrics(fund, period),
     assets = currentFundAssets(fund);
+  const trend = chartGeometry(periodSeries(fund, period), 72, 32);
+  const tone = metrics.returnPct === null ? "" : metrics.returnPct >= 0 ? "pos" : "neg";
   const url = `/funds/${fund.slug}?period=${period}&returnTo=${encodeURIComponent(returnTo)}`;
   return (
     <article className="fund-row" data-slug={fund.slug}>
@@ -28,22 +33,18 @@ export function FundRow({
           <h3>
             <FundName fund={fund} url={url} />
           </h3>
-          <FundByline fund={fund} />
+          {showSource && <FundSource fund={fund} />}
         </div>
+        {trend && (
+          <svg className={`fund-list-trend ${tone}`} viewBox="0 0 72 32" aria-hidden="true">
+            <path d={trend.path} fill="none" stroke="currentColor" strokeWidth="1.5"
+              strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+          </svg>
+        )}
         <span className="fund-list-result">
-          <strong className={(metrics.returnPct ?? 0) >= 0 ? "pos" : "neg"}>
+          <strong className={tone}>
             {pct(metrics.returnPct)}
           </strong>
-          <small>
-            {metrics.partial && fund.nav?.[0]
-              ? "Since " +
-                new Intl.DateTimeFormat("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  timeZone: "UTC",
-                }).format(fund.nav[0].t)
-              : periodLabel(fund, period)}
-          </small>
         </span>
         <span
           className="fund-asset-icons"

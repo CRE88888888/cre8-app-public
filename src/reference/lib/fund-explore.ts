@@ -80,9 +80,6 @@ export function periodMetrics(f:Pick<ExploreFund,"nav"|"returns"|"maxDrawdown">,
   for(const p of series){peak=Math.max(peak,p.v);maxDrawdown=Math.min(maxDrawdown,(p.v/peak-1)*100);}
   return {returnPct:(last!.v/first.v-1)*100,maxDrawdown,days,partial};
 }
-export function periodLabel(f:Pick<ExploreFund,"nav"|"returns"|"maxDrawdown">,period:Period) {
-  return period==="ALL"?"All time":period==="1Y"&&periodMetrics(f,period).partial?"Since inception":period;
-}
 export function chartGeometry(series:readonly{t:number;v:number}[],width=320,height=64) {
   if(series.length<2||series.some((p,i)=>!Number.isFinite(p.v)||p.v<=0||!Number.isFinite(p.t)||(i>0&&p.t<=series[i-1].t)))return null;
   const values=series.map(p=>p.v),min=Math.min(...values),max=Math.max(...values),range=max-min||1;

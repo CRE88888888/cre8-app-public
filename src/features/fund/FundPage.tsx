@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { encodeFunctionData, formatEther, formatUnits, parseEther, parseUnits } from 'viem';
 import type { Address } from 'viem';
 import { closePosition, enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, listStrategies, postRebalance, redeemPortfolio } from '../../lib/api';
@@ -10,9 +10,11 @@ import type { PortfolioStatus } from '../../lib/api';
 import { MOCK_FUNDS } from '../../data/mock-funds';
 import {safePublicReturn} from '../../lib/public-navigation';
 import {useMobile} from '../../lib/use-mobile';
-import {ReferenceSheet} from '../reference/ReferenceSheet';
+import { AppBottomSheet, AppSheetClose } from '../../components/AppBottomSheet';
+import { TicketFund, TicketReceipt, TicketReview } from './TicketReview';
+import type { TicketAction, TicketProgress } from './TicketReview';
 import {catalogueTargets} from '../../data/public-fund-adapter';
-import {referenceFund} from '../../lib/public-funds';
+import { REFERENCE_METADATA, referenceFund } from '../../lib/public-funds';
 import {periodMetrics} from '../../reference/lib/fund-explore';
 import {FundOverview} from '../reference/FundOverview';
 import { shortAddress } from '../../lib/format';
@@ -21,11 +23,11 @@ import { useBodyClass } from '../../lib/use-body-class';
 import { useOwnerWallet } from '../../lib/use-owner-wallet';
 import { useConnectedSessionToken } from '../../lib/use-connected-session';
 import { WalletMenu } from '../../components/WalletMenu';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge, ErrorNote, Note, Spinner } from '../../components/ui';
 import { AssetLogo } from '../../components/AssetLogo';
-import { toast } from '../../components/Toast';
+import { toast, type ToastId } from '../../components/Toast';
 
 const ERC20_ABI = [
   { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: '', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] },
@@ -58,12 +60,25 @@ function pct(bps: number, digits = 2): string {
 export function FundPage(): ReactNode {
   useBodyClass('vault-page', 'fund-detail-redesign', 'atp-formal-fund', 'atp-complete-fund');
   const { slug } = useParams<{ slug: string }>();
+  const { pathname } = useLocation();
+  useLayoutEffect(() => {
+    const resetScroll = () => window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    resetScroll();
+    // History traversal can restore scroll just after the route commits.
+    const frame = window.requestAnimationFrame(resetScroll);
+    return () => window.cancelAnimationFrame(frame);
+  }, [pathname]);
+
   const token = useConnectedSessionToken();
   const wallet = useOwnerWallet();
   const queryClient = useQueryClient();
 
   const fund = MOCK_FUNDS.find((entry) => entry.slug === slug);
   const reference = referenceFund(slug ?? '');
+  const modelFees = reference?.fees;
+  const modelPerformanceFee = modelFees
+    ? Number((modelFees.perf + modelFees.platform).toFixed(2))
+    : null;
 
   const strategies = useQuery({
     queryKey: ['strategies', token],
@@ -103,8 +118,25 @@ export function FundPage(): ReactNode {
   // `?tab=withdraw` 直接開提領分頁 —— 分頁狀態本來只在記憶體裡，沒有網址就只能靠手動點。
   const [search,setSearch] = useSearchParams();
   const mobile=useMobile();
+  const ticketToast = useRef<ToastId | null>(null);
   const [mobileTicket,setMobileTicket]=useState(search.get('ticket')==='1'||search.get('tab')==='withdraw');
-  const setTicketOpen=(open:boolean)=>{setMobileTicket(open);const next=new URLSearchParams(window.location.search);if(open)next.set('ticket','1');else next.delete('ticket');setSearch(next,{replace:true});};
+  function dismissTicketToast() {
+    if (ticketToast.current === null) return;
+    toast.dismiss(ticketToast.current);
+    ticketToast.current = null;
+  }
+
+  const setTicketOpen = (open: boolean) => {
+    setMobileTicket(open);
+    const next = new URLSearchParams(window.location.search);
+    if (open) next.set('ticket', '1');
+    else {
+      dismissTicketToast();
+      next.delete('ticket');
+      next.delete('tab');
+    }
+    setSearch(next, { replace: true });
+  };
   // 返回目錄只接受本站路徑，保留篩選但不讓外部網址成為導向目標。
   const requestedReturn = search.get('returnTo');
   const backTo = safePublicReturn(requestedReturn);
@@ -137,6 +169,21 @@ export function FundPage(): ReactNode {
    */
   const [walletUsdt, setWalletUsdt] = useState<bigint | null>(null);
   const [closing, setClosing] = useState(false);
+  const [reviewKey, setReviewKey] = useState<string | null>(null);
+  const [ticketProgress, setTicketProgress] = useState<{ scope: string; progress: TicketProgress } | null>(null);
+  const reviewHeading = useRef<HTMLHeadingElement>(null);
+  const ticketScope = `${slug}:${wallet?.address ?? ''}:${token !== null}`;
+  const reviewMatches = mobile && reviewKey === `${ticketScope}:${tab}:${tab === 'deposit' ? amount : withdrawAmount}`;
+  const progress = ticketProgress?.scope === ticketScope ? ticketProgress.progress : null;
+  const ticketBusy = busy || withdrawBusy || closing;
+
+  useEffect(() => {
+    if (mobile && mobileTicket && (reviewMatches || progress !== null)) reviewHeading.current?.focus({ preventScroll: true });
+  }, [mobile, mobileTicket, reviewMatches, progress !== null]);
+
+  function showProgress(next: TicketProgress) {
+    setTicketProgress({ scope: ticketScope, progress: next });
+  }
 
   const walletAddress = wallet?.address ?? null;
   const usdtAddress = usdt?.address;
@@ -259,6 +306,45 @@ export function FundPage(): ReactNode {
   const withdrawLoading = strategies.isPending || portfolios.isPending ||
     (holding !== undefined && status.isPending);
   const depositLoadError = strategies.error ?? assets.error;
+  const reviewId = `${ticketScope}:${tab}:${tab === 'deposit' ? amount : withdrawAmount}`;
+  const depositUnits = mobile && /^(?:\d+(?:\.\d*)?|\.\d+)$/.test(amount)
+    ? parseUnits(amount, usdtDecimals)
+    : 0n;
+  const withdrawRequested = Number(withdrawAmount);
+  const withdrawValid = /^(?:\d+(?:\.\d*)?|\.\d+)$/.test(withdrawAmount) &&
+    Number.isFinite(withdrawRequested) && withdrawRequested > 0.000001;
+  const withdrawLimit = Math.min(withdrawRequested, totalUsd());
+
+  function openMobileTicket(action: TicketAction) {
+    setReviewKey(null);
+    setTicketProgress(null);
+    setTab(action);
+    setTicketOpen(true);
+  }
+
+  function submitTicket(action: TicketAction) {
+    if (ticketBusy) return;
+    if (mobile) {
+      if (token === null || wallet === null || usdt === undefined) return;
+      if (action === 'deposit' && (depositUnits <= 0n || depositTooLarge || strategy === undefined)) return;
+      if (action === 'withdraw' && (!withdrawValid || live === undefined || !live.complete || withdrawLimit <= 0.000001)) return;
+      if (!reviewMatches) {
+        setReviewKey(reviewId);
+        return;
+      }
+    }
+    setReviewKey(null);
+    if (action === 'deposit') void deposit();
+    else void withdraw();
+  }
+
+  const cover = reference ? REFERENCE_METADATA[reference.slug]?.cover : undefined;
+  const ticketFund = (
+    <TicketFund name={fund.name} image={cover ? { src: cover.thumbnailSrc, position: cover.thumbnailPosition } : undefined} />
+  );
+  const depositPresets = walletUsdt === null ? [] : ['25', '100'].filter(
+    (preset) => parseUnits(preset, usdtDecimals) <= walletUsdt,
+  );
 
   const ticket = (<>
             <section className="panel ticket" id="ticket">
@@ -266,14 +352,12 @@ export function FundPage(): ReactNode {
                   `aria-selected`、`tabIndex` 管理。內容仍是同一個三元式（不改 TabsContent）——
                   那份內容很長，重排只增加 diff 而不增加正確性。 */}
               <Tabs value={tab} onValueChange={(value) => setTab(value as 'deposit' | 'withdraw')}>
-                <TabsList className="w-full bg-[var(--card,#eef3f7)]">
-                  <TabsTrigger value="deposit" className="flex-1">
-                    Deposit
-                  </TabsTrigger>
-                  <TabsTrigger value="withdraw" className="flex-1">
-                    Withdraw
-                  </TabsTrigger>
-                </TabsList>
+                {!mobile && (
+                  <TabsList aria-label="Fund actions" className="w-full bg-[var(--card,#eef3f7)]">
+                    <TabsTrigger value="deposit" className="flex-1">Deposit</TabsTrigger>
+                    <TabsTrigger value="withdraw" className="flex-1">Withdraw</TabsTrigger>
+                  </TabsList>
+                )}
               <div className="panel-b">
                 {tab === 'withdraw' ? (
                   token !== null && withdrawLoadError !== null ? (
@@ -289,13 +373,13 @@ export function FundPage(): ReactNode {
                       className="swap"
                       onSubmit={(event) => {
                         event.preventDefault();
-                        void withdraw();
+                        submitTicket('withdraw');
                       }}
                     >
                       <div className="swap-box">
                         <div className="swap-head">
                           <label className="swap-label" htmlFor="withdraw-amount">
-                            You receive
+                            {mobile ? 'Amount' : 'You receive'}
                           </label>
                           <span className="swap-picks">
                             <button type="button" disabled={live === undefined} onClick={() => setWithdrawAmount(maxWithdrawLabel())}>
@@ -311,11 +395,16 @@ export function FundPage(): ReactNode {
                           value={withdrawAmount}
                           onChange={(event) => setWithdrawAmount(event.target.value)}
                         />
-                        <span className="swap-sub">USDT → {walletAddress === null ? 'your wallet' : shortAddress(walletAddress)}</span>
+                        {mobile ? (
+                          <>
+                            <span className="app-ticket-currency">USDT</span>
+                            {live !== undefined && <span className="swap-sub">Fund value {formatUsd(totalUsd())}</span>}
+                          </>
+                        ) : <span className="swap-sub">USDT → {walletAddress === null ? 'your wallet' : shortAddress(walletAddress)}</span>}
                       </div>
                       {token === null ? <WalletMenu inline /> : (
                         <>
-                          <p className="fine">
+                          {!mobile && <p className="fine">
                             Cash {formatUsd(cashUsd())} · positions {formatUsd(Math.max(0, totalUsd() - cashUsd()))} · total{' '}
                             {formatUsd(totalUsd())}
                             {withdrawAmount !== '' && Number(withdrawAmount) > cashUsd() ? (
@@ -325,19 +414,19 @@ export function FundPage(): ReactNode {
                                 pro-rata first, so the fund stays on its mandate.
                               </>
                             ) : null}
-                          </p>
+                          </p>}
                           <button
                             type="submit"
-                            className="btn ghost block"
-                            disabled={withdrawBusy || wallet === null || live === undefined || totalUsd() === 0}
+                            className={mobile ? 'btn primary block' : 'btn ghost block'}
+                            disabled={ticketBusy || wallet === null || live === undefined || totalUsd() === 0 ||
+                              (mobile && (!withdrawValid || usdt === undefined || !live.complete))}
                           >
-                            {withdrawBusy ? 'Working…' : 'Withdraw in USDT'}
+                            {withdrawBusy ? 'Working…' : mobile ? 'Review withdrawal' : 'Withdraw in USDT'}
                           </button>
-                          {totalUsd() === 0 ? <p className="fine">This account holds nothing yet — deposit first.</p> : null}
+                          {totalUsd() === 0 ? <p className="fine">This fund account has no balance.</p> : null}
                           {live !== undefined && gasTooLow(live) ? (
                             <p className="fine">
-                              The account needs BNB for gas. Top it up on{' '}
-                              the “My position” drawer above first.
+                              Add BNB in My position for network fees.
                             </p>
                           ) : null}
                           {withdrawNote === null ? null : <p className="fine warn">{withdrawNote}</p>}
@@ -350,23 +439,18 @@ export function FundPage(): ReactNode {
                           {/* 清倉：把全部部位賣成 USDT，再把 USDT 與所有殘留的股票代幣（塵埃）掃回錢包。 */}
                           <button
                             type="button"
-                            className="btn ghost block"
-                            disabled={closing || withdrawBusy || wallet === null || totalUsd() === 0}
+                            className="btn ghost block app-ticket-close-position"
+                            disabled={ticketBusy || wallet === null || totalUsd() === 0}
                             onClick={() => void closeAll()}
                             style={{ marginTop: 8 }}
                             title="Sell everything to USDT, then send the USDT and every leftover token back to your wallet"
                           >
                             {closing ? 'Closing…' : 'Close position'}
                           </button>
-                          {totalUsd() === 0 ? (
-                            <p className="fine">
-                              This account is empty, so there is nothing to withdraw or close — deposit first.
-                            </p>
-                          ) : null}
                           <p className="fine">
-                            Two signatures when cash is short: the fund sells pro-rata with its session key, then you sign
-                            one USDT transfer out. Selling the whole position back to cash would break the mandate and the
-                            scheduler would buy it straight back — pro-rata does not.
+                            {mobile
+                              ? 'Sells all holdings and returns the balance to your wallet.'
+                              : 'If there isn’t enough cash, the fund sells part of each position. You then approve the USDT transfer.'}
                           </p>
                         </>
                       )}
@@ -388,19 +472,19 @@ export function FundPage(): ReactNode {
                     className="swap"
                     onSubmit={(event) => {
                       event.preventDefault();
-                      void deposit();
+                      submitTicket('deposit');
                     }}
                   >
                     <div className="swap-box">
                       <div className="swap-head">
                         <label className="swap-label" htmlFor="deposit-amount">
-                          You pay
+                          {mobile ? 'Amount' : 'You pay'}
                         </label>
-                        <span className="swap-picks">
-                          <button type="button" disabled={walletUsdt === null} onClick={() => setAmount(maxDepositLabel())}>
-                            Max
-                          </button>
-                        </span>
+                        {!mobile && (
+                          <span className="swap-picks">
+                            <button type="button" disabled={walletUsdt === null} onClick={() => setAmount(maxDepositLabel())}>Max</button>
+                          </span>
+                        )}
                       </div>
                       <input
                         id="deposit-amount"
@@ -410,35 +494,41 @@ export function FundPage(): ReactNode {
                         value={amount}
                         onChange={(event) => setAmount(event.target.value)}
                       />
-                      {/* ⚠ 只能有**一個** `.swap-sub`：在 ticket 裡它是 grid 的 `sub` 區，
-                          兩個元素會被放進同一格而重疊（實測「USDT → your account…」疊在
-                          「Wallet balance…」上面，變成看不懂的一行）。所以兩段資訊放進同一個
-                          flex 容器，並沿用 CSS 已預期的 `.swap-sub > span` 結構。 */}
-                      <span className="swap-sub">
-                        <span>
-                          {usdt?.symbol ?? 'USDT'} →{' '}
-                          {holding === undefined
-                            ? 'your new account'
-                            : shortAddress(holding.smartAccounts[0]?.address ?? '')}
+                      {mobile && <span className="app-ticket-currency">{usdt?.symbol ?? 'USDT'}</span>}
+                      {(!mobile || token !== null) && (
+                        <span className="swap-sub">
+                          {!mobile && <span>
+                            {usdt?.symbol ?? 'USDT'} →{' '}
+                            {holding === undefined
+                              ? 'your new account'
+                              : shortAddress(holding.smartAccounts[0]?.address ?? '')}
+                          </span>}
+                          {token !== null && <span className="vault-balance-value">
+                            {mobile ? 'Balance ' : '· balance '}
+                            {walletUsdt === null
+                              ? '—'
+                              : Number(formatUnits(walletUsdt, usdtDecimals)).toLocaleString('en-US', { maximumFractionDigits: 4 })}{' '}
+                            {usdt?.symbol ?? 'USDT'}
+                          </span>}
                         </span>
-                        {token !== null && <span className="vault-balance-value">
-                          · balance{' '}
-                          {walletUsdt === null
-                            ? '—'
-                            : Number(formatUnits(walletUsdt, usdtDecimals)).toLocaleString('en-US', { maximumFractionDigits: 4 })}{' '}
-                          {usdt?.symbol ?? 'USDT'}
-                        </span>}
-                      </span>
+                      )}
                       {depositTooLarge ? (
                         <p className="fine neg" style={{ margin: '6px 0 0' }}>
-                          That is more than the wallet holds — the transfer would revert with
-                          &ldquo;BEP20: transfer amount exceeds balance&rdquo; before it reaches the chain.
+                          This amount exceeds your wallet balance.
                         </p>
                       ) : null}
                     </div>
+                    {mobile && walletUsdt !== null && (
+                      <div className="app-ticket-presets" aria-label="Deposit amount shortcuts" role="group">
+                        {depositPresets.map((preset) => (
+                          <button type="button" key={preset} aria-label={`Set deposit to ${preset} USDT`} onClick={() => setAmount(preset)}>{preset}</button>
+                        ))}
+                        <button type="button" onClick={() => setAmount(maxDepositLabel())}>Max</button>
+                      </div>
+                    )}
                     {token === null ? <WalletMenu inline /> : (
-                      <button type="submit" className="btn primary block" disabled={busy || wallet === null || usdt === undefined || depositTooLarge}>
-                        {busy ? 'Sending…' : 'Deposit'}
+                      <button type="submit" className="btn primary block" disabled={ticketBusy || wallet === null || usdt === undefined || depositTooLarge || (mobile && depositUnits <= 0n)}>
+                        {busy ? 'Sending…' : mobile ? 'Review deposit' : 'Deposit'}
                       </button>
                     )}
                     <ErrorNote error={error} />
@@ -457,8 +547,56 @@ export function FundPage(): ReactNode {
         <div className="vgrid">
           <div className="main">{reference&&<FundOverview key={reference.slug} fund={reference} backTo={backTo} factsTrigger={factsTrigger} onFacts={()=>setFacts(true)} onPosition={()=>setMyPosition(true)} held={held}/>}</div>
 
-          {mobile?<ReferenceSheet open={mobileTicket} onOpenChange={setTicketOpen} title={tab === 'deposit' ? 'Deposit' : 'Withdraw'}>{ticket}</ReferenceSheet>:<aside className="side">{ticket}</aside>}
-          <div className="public-mobile-cta"><button className="btn" onClick={()=>{setTab('deposit');setTicketOpen(true);}}>Deposit</button><button className="btn ghost" onClick={()=>{setTab('withdraw');setTicketOpen(true);}}>Withdraw</button></div>
+          {mobile ? (
+            <AppBottomSheet
+              open={mobileTicket}
+              onOpenChange={(open) => {
+                if (!open) setReviewKey(null);
+                setTicketOpen(open);
+              }}
+              title={reviewMatches ? `Review ${tab === 'deposit' ? 'deposit' : 'withdrawal'}` : tab === 'deposit' ? 'Deposit' : 'Withdraw'}
+              hideTitle={progress !== null}
+              titleRef={reviewHeading}
+              locked={ticketBusy}
+            >
+              {progress !== null ? (
+                <TicketReceipt
+                  fund={ticketFund}
+                  progress={progress}
+                  busy={ticketBusy}
+                  explorerUrl={CHAIN_ID === 56 ? 'https://bscscan.com' : undefined}
+                  onDone={() => setTicketOpen(false)}
+                  onViewPortfolio={dismissTicketToast}
+                  onBack={() => {
+                    dismissTicketToast();
+                    setTicketProgress(null);
+                  }}
+                />
+              ) : (
+                <>
+                  {ticketFund}
+                  {reviewMatches ? <TicketReview
+                    action={tab}
+                    amount={tab === 'deposit' ? `${formatUnits(depositUnits, usdtDecimals)} ${usdt?.symbol ?? 'USDT'}` : `${withdrawLimit.toLocaleString('en-US', { maximumFractionDigits: 6 })} USDT`}
+                    destination={tab === 'deposit' ? (holding?.smartAccounts[0]?.address ?? 'Your new fund account') : (walletAddress ?? 'Your wallet')}
+                    network={appChain.name}
+                    note={tab === 'deposit'
+                      ? 'Your wallet may also ask for a BNB top-up or token approval.'
+                      : [
+                        withdrawRequested > totalUsd() && 'Limited to the current fund value.',
+                        withdrawLimit > cashUsd() && 'The fund may sell holdings to cover the withdrawal. The final amount can change.',
+                      ].filter(Boolean).join(' ')}
+                    onEdit={() => setReviewKey(null)}
+                    onConfirm={() => submitTicket(tab)}
+                  /> : ticket}
+                </>
+              )}
+            </AppBottomSheet>
+          ) : <aside className="side">{ticket}</aside>}
+          <div className="public-mobile-cta" aria-label="Fund actions" role="group">
+            <button className="btn" type="button" aria-haspopup="dialog" disabled={ticketBusy} onClick={() => openMobileTicket('deposit')}>Deposit</button>
+            <button className="btn ghost" type="button" aria-haspopup="dialog" disabled={ticketBusy} onClick={() => openMobileTicket('withdraw')}>Withdraw</button>
+          </div>
         </div>
       </main>
 
@@ -470,12 +608,14 @@ export function FundPage(): ReactNode {
         Radix 這些都處理好了，而且保留原本的 .pros-head / .pros-body 內容樣式。
       */}
       <Sheet open={myPosition && live !== undefined} onOpenChange={setMyPosition}>
-        <SheetContent side="right" className="w-full gap-0 overflow-y-auto p-0 sm:max-w-xl">
+        <SheetContent side={mobile ? 'bottom' : 'right'} showCloseButton={!mobile} className={mobile ? 'app-bottom-sheet app-fund-info-sheet' : 'w-full gap-0 overflow-y-auto p-0 sm:max-w-xl'}>
           <SheetHeader>
-            <p className="label">[ My position ]</p>
+            {!mobile && <p className="label">[ My position ]</p>}
             <SheetTitle>Portfolio #{live?.portfolioId ?? '—'}</SheetTitle>
+            <SheetDescription className="sr-only">Current fund holdings and account status.</SheetDescription>
+            {mobile && <AppSheetClose />}
           </SheetHeader>
-          <div className="pros-body" style={{ padding: '20px 24px' }}>
+          <div className="pros-body" style={mobile ? undefined : { padding: '20px 24px' }}>
             {live === undefined ? (
               <p className="fine">No live status for this account yet.</p>
             ) : (
@@ -584,36 +724,77 @@ export function FundPage(): ReactNode {
         </SheetContent>
       </Sheet>
 
-      {/* Fund facts：參考站是一個右側抽屜。 */}
       <Sheet open={facts} onOpenChange={setFacts}>
-        <SheetContent side="right" className="w-full gap-0 overflow-y-auto p-0 sm:max-w-xl" onCloseAutoFocus={(event) => {
-          // 開啟按鈕在頁面標頭，不在 Sheet 內；關閉時明確把焦點還給原入口。
-          if (factsTrigger.current !== null) { event.preventDefault(); factsTrigger.current.focus(); }
-        }}>
+        <SheetContent
+          side="right"
+          showCloseButton={false}
+          className="app-fund-facts-sheet w-full gap-0 overflow-hidden p-0 sm:max-w-xl"
+          onCloseAutoFocus={(event) => {
+            if (factsTrigger.current !== null) {
+              event.preventDefault();
+              factsTrigger.current.focus({ preventScroll: true });
+            }
+          }}
+        >
           <SheetHeader>
-            <p className="label">[ Fund facts ]</p>
+            <p className="app-facts-label">Fund facts</p>
             <SheetTitle>{fund.name}</SheetTitle>
+            <SheetDescription className="sr-only">Fees, strategy, and fund information.</SheetDescription>
+            <AppSheetClose />
           </SheetHeader>
-          <div className="pros-body" style={{ padding: '20px 24px' }}>
-            <section className="panel pros-sec">
-              <div className="panel-h"><h3>At a glance</h3></div>
-              <div className="panel-b"><dl className="kv">
-                <dt>Catalogue model</dt><dd>{fund.thesis}</dd>
-                <dt>Model rebalancing</dt><dd>{reference?.sourceModel ? 'Source updates' : fund.rebalance === 'none' ? 'No fixed schedule' : fund.rebalance === 'drift' ? 'On allocation drift' : 'Monthly'}</dd>
-                <dt>Execution</dt><dd>{strategy === undefined ? 'Example only; no published strategy is connected.' : `Connected to strategy #${strategy.id}. Your account status and execution rules are shown in My position.`}</dd>
-              </dl></div>
-            </section>
-            <section className="panel pros-sec">
-              <div className="panel-h"><h3>Performance &amp; data</h3></div>
-              <div className="panel-b"><p className="fine">Simulated series copied from the design reference, before fees. It is not this deployment’s result or a forecast. Returns, drawdowns and risk statistics use the selected historical window.</p><dl className="kv"><dt>Since-inception max drop</dt><dd>{reference===undefined?'—':pct((periodMetrics(reference,'ALL').maxDrawdown??0)*100)}</dd></dl></div>
-            </section>
-            <section className="panel pros-sec vault-mandate">
-              <div className="panel-h">
-                <h3>Mandate</h3>
-                <span className="tag">Manifest</span>
+          <nav className="app-facts-navigation" aria-label="Fund facts sections" onClick={(event) => {
+            const link = (event.target as Element).closest('a');
+            const section = link?.hash ? document.getElementById(link.hash.slice(1)) : null;
+            if (!section) return;
+            event.preventDefault();
+            event.currentTarget.querySelector('details')?.removeAttribute('open');
+            section.scrollIntoView({ block: 'start', behavior: 'instant' });
+            section.focus({ preventScroll: true });
+          }}>
+            <a href="#facts-overview">Overview</a>
+            <a href="#facts-fees">Fees</a>
+            <a href="#facts-strategy">Strategy</a>
+            <details>
+              <summary>More</summary>
+              <div>
+                <a href="#facts-performance">Performance &amp; data</a>
+                <a href="#facts-positions">Positions</a>
+                <a href="#facts-creator">Creator</a>
+                <a href="#facts-contracts">Contracts</a>
               </div>
+            </details>
+          </nav>
+          <div className="pros-body">
+            <section id="facts-overview" className="panel pros-sec" tabIndex={-1}>
+              <div className="panel-h"><h3>At a glance</h3></div>
               <div className="panel-b">
-                <p className="sentence">{fund.thesis}</p>
+                <dl className="app-facts-overview">
+                  {modelPerformanceFee !== null && <div><dt>Model fees</dt><dd>{modelPerformanceFee}% of realized profit</dd></div>}
+                  <div><dt>Allocation</dt><dd>{fund.thesis}</dd></div>
+                  <div><dt>Rebalancing</dt><dd>{reference?.sourceModel ? 'Source updates' : fund.rebalance === 'none' ? 'No fixed schedule' : fund.rebalance === 'drift' ? 'On allocation drift' : 'Monthly'}</dd></div>
+                  <div><dt>Execution</dt><dd>{strategy === undefined ? 'Catalogue model' : `Connected to strategy #${strategy.id}`}</dd></div>
+                </dl>
+              </div>
+            </section>
+            <section id="facts-fees" className="panel pros-sec" tabIndex={-1}>
+              <div className="panel-h"><h3>Fees &amp; terms</h3></div>
+              <div className="panel-b">
+                {modelFees || strategy ? (
+                  <dl className="app-facts-overview">
+                    {modelFees && (
+                      <>
+                        <div><dt>Model performance fee</dt><dd>{modelPerformanceFee}% of realized profit</dd></div>
+                        <div><dt>Model management fee</dt><dd>{modelFees.mgmt}%</dd></div>
+                      </>
+                    )}
+                    {strategy && <div><dt>Live strategy swap fee</dt><dd>{pct(strategy.swapFeeBps)}</dd></div>}
+                  </dl>
+                ) : <p className="fine">Fee terms unavailable.</p>}
+              </div>
+            </section>
+            <section id="facts-strategy" className="panel pros-sec vault-mandate" tabIndex={-1}>
+              <div className="panel-h"><h3>Strategy</h3></div>
+              <div className="panel-b">
                 <table className="dk-table vault-where" style={{ marginTop: 12 }}>
                   <thead>
                     <tr>
@@ -644,7 +825,14 @@ export function FundPage(): ReactNode {
               </div>
             </section>
 
-            <section className="panel pros-sec vault-positions">
+            <section id="facts-performance" className="panel pros-sec" tabIndex={-1}>
+              <div className="panel-h"><h3>Performance &amp; data</h3></div>
+              <div className="panel-b">
+                <p className="fine">Model performance before fees.</p>
+                <dl className="kv"><dt>All-time max drawdown</dt><dd>{reference === undefined ? '—' : pct((periodMetrics(reference, 'ALL').maxDrawdown ?? 0) * 100)}</dd></dl>
+              </div>
+            </section>
+            <section id="facts-positions" className="panel pros-sec vault-positions" tabIndex={-1}>
               <div className="panel-h">
                 <h3>Positions</h3>
                 <span className="label">{live === undefined ? '' : `block #${live.block}`}</span>
@@ -677,7 +865,7 @@ export function FundPage(): ReactNode {
               </div>
             </section>
 
-            <section className="panel vault-creator-card">
+            <section id="facts-creator" className="panel pros-sec vault-creator-card" tabIndex={-1}>
               <div className="panel-h">
                 <h3>Creator</h3>
               </div>
@@ -702,7 +890,7 @@ export function FundPage(): ReactNode {
               </div>
             </section>
 
-            <section className="panel pros-sec vault-identity">
+            <section id="facts-contracts" className="panel pros-sec vault-identity" tabIndex={-1}>
               <div className="panel-h">
                 <h3>Identity &amp; contracts</h3>
               </div>
@@ -730,6 +918,11 @@ export function FundPage(): ReactNode {
     setBusy(true);
     setError(null);
     const toastId = toast.pending('Deposit', 'Preparing…');
+    if (mobile) ticketToast.current = toastId;
+    let transferHash: string | undefined;
+    let transferState: 'submitted' | 'confirmed' | 'reverted' = 'submitted';
+    let allocation = 'Check Portfolio for the latest allocation.';
+    showProgress({ tone: 'pending', title: 'Preparing deposit', detail: 'Follow the prompts in your wallet.' });
     try {
       // 沒有帳戶就先建（enroll）——「存款就是跟隨」，使用者不必先理解 enroll。
       // 位址是 counterfactual 的：同一個 (owner, strategy) 永遠同一個地址，所以建好之後
@@ -779,13 +972,18 @@ export function FundPage(): ReactNode {
             body: `Sending ${Number(formatEther(topUpWei)).toFixed(4)} BNB to the fund's account…`,
           });
           // 這是 owner 錢包 → 帳戶的普通 BNB 轉帳（會再要一次簽名）。
+          showProgress({ tone: 'pending', title: 'Top up network gas', detail: 'Approve the BNB transfer in your wallet.' });
           await sendGasTopUp({ wallet, to: account as Address, valueWei: topUpWei });
           toast.replace(toastId, { tone: 'pending', title: 'Deposit', body: 'Confirm the USDT transfer in your wallet…' });
         }
       }
 
+      showProgress({ tone: 'pending', title: 'Approve the USDT transfer in your wallet' });
       const hash = await sendUsdt(wallet, usdt.address as Address, account as Address, value);
-      toast.replace(toastId, { tone: 'ok', title: `Deposited ${amount} ${usdt.symbol}`, body: hash });
+      transferHash = hash;
+      const sent = `${formatUnits(value, usdt.decimals)} ${usdt.symbol}`;
+      showProgress({ tone: 'pending', title: 'Transfer submitted', detail: `${sent} · Waiting for network confirmation.`, hash });
+      toast.replace(toastId, { tone: 'pending', title: `Submitted ${sent}`, body: hash });
       setAmount('');
 
       // 等轉帳**真的被 RPC 看到**再觸發配置。
@@ -796,7 +994,16 @@ export function FundPage(): ReactNode {
       // 「Deposit recorded (noop)」，錢明明進去了卻沒被配置。
       //
       // 等 2 個確認把「錢在鏈上」與「RPC 看得到它」之間的窗口關掉。
-      await waitForConfirmations(hash, 2);
+      transferState = await waitForConfirmations(wallet, hash, 2);
+      if (transferState === 'reverted') {
+        showProgress({ tone: 'error', title: 'Transfer reverted', detail: 'The network rejected the transfer.', hash });
+        toast.replace(toastId, { tone: 'bad', title: 'Transfer reverted', body: hash });
+        return;
+      }
+      showProgress({
+        tone: 'pending', title: 'Preparing fund allocation', hash,
+        detail: transferState === 'confirmed' ? `${sent} confirmed. Your wallet may ask for asset approvals.` : 'The transfer status is available on the block explorer.',
+      });
 
       // 入金後**立刻**跑一輪配置。
       //
@@ -873,7 +1080,7 @@ export function FundPage(): ReactNode {
             // 授權失敗不擋存款本身：錢已經到了，使用者可以再按一次。
             toast.replace(configuringId, {
               tone: 'warn',
-              title: 'Deposited, but the approval failed',
+              title: 'Asset approval failed',
               body: (cause as Error).message.split('\n')[0].slice(0, 140),
             });
             throw cause;
@@ -886,23 +1093,27 @@ export function FundPage(): ReactNode {
           //   executed → 配置完成
           //   blocked  → 被前置檢查擋下（最常見是 allowance），要**再按一次**或先 approve
           //   noop     → 規劃器認為沒事可做（錢沒被看到/已經對齊）
+          allocation = round.outcome === 'executed' ? 'Initial allocation executed.' :
+            round.outcome === 'blocked' ? 'Initial allocation was blocked. Check Portfolio for the latest status.' :
+              'No initial allocation was executed. Check Portfolio for the latest status.';
           const tone = round.outcome === 'executed' ? 'ok' : round.outcome === 'blocked' ? 'bad' : 'warn';
           const title =
             round.outcome === 'executed'
               ? 'Deposit configured'
               : round.outcome === 'blocked'
-                ? 'Deposited, but the first rebalance was blocked'
-                : `Deposited — nothing to configure yet (${round.outcome})`;
+                ? 'Initial allocation was blocked'
+                : `No initial allocation (${round.outcome})`;
           toast.replace(configuringId, {
             tone,
             title,
             body: round.txHash ?? round.reason ?? undefined,
           });
         } catch (cause) {
-          // 配置失敗不影響「錢已經到了」：部位還在，排程器之後會處理（或使用者再按一次）。
+          // 配置失敗不影響入金；收據獨立顯示這兩個狀態。
+          allocation = 'Initial allocation did not complete. Check Portfolio for the latest status.';
           toast.replace(configuringId, {
             tone: 'warn',
-            title: 'Deposited, but the first rebalance failed',
+            title: 'Initial allocation did not complete',
             body: (cause as Error).message.split('\n')[0].slice(0, 140),
           });
         }
@@ -924,9 +1135,24 @@ export function FundPage(): ReactNode {
         queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token), refetchType: 'all' }),
         queryClient.invalidateQueries({ queryKey: ['fund-status'], refetchType: 'all' }),
       ]);
+      showProgress({
+        tone: transferState === 'confirmed' ? 'confirmed' : 'notice',
+        title: transferState === 'confirmed' ? 'Deposit confirmed' : 'Transfer submitted',
+        amount: sent,
+        detail: transferState === 'confirmed' ? allocation : 'Check the block explorer for confirmation.',
+        hash,
+      });
     } catch (cause) {
+      showProgress(transferHash ? {
+        tone: 'notice',
+        title: transferState === 'confirmed' ? 'Deposit received' : 'Transfer submitted',
+        detail: transferState === 'confirmed' ? 'Initial allocation did not complete. Check your portfolio.' : 'Check the block explorer for confirmation.',
+        hash: transferHash,
+      } : { tone: 'error', title: 'Deposit not sent', detail: String((cause as Error).message ?? cause).split('\n')[0].slice(0, 180) });
       setError(cause);
-      toast.replace(toastId, { tone: 'bad', title: 'Deposit failed', body: (cause as Error).message.split('\n')[0].slice(0, 140) });
+      toast.replace(toastId, transferHash ? {
+        tone: 'warn', title: transferState === 'confirmed' ? 'Deposit received; check allocation' : 'Check transfer status', body: transferHash,
+      } : { tone: 'bad', title: 'Deposit failed', body: (cause as Error).message.split('\n')[0].slice(0, 140) });
     } finally {
       setBusy(false);
     }
@@ -1128,6 +1354,8 @@ export function FundPage(): ReactNode {
     setWithdrawTx(null);
     setWithdrawNote(null);
     const toastId = toast.pending('Withdraw', 'Preparing the round…');
+    if (mobile) ticketToast.current = toastId;
+    showProgress({ tone: 'pending', title: 'Preparing withdrawal', detail: 'Checking the fund’s available USDT.' });
     try {
       // 錢包不在本 app 的鏈上時，簽名請求會「看起來沒反應」（其實是被鏈切換擋掉）。
       // 明講要切到哪一條，比讓使用者一直按卻沒有彈窗好。
@@ -1176,6 +1404,7 @@ export function FundPage(): ReactNode {
         const shortfall = effective - available;
         if (shortfall <= 0.01) break;
         const target = Math.ceil((shortfall / (1 - SELL_BUFFER)) * 1e6) / 1e6;
+        showProgress({ tone: 'pending', title: 'Selling positions', detail: 'Raising USDT for your withdrawal.' });
         const redeemed = await redeemPortfolio(token, holding.id, target);
         if (redeemed.outcome !== 'executed' && redeemed.outcome !== 'noop') {
           throw new Error(`selling the shortfall failed: ${redeemed.reason}`);
@@ -1190,6 +1419,7 @@ export function FundPage(): ReactNode {
       if (sendable <= 0.000001) throw new Error('there is nothing to send after selling');
       const decimals = usdtRow?.decimals ?? 18;
       const value = parseUnits(sendable.toFixed(Math.min(decimals, 6)), decimals);
+      showProgress({ tone: 'pending', title: 'Approve the withdrawal in your wallet' });
       const receipt = await sendWithdraw({
         wallet,
         token,
@@ -1206,6 +1436,11 @@ export function FundPage(): ReactNode {
           : null,
       );
       setWithdrawTx(receipt.txHash);
+      showProgress({
+        tone: 'confirmed', title: 'Withdrawal confirmed', hash: receipt.txHash,
+        amount: `${formatUnits(value, decimals)} USDT`,
+        detail: sendable < effective - 0.01 ? 'Less USDT was available than requested.' : undefined,
+      });
       toast.replace(toastId, { tone: 'ok', title: `Withdrew ${formatUsd(sendable)}`, body: receipt.txHash });
       // 存款後要重抓的是**整條依賴鏈**，不是只有 portfolios：
       //
@@ -1225,7 +1460,10 @@ export function FundPage(): ReactNode {
         queryClient.invalidateQueries({ queryKey: ['fund-status'], refetchType: 'all' }),
       ]);
     } catch (cause) {
+      const detail = String((cause as Error).message ?? cause).split('\n')[0].slice(0, 180);
       setWithdrawError(cause);
+      showProgress({ tone: 'error', title: 'Withdrawal not completed', detail });
+      toast.replace(toastId, { tone: 'bad', title: 'Withdrawal not completed', body: detail });
     } finally {
       setWithdrawBusy(false);
     }
@@ -1240,13 +1478,20 @@ export function FundPage(): ReactNode {
  * 後端用 head 讀餘額，head 落後時就看不到剛進來的錢（實測造成 deposit 後的 noop）。
  * 多等一個確認等於替 RPC 留一個塊的追上時間。
  *
- * 用 readOnlyClient（不碰錢包 provider）：這是純讀取，不該經過使用者的錢包。
+ * 使用與送出交易相同的網路讀取收據；這一步不會要求錢包簽名。
  */
-async function waitForConfirmations(hash: string, confirmations = 2): Promise<void> {
+async function waitForConfirmations(
+  wallet: NonNullable<ReturnType<typeof useOwnerWallet>>,
+  hash: string,
+  confirmations = 2,
+): Promise<'submitted' | 'confirmed' | 'reverted'> {
   try {
-    await readOnlyClient().waitForTransactionReceipt({ hash: hash as `0x${string}`, confirmations });
+    const receipt = await publicClientFor(wallet).waitForTransactionReceipt({
+      hash: hash as `0x${string}`, confirmations, timeout: 15_000,
+    });
+    return receipt.status === 'success' ? 'confirmed' : 'reverted';
   } catch {
-    // 等不到也不算失敗：錢已經上鏈了。讓後面的 rebalance 自己去判斷。
+    return 'submitted';
   }
 }
 

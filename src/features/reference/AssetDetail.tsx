@@ -114,7 +114,7 @@ export function AssetDetail({
             </div>
           </header>
           <section className={styles.about} aria-labelledby="asset-about">
-            <h2 id="asset-about">About {a.name}</h2>
+            <h2 id="asset-about">About</h2>
             {a.description ? (
               <>
                 <p>
@@ -275,8 +275,7 @@ export function AssetDetail({
             <section className={styles.funds} aria-labelledby="asset-funds">
               <h2 id="asset-funds">Funds with {a.symbol}</h2>
               <p className={styles.source}>
-                Model target allocations. Availability and cash treatment vary
-                by fund; see each fund’s description.
+                Model target weights.
               </p>
               {a.funds.length ? (
                 <div>
@@ -289,14 +288,13 @@ export function AssetDetail({
                       <strong>{f.name}</strong>
                       <span>
                         {f.targetWeight.toFixed(1)}% target{" "}
-                        <i aria-hidden="true">↗</i>
                       </span>
                     </a>
                   ))}
                 </div>
               ) : (
                 <p className={styles.noFunds}>
-                  No demo fund includes this asset yet.
+                  No funds include this asset.
                 </p>
               )}
             </section>
@@ -407,7 +405,6 @@ export function AssetDetail({
           {a.builderKey && (
             <section className={styles.create}>
               <h2>Make it part of your fund</h2>
-              <p>Start with {a.symbol}, then build your allocation.</p>
               <a
                 className="btn"
                 href={`${app}/create/?asset=${encodeURIComponent(a.builderKey)}`}

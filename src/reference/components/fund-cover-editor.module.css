@@ -1,7 +1,6 @@
 .editor{padding:24px;background:var(--white);border:1px solid var(--hair);min-width:0}
 .heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}
 .heading h2{font:500 16px var(--sans);margin:0 0 4px;color:var(--ink)}
-.heading p{font:400 13px/1.5 var(--sans);color:var(--steel);margin:0}
 .heading button{flex:none}
 .nameField{display:grid;gap:8px;margin-bottom:18px;font:400 13px var(--sans);color:var(--steel)}
 .nameField input{min-width:0;min-height:46px;padding:10px 12px;border:1px solid var(--hair);background:var(--white);color:var(--ink);font:500 17px var(--sans)}
@@ -23,4 +22,13 @@
 .position input{min-width:30px;flex:1;accent-color:var(--ink);height:30px}
 .file{position:absolute;width:1px;height:1px;clip-path:inset(50%);overflow:hidden;white-space:nowrap}
 .error{font:400 13px/1.5 var(--sans);color:var(--negative);margin:14px 0 0}
-@media(max-width:600px){.editor{padding:18px}.heading p{font-size:12px}.heading button{padding-inline:10px}.preview{aspect-ratio:1.65;min-height:160px}.preview>strong{left:18px;right:18px;bottom:18px;font-size:28px}.gallery{grid-template-columns:repeat(3,minmax(0,1fr))}.position{flex-wrap:wrap}.position>span{display:none}}
+@media(max-width:600px){.editor{padding:18px}.heading button{padding-inline:10px}.preview{aspect-ratio:1.65;min-height:160px}.preview>strong{left:18px;right:18px;bottom:18px;font-size:28px}.gallery{grid-template-columns:repeat(3,minmax(0,1fr))}.position{flex-wrap:wrap}.position>span{display:none}}
+
+@media (max-width: 719px) {
+  .editor { padding: 12px 0 0; border: 0; border-top: 1px solid var(--app-card-line); }
+  .heading { margin-bottom: 10px; }
+  .heading h2 { margin: 0; font: var(--app-section-title); }
+  .heading button { min-height: 44px; padding-inline: 0; border-color: transparent; }
+  .nameField { font: var(--app-secondary); }
+  .nameField input { background: var(--app-grouped); border-radius: var(--app-control-radius) !important; font: var(--app-body); }
+}

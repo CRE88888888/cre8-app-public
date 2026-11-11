@@ -4,7 +4,7 @@
  */
 :root {
   /* 底色與表面 */
-  --bg: var(--paper);
+  --bg: var(--white);
   --bg-2: var(--snow);
   --card: var(--white);
   --white: #ffffff;

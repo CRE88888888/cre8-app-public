@@ -28,7 +28,7 @@ export default function FundSourceEditor({ state, onChange }: { state: Builder; 
   const handle = normalizeXHandle(state.xHandle), invalid = !!state.xHandle?.trim() && !handle;
   function confirm() { if (handle) { onChange({ ...state, xHandle: handle }); setLoaded(handle); } }
   return <section className={styles.editor} aria-label="Fund collection and X profile">
-    <div className={styles.heading}><h2>Collection &amp; X profile</h2><p>Help people find the idea behind your fund.</p></div>
+    <div className={styles.heading}><h2>Collection &amp; X profile</h2></div>
     <label className={styles.field}><span>Collection</span><select value={state.collection ?? "themes"} onChange={e => onChange({ ...state, collection: e.target.value as Builder["collection"] })}><option value="themes">Themes</option><option value="public-figures">Public figures</option><option value="x-voices">X voices</option></select></label>
     <label className={styles.field}><span>X handle <small>{state.collection === "x-voices" ? "Required for X voices" : "Optional"}</small></span><div className={styles.inputRow}><input aria-label="X handle" type="text" placeholder="@username or x.com/username" value={state.xHandle ?? ""} maxLength={120} autoComplete="off" spellCheck={false} aria-invalid={invalid} onChange={e => { setLoaded(null); onChange({ ...state, xHandle: e.target.value }); }} onBlur={confirm} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); confirm(); } }} /><button className="btn ghost sm" type="button" disabled={!handle} onClick={confirm}>Load profile</button></div></label>
     {invalid && <p className={styles.error} role="alert">Use an X username with 1–15 letters, numbers or underscores.</p>}

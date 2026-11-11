@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 
 import { discoverProviders } from './wallet';
+import { restoreWalletConnect, WALLETCONNECT_RDNS } from './wallet-connect';
 import { useSession } from '../store/session';
 import { useWallet } from '../store/wallet';
 
@@ -35,8 +36,8 @@ function readSaved(): Saved | null {
 }
 
 /** 連上 / 斷線時同步 storage；由 `useAutoConnect` 掛一次。 */
-function persist(): void {
-  useWallet.subscribe((state) => {
+function persist(): () => void {
+  return useWallet.subscribe((state) => {
     try {
       if (state.address === null || state.kind !== 'injected' || state.rdns === null) {
         window.localStorage.removeItem(STORAGE_KEY);
@@ -51,45 +52,49 @@ function persist(): void {
 
 export function useAutoConnect(): void {
   useEffect(() => {
-    persist();
-    if (useWallet.getState().address !== null) return;
+    const unsubscribe = persist();
+    if (useWallet.getState().address !== null) return unsubscribe;
 
     const saved = readSaved();
-    if (saved === null) return;
+    if (saved === null) return unsubscribe;
 
     let cancelled = false;
     void (async () => {
-      const providers = await discoverProviders(400);
-      if (cancelled) return;
-      const match = providers.find((entry) => entry.info.rdns === saved.rdns) ?? providers[0];
-      if (match === undefined) return;
-
-      let accounts: unknown;
+      let connection;
       try {
-        // `eth_accounts`（不是 `eth_requestAccounts`）：已授權才會回值，且**不會彈窗**。
-        accounts = await match.provider.request({ method: 'eth_accounts' });
+        if (saved.rdns === WALLETCONNECT_RDNS) {
+          connection = await restoreWalletConnect();
+        } else {
+          const providers = await discoverProviders(400);
+          if (cancelled) return;
+          const match = providers.find((entry) => entry.info.rdns === saved.rdns) ?? providers[0];
+          if (!match) return;
+
+          // eth_accounts only reads previously approved accounts.
+          const accounts = await match.provider.request({ method: 'eth_accounts' });
+          const first = Array.isArray(accounts) ? accounts[0] : undefined;
+          if (typeof first !== 'string') return;
+          connection = { address: first, rdns: match.info.rdns, provider: match.provider };
+        }
       } catch {
         return;
       }
-      if (cancelled) return;
+      if (cancelled || !connection || useWallet.getState().address !== null) return;
+      const { address } = connection;
+      if (address.toLowerCase() !== saved.address.toLowerCase()) return;
 
-      const first = Array.isArray(accounts) ? accounts[0] : undefined;
-      if (typeof first !== 'string') return;
-      // 帳號換了就不自動接 —— 否則「我的投組」會在使用者不知情時變成別人的。
-      if (first.toLowerCase() !== saved.address.toLowerCase()) return;
-      if (useWallet.getState().address !== null) return;
-
-      useWallet.getState().connectInjected({ address: first, rdns: match.info.rdns, provider: match.provider });
+      useWallet.getState().connectInjected(connection);
       // 接回的錢包若與 session token 綁定的不同，token 就失效了 —— 清掉，讓 UI 提示重新登入。
       // （session.address 存的是「簽 SIWE 那一刻」的錢包；不該拿 A 的 token 去查 B 的投組。）
       const session = useSession.getState();
-      if (session.address !== null && session.address.toLowerCase() !== first.toLowerCase()) {
+      if (session.address !== null && session.address.toLowerCase() !== address.toLowerCase()) {
         session.clear();
       }
     })();
 
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, []);
 }

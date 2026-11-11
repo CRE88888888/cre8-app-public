@@ -414,3 +414,23 @@
   text-decoration: underline;
   cursor: pointer;
 }
+
+.wallet-menu__walletconnect {
+  min-height: 44px;
+  border-color: transparent;
+  background: var(--app-grouped);
+  color: var(--deep);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.wallet-menu__walletconnect > span { flex: 1; }
+
+.wallet-connect-qr { align-self: stretch; }
+.wallet-connect-qr summary { min-height: 44px; align-content: center; cursor: pointer; font-size: 13px; }
+.wallet-connect-qr img { display: block; max-width: 100%; height: auto; margin: 4px auto; }
+
+@media (max-width: 719px) {
+  .wallet-menu__panel { max-width: calc(100vw - 32px); }
+  .wallet-menu__item { min-height: 44px; }
+}

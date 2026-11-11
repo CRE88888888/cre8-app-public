@@ -1,4 +1,5 @@
 import { useSearchParams } from "react-router-dom";
+import { AppIcon } from "../../components/AppIcon";
 import { useEffect, useId, useRef, useState } from "react";
 import { attachAssetPreviews } from "../../reference/lib/asset-preview";
 import type { HoldingSort } from "../../reference/lib/fund-holdings";
@@ -50,6 +51,7 @@ export function Assets({ fund }: { fund: ReferenceFund }) {
     >
       <button
         aria-label={label}
+        className={sort === key && asc ? "holding-sort-ascending" : undefined}
         onClick={() => {
           if (sort === key) setAsc(!asc);
           else {
@@ -68,7 +70,7 @@ export function Assets({ fund }: { fund: ReferenceFund }) {
         ) : (
           label
         )}{" "}
-        {sort === key ? (asc ? "↑" : "↓") : "↕"}
+        <AppIcon name={sort === key ? "down" : "sort"} size={12} />
       </button>
     </th>
   );
@@ -77,7 +79,7 @@ export function Assets({ fund }: { fund: ReferenceFund }) {
       <header className="holdings-heading">
         <h2>Assets</h2>
         <button className="btn ghost sm" onClick={() => setTokens(true)}>
-          Token details ↗
+          <AppIcon name="document" size={17} /> Token details
         </button>
       </header>
       <div className="dk-wrap">
