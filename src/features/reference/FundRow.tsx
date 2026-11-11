@@ -14,17 +14,26 @@ export function FundRow({
   period,
   returnTo,
   showSource = true,
+  href,
 }: {
   fund: ReferenceFund;
   period: Period;
   returnTo: string;
   showSource?: boolean;
+  /**
+   * 覆寫列的目標網址。
+   *
+   * 為什麼需要：社群策略（`/vaults` 的 Community 區塊）不是參考目錄裡的基金，
+   * 沒有 `/funds/:slug` 這條路由 —— 它們的細節頁是 `/strategies/:id`。
+   * 沒有這個參數就只能複製一份 `.fund-row` 的 markup，那會讓兩邊的樣式遲早不同步。
+   */
+  href?: string;
 }) {
   const metrics = periodMetrics(fund, period),
     assets = currentFundAssets(fund);
   const trend = chartGeometry(periodSeries(fund, period), 72, 32);
   const tone = metrics.returnPct === null ? "" : metrics.returnPct >= 0 ? "pos" : "neg";
-  const url = `/funds/${fund.slug}?period=${period}&returnTo=${encodeURIComponent(returnTo)}`;
+  const url = href ?? `/funds/${fund.slug}?period=${period}&returnTo=${encodeURIComponent(returnTo)}`;
   return (
     <article className="fund-row" data-slug={fund.slug}>
       <div className="fund-row-link">

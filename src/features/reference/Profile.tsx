@@ -26,15 +26,28 @@ export function FundPortrait({
   const root = useRef<HTMLSpanElement>(null),
     card = useRef<HTMLElement>(null),
     id = useId(),
-    meta = REFERENCE_METADATA[fund.slug];
+    // 社群策略（`/vaults` 的 Community 區塊）沒有參考目錄的封面與人物資料，
+    // 所以這裡必須容忍 `meta === undefined` —— 以前直接 `meta.profile` 會整頁 crash。
+    meta = REFERENCE_METADATA[fund.slug] as (typeof REFERENCE_METADATA)[string] | undefined;
   useEffect(() => {
-    if (!root.current || !card.current || !meta.profile) return;
+    if (!root.current || !card.current || !meta?.profile) return;
     const binding = attachFundProfiles(root.current, card.current, () => ({
       profile: meta.profile!,
       image: meta.cover.thumbnailSrc,
     }));
     return () => binding.abort();
   }, [meta]);
+  if (meta === undefined) {
+    // 沒有封面：用名稱縮寫當標記，維持與其他基金列一樣的 `.public-portrait` 版面。
+    const initials = fund.name.replace(/[^A-Za-z\u4e00-\u9fff]/g, '').slice(0, 2).toUpperCase() || 'C8';
+    return (
+      <span className="public-portrait">
+        <span className="fund-thumb" aria-hidden="true" style={{ display: 'grid', placeItems: 'center', fontSize: 18 }}>
+          {initials}
+        </span>
+      </span>
+    );
+  }
   const image = (
     <>
       <img
@@ -120,16 +133,16 @@ export function FundName({ fund, url }: { fund: ReferenceFund; url?: string }) {
   const root = useRef<HTMLSpanElement>(null),
     card = useRef<HTMLElement>(null),
     id = useId(),
-    meta = REFERENCE_METADATA[fund.slug];
+    meta = REFERENCE_METADATA[fund.slug] as (typeof REFERENCE_METADATA)[string] | undefined;
   useEffect(() => {
-    if (!root.current || !card.current || !meta.profile) return;
+    if (!root.current || !card.current || !meta?.profile) return;
     const binding = attachFundProfiles(root.current, card.current, () => ({
       profile: meta.profile!,
       image: meta.cover.thumbnailSrc,
     }));
     return () => binding.abort();
   }, [meta]);
-  if (!meta.profile)
+  if (meta === undefined || !meta.profile)
     return url ? (
       <Link className="fund-title-link" to={url}>
         {fund.name}

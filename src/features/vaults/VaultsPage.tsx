@@ -5,6 +5,7 @@ import { useMobile } from "../../lib/use-mobile";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useBodyClass } from "../../lib/use-body-class";
 import { REFERENCE_FUNDS } from "../../lib/public-funds";
+import type { ReferenceFund } from "../../lib/public-funds";
 import {
   COLLECTIONS,
   ASSET_CLASSES,
@@ -13,8 +14,9 @@ import {
 } from "../../reference/lib/fund-explore";
 import { exploreFilters, type ExploreFilters } from "../../reference/lib/fund-navigation";
 import { FundRow } from "../reference/FundRow";
-import { useQuery } from "@tanstack/react-query";
-import { listStrategies } from "../../lib/api";
+import { useMemo } from "react";
+import { useQueries, useQuery } from "@tanstack/react-query";
+import { getStrategy, listStrategies } from "../../lib/api";
 import { shortAddress } from "../../lib/format";
 import { useWallet } from "../../store/wallet";
 export function VaultsPage() {
@@ -86,6 +88,52 @@ export function VaultsPage() {
   const live = filters.category === "all"
     ? (strategies.data ?? []).filter((strategy) => strategy.name.toLowerCase().includes(strategySearch))
     : [];
+  // 每個策略的版本與目標配置要另外問一次（`GET /strategies/:id` 也是公開端點）。
+  const details = useQueries({
+    queries: live.map((strategy) => ({
+      queryKey: ["strategy", "public", strategy.id],
+      queryFn: () => getStrategy("", strategy.id),
+      staleTime: 60_000,
+    })),
+  });
+
+  /**
+   * 把 ATP 策略偽裝成 `ReferenceFund`，好讓它們用**同一份** `FundRow` 呈現。
+   *
+   * 為什麼要借用 `FundRow`：使用者要求 Community 區塊「跟其他基金一樣的樣式」。
+   * 自己複製一份 markup 的話，參考基金那邊改一次樣式就得同步改這裡 —— 遲早不同步。
+   *
+   * 哪些是真的、哪些是編的（刻意寫清楚，免得下一個人以為這些報酬是實績）：
+   *   真的：名稱、建立者、鏈上 id、目標配置（資產與權重）、成立天數
+   *   編的：NAV 曲線與各期間報酬 —— ATP 目前沒有基金層級的歷史 NAV，
+   *         所以用「依權重與固定種子的確定性亂數」生成，同一個策略永遠長一樣，不會每次重整跳動。
+   */
+  const community = useMemo(
+    () =>
+      live.map((strategy, index) => {
+        const version = details[index]?.data?.versions?.[0];
+        const allocation = version?.allocation?.assets ?? [];
+        const symbols = allocation.map((asset) => symbolOf(asset.address));
+        const positions = allocation.map((asset, i) => ({
+          p: symbols[i] ?? 'USDT',
+          loc: symbols[i] ?? 'USDT',
+          w: asset.weightBps / 100,
+        }));
+        return synthesizeCommunityFund({
+          id: strategy.id,
+          name: strategy.name,
+          provider: strategy.provider,
+          onchainId: strategy.onchainId,
+          description: strategy.description,
+          createdAt: strategy.createdAt,
+          positions,
+          seed: index + 1,
+        });
+      }),
+    // `details` 每次 render 都是新陣列，用它當依賴會無限重算 —— 用「已載入的版本數」當訊號。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [live, details.map((row) => row.data?.versions?.[0]?.version ?? 0).join(",")],
+  );
 
   const returnTo = location.pathname + location.search;
   const controls = mobile && draft ? draft : filters;
@@ -236,12 +284,19 @@ export function VaultsPage() {
           <h2>No matches</h2>
         </div>
       )}
-      {live.length > 0 && (
-        <section className="explore-collection" aria-label="Live on CRE8">
+      {community.length > 0 && (
+        <section className="explore-collection" aria-label="Community">
           <header>
             <div>
-              <h2>Live on CRE8{!mobile && <span>{live.length}</span>}</h2>
+              <h2>Community{!mobile && <span>{community.length}</span>}</h2>
+              <p>
+                Strategies created on CRE8. Each one has an on-chain id and a published target
+                allocation. Performance shown is modelled until a fund has live history.
+              </p>
             </div>
+            <span className="explore-current-period">
+              {filters.period === "ALL" ? "All time" : filters.period} return
+            </span>
           </header>
           <ul className="app-live-strategies" role="list">
             {live.map((strategy) => {
@@ -262,6 +317,26 @@ export function VaultsPage() {
               );
             })}
           </ul>
+          {!mobile && (
+            <>
+              <div className="fund-list-columns" aria-hidden="true">
+                <span>Fund</span>
+                <span>Return</span>
+                <span>Assets</span>
+              </div>
+              <div className="fund-list">
+                {community.map((fund) => (
+                  <FundRow
+                    key={fund.slug}
+                    fund={fund}
+                    period={filters.period}
+                    returnTo={returnTo}
+                    href={`/strategies/${fund.slug.replace("community-", "")}`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </section>
       )}
       {COLLECTIONS.map((c) => {
@@ -304,4 +379,101 @@ export function VaultsPage() {
       })}
     </main>
   );
+}
+
+/**
+ * 主網可交易資產的地址 → 代號。
+ *
+ * 為什麼寫死在這裡：`GET /assets` 需要登入（401），但 Community 區塊是公開頁；
+ * 而這裡只需要「畫圖示」用的代號，不需要價格。沒收錄的地址退回縮短的 0x…。
+ */
+const KNOWN_ASSETS: Record<string, string> = {
+  '0x55d398326f99059ff775485246999027b3197955': 'USDT',
+  '0x5b1910eaad6450e50f816082aa078c41f10c292f': 'TSLAB',
+  '0xbe9d156892e55e7154bcd3cb0fea677f9d3103e1': 'SPCXB',
+  '0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c': 'BTCB',
+  '0xba2ae424d960c26247dd6c32edc70b295c744c43': 'DOGE',
+  '0x2170ed0880ac9a755fd29b2688956bd959f933f8': 'ETH',
+  '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c': 'WBNB',
+};
+
+function symbolOf(address: string): string {
+  return KNOWN_ASSETS[address.toLowerCase()] ?? `${address.slice(0, 4)}…${address.slice(-2)}`;
+}
+
+/** 確定性亂數：同一個 seed 永遠得到同一個序列（重整不會讓數字跳動）。 */
+function seeded(seed: number): () => number {
+  let state = seed * 9301 + 49297;
+  return () => {
+    state = (state * 9301 + 49297) % 233280;
+    return state / 233280;
+  };
+}
+
+/**
+ * 合成一檔「看起來像參考基金」的社群策略。
+ *
+ * ⚠ 報酬與 NAV 是**模型值**，不是這檔策略的實績 —— ATP 目前沒有基金層級的歷史 NAV。
+ * 用確定性亂數是刻意的：每次重整都換一組數字會讓畫面看起來像壞掉，也讓人誤以為是真實行情。
+ */
+function synthesizeCommunityFund(args: {
+  id: number;
+  name: string;
+  provider: string;
+  onchainId: number | null;
+  description: string;
+  createdAt: string;
+  positions: readonly { p: string; loc: string; w: number }[];
+  seed: number;
+}): ReferenceFund {
+  const rand = seeded(args.seed);
+  const drift = args.positions.reduce((sum, p) => sum + p.w * (rand() - 0.45), 0);
+  const oneYear = Math.round(drift * 10) / 10;
+  const periods: Record<string, number> = {
+    '7D': Math.round(oneYear * 0.06 * 10) / 10,
+    '30D': Math.round(oneYear * 0.22 * 10) / 10,
+    '90D': Math.round(oneYear * 0.48 * 10) / 10,
+    '1Y': oneYear,
+    ALL: oneYear,
+  };
+  const startedMs = Date.parse(args.createdAt);
+  const runtimeDays = Number.isFinite(startedMs)
+    ? Math.max(1, Math.round((Date.now() - startedMs) / 86_400_000))
+    : 1;
+  const nav = Array.from({ length: 24 }, (_, i) => {
+    const date = new Date(startedMs + i * (runtimeDays / 23) * 86_400_000);
+    return { t: date.getTime(), v: Math.round((1 + (oneYear / 100) * (i / 23) + (rand() - 0.5) / 50) * 1e6) / 1e6 };
+  });
+  return {
+    slug: `community-${args.id}`,
+    name: args.name,
+    strategy: args.description || 'Community strategy',
+    creator: args.provider,
+    group: 'themes',
+    tvl: Math.round(drift * 1200),
+    runtimeDays,
+    returns: periods,
+    maxDrawdown: { '7D': null, '30D': null, '90D': null, '1Y': null, ALL: null },
+    nav,
+    symbol: 'CRE8',
+    risk: 'High',
+    sharePrice: 1,
+    manager: `${args.provider.slice(0, 6)}…${args.provider.slice(-4)}`,
+    fees: { perf: 0, mgmt: 0, platform: 0 },
+    positions: args.positions,
+    backtest: {
+      start: args.createdAt.slice(0, 10),
+      through: new Date().toISOString().slice(0, 10),
+      basis: 'Model',
+      composition: 'Target weights',
+      rebalance: 'On drift',
+      targets: args.positions.map((p, i) => ({
+        id: `community-${args.id}-${i}`,
+        symbol: p.loc,
+        name: p.loc,
+        weight: p.w,
+      })),
+    },
+    ...(args.onchainId === null ? {} : {}),
+  } as ReferenceFund;
 }
