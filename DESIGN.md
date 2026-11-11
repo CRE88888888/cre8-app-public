@@ -60,7 +60,8 @@
 - 頁標題一律使用 fog 句點（Explore funds. / Creators. / Portfolio. / Manage.），手機隱藏句點。桌面主導覽「Leaderboard」改稱 Creators，與頁標題及手機分頁一致。
 - 手機分頁根目錄（Funds、Creators、Create、Portfolio、Manage）不顯示網站 logo 列：頁面 h1 作大標題，右上為玻璃圓鈕錢包。捲過約 56px 後出現 scroll edge 霧化與置中小標題。頁面已有大型連線按鈕時，右上錢包隱藏。
 - 手機控制層採 Liquid Glass 語言：分頁列與基金頁 Deposit／Withdraw 為浮動玻璃膠囊（半透明白、模糊＋飽和＋提亮、內緣高光、柔和陰影），選中分頁為膠囊內的淡色膠囊。玻璃只用於浮在內容上的控制層，內容本身不用。瀏覽器無法在 iOS Safari 做真正折射，故不使用 SVG displacement；`prefers-reduced-transparency` 或不支援 `backdrop-filter` 時退回實心白。
-- 手機分頁順序：Funds、Creators、Create、Portfolio、Manage（左側是市場、中間是建立、右側是「我的」）。列表與按鈕有按壓回饋，`prefers-reduced-motion` 時關閉。
+- 兩個工作區：投資（Funds · Creators · Portfolio）與 Studio（Today · My funds · Create · Earnings）。模式由網址決定（`/studio`、`/create`、`/strategies` 屬於 Studio），右上角文字按鈕「Studio／Investing」切換，支援時以 View Transition 淡入淡出；localStorage 記住上次模式，manifest 的 `/start` 依此導向。Studio 以頂部「Studio」標記、桌面頁首底部深色線、手機深色玻璃分頁列區分。`/operator` 是 CRE8 內部營運後台，不在任何導覽中。列表與按鈕有按壓回饋，`prefers-reduced-motion` 時關閉。
 - 手機 Funds 列表一屏約十檔：列高約 72px、縮圖 44px、名稱最多兩行（有機構名時三行）。分類（All／Themes／Public figures／X voices）捲動時固定在頂部列下方。
 - 「人名 · 機構」在手機列表中拆成兩行。
 - 支援加到主畫面：`public/manifest.webmanifest`（standalone、start_url `/vaults`）與 `public/app-icons/`。
+- Studio 資料：My funds = `GET /strategies` 中 provider 等於目前錢包的策略；狀態取自使用者在該策略的帳戶（`/portfolios/:id/status`）。Today 只列需要處理的項目（無帳戶、權限到期／七天內到期、gas 不足、估值不完整、需要入金、需要再平衡），讀不到的值不當成正常或 0。Earnings 後端尚無資料，顯示說明，不放數字。

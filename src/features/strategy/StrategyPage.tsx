@@ -71,8 +71,8 @@ export function StrategyPage(): ReactNode {
           </p>
         </div>
         <div className="explore-heading-actions">
-          <Link className="btn btn--ghost" to="/portfolios">
-            Your funds
+          <Link className="btn btn--ghost" to="/studio/funds">
+            My funds
           </Link>
         </div>
       </header>

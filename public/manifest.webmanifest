@@ -2,7 +2,7 @@
   "name": "CRE8",
   "short_name": "CRE8",
   "description": "Explore, create and hold onchain funds.",
-  "start_url": "/vaults",
+  "start_url": "/start",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

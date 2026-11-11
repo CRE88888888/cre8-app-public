@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Badge, ErrorNote, Spinner } from '../../components/ui';
 import { toast } from '../../components/Toast';
+import { Link } from 'react-router-dom';
 import { AppIcon } from '../../components/AppIcon';
 import { WalletMenu } from '../../components/WalletMenu';
 
@@ -492,14 +493,15 @@ export function OperatorPage(): ReactNode {
   return (
     <main className="explore-wrap app-manage">
       <header className="explore-heading">
-        <h1>Manage<span>.</span></h1>
+        <h1>Operations<span>.</span></h1>
       </header>
-      {/* 只有按鈕時看不出這頁是給誰用的；先講清楚「這是基金建立者的管理頁」。 */}
-      <section className="app-portfolio-summary app-portfolio-guest" aria-labelledby="manage-guest-title">
+      {/* 這是 CRE8 內部的營運後台，不是 creator 的管理頁（creator 用 Studio）。 */}
+      <section className="app-portfolio-summary app-portfolio-guest" aria-labelledby="ops-guest-title">
         <span className="app-icon-tile app-portfolio-hero-icon"><AppIcon name="manage" size={22} /></span>
-        <h2 id="manage-guest-title">Run the funds you created</h2>
-        <p>Connect the wallet that created a fund to rebalance it, renew its permissions and review its trades.</p>
+        <h2 id="ops-guest-title">Operations console</h2>
+        <p>This console is for the CRE8 operations team. Creators manage their funds in Studio.</p>
         <WalletMenu inline />
+        <Link to="/studio">Go to Studio <AppIcon name="right" size={16} /></Link>
       </section>
     </main>
   );
@@ -522,7 +524,7 @@ function CreatorOperatorPage({ token }: { token: string }): ReactNode {
     <main className="explore-wrap app-manage">
       <header className="explore-heading">
         <div>
-          <h1>Manage<span>.</span></h1>
+          <h1>Operations<span>.</span></h1>
         </div>
         <div className="explore-heading-actions">
           <button type="button" className="btn" disabled={overview.isFetching} onClick={() => void overview.refetch()}>

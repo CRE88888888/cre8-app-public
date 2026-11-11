@@ -155,6 +155,7 @@ body.atp-complete-create #root button[data-fund-cover] img { border-radius: 8px 
 @media (min-width: 720px) and (max-width: 1023px) {
   :root { --page-gutter: 24px; }
   #root .app-masthead .wrap { gap: 28px; }
+  #root .app-masthead .wrap > .app-mode-label { margin-left: -12px; }
   body.atp-formal-market #fund-explore .fund-row-link,
   body.atp-formal-market #fund-explore .fund-list-columns { grid-template-columns: 56px minmax(0, 1fr) 96px 100px; column-gap: 16px; }
   body.atp-formal-market #fund-explore .fund-list-columns > span:last-child,
@@ -162,4 +163,12 @@ body.atp-complete-create #root button[data-fund-cover] img { border-radius: 8px 
   body.atp-formal-market #fund-explore .fund-thumb,
   body.atp-formal-market #fund-explore .public-portrait { width: 56px; height: 56px; }
   body.atp-formal-fund .vgrid { grid-template-columns: minmax(0, 1fr) 300px; gap: 32px; }
+}
+
+/* 桌面頁首：Studio 標記緊跟在 logo 後，模式切換放在錢包左邊，兩者同高。 */
+@media (min-width: 720px) {
+  /* 頁首 .wrap 的 gap 是 48px（平板 28px）；把標記拉回 logo 旁，看起來是 logo 的一部分。 */
+  #root .app-masthead .wrap > .app-mode-label { margin-left: -24px; }
+  #root .app-masthead .head-right { display: flex; align-items: center; gap: 10px; }
+  body.studio-mode #root .app-masthead { box-shadow: inset 0 -2px 0 var(--deep); }
 }

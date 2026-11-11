@@ -16,6 +16,8 @@ import {CreatorPage} from './features/reference/CreatorPage';
 import { Leaderboard } from './features/reference/Leaderboard';
 const AssetPage=lazy(()=>import('./features/reference/AssetPage').then(module=>({default:module.AssetPage})));
 import { VaultsPage } from './features/vaults/VaultsPage';
+import { StudioEarningsPage, StudioFundsPage, StudioTodayPage } from './features/studio/StudioPages';
+import { MODE_HOME, lastMode } from './lib/app-mode';
 
 export function App(): ReactNode {
   useSyncExternalStore(subscribeReference,referenceRevision,referenceRevision);
@@ -31,12 +33,18 @@ export function App(): ReactNode {
       <Routes>
         {/* 登入改由標頭的錢包選單處理；舊連結仍然可用，只是把使用者帶回目錄。 */}
         <Route path="/login" element={<Navigate to="/vaults" replace />} />
+        {/* 從主畫面打開 App 時回到上次用的模式（manifest 的 start_url）。 */}
+        <Route path="/start" element={<Navigate to={MODE_HOME[lastMode()]} replace />} />
         <Route path="/vaults" element={<VaultsPage />} />
         <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/creator/:id" element={<CreatorPage />} />
         <Route path="/portfolio" element={<PortfoliosPage />} />
         <Route path="/create" element={<DesignFundPage />} />
         <Route path="/create/activate" element={<ActivateFundPage />} />
+        <Route path="/studio" element={<StudioTodayPage />} />
+        <Route path="/studio/funds" element={<StudioFundsPage />} />
+        <Route path="/studio/earnings" element={<StudioEarningsPage />} />
+        {/* 內部營運後台：不在任何導覽裡，保留網址給營運團隊。 */}
         <Route path="/operator" element={<OperatorPage />} />
         <Route path="/rebalance" element={<Navigate to="/operator" replace />} />
         <Route path="/strategies/:id" element={<StrategyPage />} />
