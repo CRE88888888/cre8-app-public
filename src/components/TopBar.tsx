@@ -103,15 +103,18 @@ function ModeSwitch({ mode }: { mode: AppMode }): ReactNode {
     event.preventDefault();
     document.startViewTransition(() => flushSync(() => navigate(to)));
   };
+  // 文字直接說出按了會發生什麼：「Creator Studio」= 建立與管理自己的基金；「Exit Studio」= 回到投資。
+  // 只寫「Studio」「Investing」時，沒用過的人看不出這是什麼、按了去哪。
   return (
     <Link
       className="app-mode-switch"
       to={to}
       onClick={onClick}
-      aria-label={target === 'studio' ? 'Switch to Studio' : 'Switch to investing'}
+      title={target === 'studio' ? 'Create and manage your own funds' : 'Back to browsing and investing'}
       data-target={target}
     >
-      {target === 'studio' ? 'Studio' : 'Investing'}
+      <AppIcon name={target === 'studio' ? 'create' : 'left'} size={16} />
+      {target === 'studio' ? 'Creator Studio' : 'Exit Studio'}
     </Link>
   );
 }

@@ -71,3 +71,5 @@
 - 基金頁（桌面）：報酬標籤在數字上方（「Model return · 期間」），Max drawdown 與 Share price 並排；交易面板內的輸入區不再是框中框。
 - Demo 期間，Community 策略（`/funds/strategy/:id`）與 `VITE_LIVE_FUNDS` 列出的範例基金走真實存入／提領；其餘範例基金可操作到送出，送出時顯示 whitelist 提示，不簽名、不送交易。
 - 少讓使用者做決定：同一畫面只放一個 Connect wallet／Create fund；項目少時不顯示搜尋與篩選（Creators 9 位以上才顯示，網址已帶篩選時仍顯示以便清除）；Funds 桌面的篩選收成一顆 Filters（與手機一致），有套用時顯示數量。空狀態在桌面置中。
+- 模式切換按鈕寫出動作：投資模式為「＋ Creator Studio」（品牌藍灰淡色底），Studio 內為「← Exit Studio」（中性文字按鈕），並附 title 說明。
+- 首頁 `/` 在所有網域都是 landing（`public/landing/`）；帶查詢參數的 `/?…` 仍交給 App，保留 Funds 篩選深連結。App 內左上 logo 回到 landing。
