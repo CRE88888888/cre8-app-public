@@ -364,6 +364,30 @@ export function FundPage(): ReactNode {
   const held =
     holding !== undefined &&
     (live === undefined || Number(live.totalUsdE8 ?? '0') > 0 || live.holdings.length > 0);
+  // id 模式（`/funds/strategy/:id`）沒有 slug，`fund` 是由 community 策略合成的 ——
+  // 合成之前（資料還在載入）不能走這個早退，否則會顯示 `No fund with slug ""`。
+  // 合成失敗或策略不存在時才落到錯誤分支。
+  if (fund === undefined && strategyId !== null) {
+    // 策略還在載入（或查不到）：給一個明確的等待／錯誤畫面，而不是白屏。
+    return (
+      <main className="wrap vault-content">
+        {communityStrategy.isPending ? (
+          <div className="row">
+            <Spinner /> <span className="muted">Loading strategy…</span>
+          </div>
+        ) : communityStrategy.error !== null && communityStrategy.error !== undefined ? (
+          <ErrorNote error={communityStrategy.error} />
+        ) : (
+          <>
+            <Note tone="bad">No strategy #{strategyId}.</Note>
+            <p>
+              <Link to="/vaults">← All funds</Link>
+            </p>
+          </>
+        )}
+      </main>
+    );
+  }
   if (fund === undefined) {
     return (
       <main className="wrap vault-content">
