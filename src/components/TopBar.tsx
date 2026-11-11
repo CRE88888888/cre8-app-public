@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { WalletMenu } from './WalletMenu';
 
 /**
@@ -35,9 +35,9 @@ export function TopBar(): ReactNode {
   return (
     <header className="masthead app-masthead">
       <div className="wrap">
-        <Link className="brand" to="/vaults" aria-label="CRE8 home">
+        <a className="brand" href="/" aria-label="CRE8 home">
           <C8Logo />
-        </Link>
+        </a>
 
         <nav className="nav" aria-label="Main navigation">
           <NavLink to="/vaults" className={({ isActive }) => (isActive || pathname.startsWith('/funds/') ? 'active' : '')}>

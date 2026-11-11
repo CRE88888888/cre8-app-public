@@ -30,6 +30,11 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    if (url.pathname === '/' && (request.method === 'GET' || request.method === 'HEAD')) {
+      url.pathname = '/landing/';
+      return env.ASSETS.fetch(new Request(url, request));
+    }
+
     if (url.pathname === '/reference-data/demo-funds') {
       if (!['GET', 'HEAD'].includes(request.method)) return new Response('Method not allowed', {status:405,headers:{Allow:'GET, HEAD'}});
       try {

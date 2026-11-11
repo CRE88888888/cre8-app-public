@@ -31,8 +31,6 @@ export function App(): ReactNode {
       <Routes>
         {/* 登入改由標頭的錢包選單處理；舊連結仍然可用，只是把使用者帶回目錄。 */}
         <Route path="/login" element={<Navigate to="/vaults" replace />} />
-        {/* 首頁改成 vaults：那是使用者進來的第一個畫面（Explore funds）。 */}
-        <Route path="/" element={<VaultsPage />} />
         <Route path="/vaults" element={<VaultsPage />} />
         <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/creator/:id" element={<CreatorPage />} />
@@ -47,7 +45,7 @@ export function App(): ReactNode {
         <Route path="/asset/:slug" element={<AssetPage />} />
         <Route path="/assets/:slug" element={<AssetPage />} />
         <Route path="/portfolios" element={<PortfoliosPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/vaults" replace />} />
       </Routes>
       </Suspense>
     </>
