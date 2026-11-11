@@ -40,6 +40,7 @@ export function App(): ReactNode {
         <Route path="/create" element={<DesignFundPage />} />
         <Route path="/create/activate" element={<ActivateFundPage />} />
         <Route path="/operator" element={<OperatorPage />} />
+        <Route path="/rebalance" element={<Navigate to="/operator" replace />} />
         <Route path="/strategies/:id" element={<StrategyPage />} />
         <Route path="/funds/:slug" element={<FundPage />} />
         <Route path="/vault/:slug" element={<FundPage />} />

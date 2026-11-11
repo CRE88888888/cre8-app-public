@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
@@ -354,8 +353,8 @@ function Dashboard({
               <th className="num">Key</th>
               <th>Next run</th>
               <th>Last round</th>
-              <th>Flags</th>
               <th>Actions</th>
+              <th>Flags</th>
             </tr>
           </thead>
           <tbody>
@@ -472,20 +471,30 @@ function Dashboard({
  * 代價是「Observed」可能是幾分鐘前 —— 所以那一欄直接顯示相對時間，新鮮度自己看得到。
  */
 export function OperatorPage(): ReactNode {
-  const canView = useWallet((state) => isCre8CreatorWallet(state.address));
-  if (!canView) {
-    return (
-      <main className="page">
-        <h1>Page unavailable</h1>
-        <Link to="/vaults">Browse funds</Link>
-      </main>
-    );
-  }
-  return <CreatorOperatorPage />;
+  useBodyClass('portfolio-page', 'fund-explore');
+  const address = useWallet((state) => state.address);
+  if (isCre8CreatorWallet(address)) return <CreatorOperatorPage />;
+
+  return (
+    <main className="explore-wrap">
+      <header className="explore-heading">
+        <h1>Rebalance<span>.</span></h1>
+      </header>
+      <div className="directory-empty">
+        <p>
+          {address === null
+            ? 'Connect the CRE8 creator wallet to manage rebalancing.'
+            : 'Switch to the CRE8 creator wallet in your wallet app to manage rebalancing.'}
+        </p>
+        {address === null && (
+          <div className="directory-empty-actions"><WalletMenu inline /></div>
+        )}
+      </div>
+    </main>
+  );
 }
 
 function CreatorOperatorPage(): ReactNode {
-  useBodyClass('portfolio-page', 'fund-explore');
   const token = useConnectedSessionToken();
 
   const overview = useQuery({

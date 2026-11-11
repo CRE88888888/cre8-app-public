@@ -1,7 +1,5 @@
 import type { ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { isCre8CreatorWallet } from '../lib/creators';
-import { useWallet } from '../store/wallet';
 import { WalletMenu } from './WalletMenu';
 
 /**
@@ -34,7 +32,6 @@ function C8Logo(): ReactNode {
 
 export function TopBar(): ReactNode {
   const { pathname } = useLocation();
-  const showRebalance = useWallet((state) => isCre8CreatorWallet(state.address));
   return (
     <header className="masthead app-masthead">
       <div className="wrap">
@@ -50,11 +47,9 @@ export function TopBar(): ReactNode {
           <NavLink to="/create" className={({ isActive }) => (isActive ? 'active' : '')}>
             Create fund
           </NavLink>
-          {showRebalance && (
-            <NavLink to="/operator" className={({ isActive }) => (isActive ? 'active' : '')}>
-              Rebalance
-            </NavLink>
-          )}
+          <NavLink to="/operator" className={({ isActive }) => (isActive ? 'active' : '')}>
+            Rebalance
+          </NavLink>
         </nav>
 
         <div className="head-right">
