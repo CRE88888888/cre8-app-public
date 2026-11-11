@@ -253,7 +253,8 @@ export function FundPage(): ReactNode {
    * Demo：不在開放清單上的基金是 whitelist-only。只要錢包連上就能操作到送出，
    * 送出時顯示 whitelist 提示，不簽名、不送交易（見 lib/live-funds.ts）。
    */
-  const whitelistOnly = !isLiveFund(slug);
+  // Community 策略（/funds/strategy/:id，真的上鏈的 ATP 策略）照常可以存入；只有範例基金是 whitelist-only。
+  const whitelistOnly = strategyId === null && !isLiveFund(slug);
   const connectedAddress = useWallet((state) => state.address);
   const [whitelistNotice, setWhitelistNotice] = useState<TicketAction | null>(null);
   const [reviewKey, setReviewKey] = useState<string | null>(null);
