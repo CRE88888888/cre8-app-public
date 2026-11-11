@@ -45,8 +45,12 @@ export function App(): ReactNode {
         <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/creator/:id" element={<CreatorPage />} />
         <Route path="/portfolio" element={<PortfoliosPage />} />
-        <Route path="/create" element={<DesignFundPage />} />
+        {/* `/create` 是**真的**建立基金（createStrategy → publishVersion → enroll → approve，
+            每一步都簽名送交易）。設計稿的 builder 只能匯出設計（Download design），
+            它退到 `/create/design`，並可把配置帶進 activate。 */}
+        <Route path="/create" element={<ActivateFundPage />} />
         <Route path="/create/activate" element={<ActivateFundPage />} />
+        <Route path="/create/design" element={<DesignFundPage />} />
         <Route path="/studio" element={<StudioTodayPage />} />
         <Route path="/studio/funds" element={<StudioFundsPage />} />
         <Route path="/studio/earnings" element={<StudioEarningsPage />} />

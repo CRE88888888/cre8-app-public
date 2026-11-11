@@ -24,7 +24,7 @@ import { useBodyClass } from '../../lib/use-body-class';
 import { useOwnerWallet } from '../../lib/use-owner-wallet';
 import { useConnectedSessionToken } from '../../lib/use-connected-session';
 import { WalletMenu } from '../../components/WalletMenu';
-import { isLiveFund, WHITELIST_COPY } from '../../lib/live-funds';
+import { WHITELIST_COPY } from '../../lib/live-funds';
 import { useWallet } from '../../store/wallet';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -253,23 +253,15 @@ export function FundPage(): ReactNode {
    * Demo：不在開放清單上的基金是 whitelist-only。只要錢包連上就能操作到送出，
    * 送出時顯示 whitelist 提示，不簽名、不送交易（見 lib/live-funds.ts）。
    */
-  // Community 策略（/funds/strategy/:id，真的上鏈的 ATP 策略）照常可以存入；只有範例基金是 whitelist-only。
+  // 提領/存款一律是真的鏈上交易 —— demo 期的 whitelist 閘門已移除。
   //
-  // ⚠ `holding === undefined` 這個條件是**安全網**，不是功能：
-  // 範例基金的 slug 與真實 ATP 策略是靠「名稱」對應的（`fund.name === strategy.name`），
-  // 所以一檔叫 `elon-universe` 的範例基金會連到 strategy 1 —— 而使用者在 strategy 1 裡**有真錢**。
-  // 少了這個例外，demo 閘門會把他自己的部位鎖住，連提領都做不到（實測回報：存款被擋在 whitelist）。
-  // 原則：**已經在裡面的錢，任何 demo 開關都不能鎖住它。**
+  // 為什麼移除：那個閘門用「slug 是不是範例基金」判斷，但範例基金與真策略是靠**名稱**對應的
+  // （`elon-universe` → strategy 1）。結果是**已經在裡面有真錢**的使用者被鎖住，
+  // 連提領都做不到 —— 對一個持有真部位的人來說這是最糟的失敗模式。
   //
-  // 判準是「**這檔在鏈上有沒有真的策略**」，而不是「是不是範例基金」：
-  // 範例基金與 ATP 策略靠名稱對應，`elon-universe` 這種同名情況會讓一個**真的**上鏈策略
-  // 被當成 demo 鎖住 —— 既有持有人存不進去，新人也永遠進不來。
-  //   strategyId !== null        → /funds/strategy/:id，本來就是真策略
-  //   strategy !== undefined     → 這個 slug 對應到鏈上策略（真基金）
-  //   holding !== undefined      → 使用者在裡面有錢（任何 demo 開關都不能鎖住既有資金）
-  //   isLiveFund(slug)           → 營運端用 VITE_LIVE_FUNDS 明確開放
-  const whitelistOnly =
-    strategyId === null && strategy === undefined && holding === undefined && !isLiveFund(slug);
+  // 現在的行為：按下去就是真的簽名、真的送交易。要擋真錢請用後端或合約層，
+  // 不要用一個「看起來像 UI」的開關去鎖既有資金。
+  const whitelistOnly = false;
   const connectedAddress = useWallet((state) => state.address);
   const [whitelistNotice, setWhitelistNotice] = useState<TicketAction | null>(null);
   const [reviewKey, setReviewKey] = useState<string | null>(null);
