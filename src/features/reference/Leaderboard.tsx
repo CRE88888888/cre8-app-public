@@ -28,7 +28,7 @@ export function Leaderboard() {
   };
   return (
     <main className="explore-wrap" id="creator-leaderboard">
-      <header className="explore-heading"><h1>Creators</h1></header>
+      <header className="explore-heading"><h1>Creators<span>.</span></h1></header>
       <CreatorControls params={params} setParams={setParams} isLeaderboard />
       {creators.length ? (
         <table className="creator-table">

@@ -116,6 +116,24 @@ export function FundIntroduction({ fund }: { fund: ReferenceFund }) {
     </>
   );
 }
+/**
+ * 「人名 · 機構」拆成兩段：手機窄欄裡整串會折成三行，把機構降成第二行小字才讀得像 App 的列表。
+ * 分隔符保留在 DOM（螢幕閱讀器與複製文字不變），只在手機版用 CSS 隱藏。
+ */
+function NameLabel({ name }: { name: string }) {
+  const split = name.indexOf(' · ');
+  if (split < 0) return <>{name}</>;
+  return (
+    <>
+      {name.slice(0, split)}
+      <span className="fund-name-org">
+        <span className="fund-name-sep"> · </span>
+        {name.slice(split + 3)}
+      </span>
+    </>
+  );
+}
+
 export function FundName({ fund, url }: { fund: ReferenceFund; url?: string }) {
   const root = useRef<HTMLSpanElement>(null),
     card = useRef<HTMLElement>(null),
@@ -132,10 +150,10 @@ export function FundName({ fund, url }: { fund: ReferenceFund; url?: string }) {
   if (!meta.profile)
     return url ? (
       <Link className="fund-title-link" to={url}>
-        {fund.name}
+        <NameLabel name={fund.name} />
       </Link>
     ) : (
-      <>{fund.name}</>
+      <><NameLabel name={fund.name} /></>
     );
   return (
     <span ref={root}>
@@ -145,7 +163,7 @@ export function FundName({ fund, url }: { fund: ReferenceFund; url?: string }) {
           to={url}
           data-fund-profile={fund.slug}
         >
-          {fund.name}
+          <NameLabel name={fund.name} />
         </Link>
       ) : (
         <button
@@ -155,7 +173,7 @@ export function FundName({ fund, url }: { fund: ReferenceFund; url?: string }) {
           aria-haspopup="dialog"
           aria-controls={id}
         >
-          {fund.name}
+          <NameLabel name={fund.name} />
         </button>
       )}
       {createPortal(

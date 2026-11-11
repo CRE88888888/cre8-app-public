@@ -332,7 +332,7 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
 .app-ticket-summary dd { align-content: center; }
 .app-ticket-summary > :nth-last-child(-n+2) { border-bottom: 0; }
 
-.app-portfolio { max-width: 1120px; }
+/* 寬度交給全站版面格線（design-controls.css），不在這裡另訂。 */
 .app-portfolio .explore-heading { margin-bottom: 20px; }
 .app-portfolio-create { gap: 7px; }
 .app-portfolio-summary {
@@ -721,14 +721,9 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
   }
   #root .app-masthead { border-bottom: 0; }
   #root .app-masthead .wrap { min-height: 52px; }
-  #root .app-page-wallet {
-    position: absolute;
-    top: calc(12px + env(safe-area-inset-top));
-    right: max(16px, env(safe-area-inset-right));
-    z-index: 41;
-  }
-  body.portfolio-page .app-page-wallet .header-wallet[data-wallet-state="disconnected"] { display: none; }
-  #root :is(.masthead, .app-page-wallet) .header-wallet.app-wallet-toolbar {
+  /* 頁面本身已有大的連線按鈕時，右上角不再重複一個。 */
+  #root:has(.app-portfolio-guest) .app-nav-bar .header-wallet[data-wallet-state="disconnected"] { visibility: hidden; }
+  #root :is(.masthead, .app-nav-bar) .header-wallet.app-wallet-toolbar {
     position: relative;
     width: 44px;
     min-width: 44px;
@@ -739,7 +734,7 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
     background: var(--app-grouped);
     color: var(--ink);
   }
-  #root :is(.masthead, .app-page-wallet) .app-wallet-toolbar[data-wallet-state="verified"]::after {
+  #root :is(.masthead, .app-nav-bar) .app-wallet-toolbar[data-wallet-state="verified"]::after {
     position: absolute;
     right: 8px;
     top: 8px;
@@ -797,7 +792,7 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
   body.create-page #root main.page > section.card,
   #root .app-manage :is(.card, .panel) { border-top: 1px solid var(--app-card-line); }
   #root .app-manage .directory-empty p { font: var(--app-body); }
-  #root :is(.app-portfolio, #fund-explore) .explore-heading h1 span { display: none; }
+  #root :is(.app-portfolio, .app-manage, #fund-explore, #creator-leaderboard) .explore-heading h1 span { display: none; }
 
   body.atp-formal-market #fund-explore .explore-toolbar { margin-bottom: 12px; }
   #fund-explore .explore-toolbar .explore-search,
@@ -1184,4 +1179,104 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
     .public-periods { border-radius: var(--app-control-radius) !important; }
     .app-filter-check { border-radius: 50% !important; }
   }
+}
+
+/*
+ * ── App shell（手機，2026-11-11）──
+ * 目標是「打開像 App，不像縮小的網站」：
+ *   1. 分頁根目錄不再放網站式 logo 列，改成原生導覽列：右上錢包、下方大標題；
+ *      捲過大標題後導覽列才浮出毛玻璃底與置中小標題（iOS large title 的收合行為）。
+ *   2. 點擊有即時回饋（列表變灰、按鈕微縮），取消瀏覽器的藍色點擊高亮。
+ *   3. 「人名 · 機構」把機構放到第二行，列表不再折成三行。
+ */
+.app-nav-bar { display: none; }
+@media (max-width: 719px) {
+  html { -webkit-tap-highlight-color: transparent; }
+  #root a, #root button, #root summary { touch-action: manipulation; }
+
+  #root .app-nav-bar {
+    position: sticky;
+    top: 0;
+    z-index: 42;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-height: calc(52px + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
+    border-bottom: .5px solid transparent;
+    background: rgb(255 255 255 / 0%);
+    transition: background-color .2s ease, border-color .2s ease;
+  }
+  #root .app-nav-bar[data-scrolled="true"] {
+    border-bottom-color: var(--app-card-line);
+    background: rgb(255 255 255 / 82%);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+  }
+  .app-nav-bar-title {
+    position: absolute;
+    left: 64px;
+    right: 64px;
+    bottom: 0;
+    overflow: hidden;
+    color: var(--ink);
+    font: 600 17px/52px var(--app-native-font);
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity .2s ease, transform .2s ease;
+    pointer-events: none;
+  }
+  .app-nav-bar[data-scrolled="true"] > .app-nav-bar-title { opacity: 1; transform: none; }
+  /* 導覽列已佔住頂部安全區，頁面不必再自己留一次。 */
+  html body #root:has(> .app-nav-bar) > main { padding-top: 2px; }
+  #root:has(> .app-nav-bar) > main :is(.explore-heading h1),
+  body.atp-complete-create #root:has(> .app-nav-bar) > main > div:first-child > h1 {
+    font: 700 2.125rem/1.12 var(--app-native-font);
+    letter-spacing: -.02em;
+  }
+  #root .app-portfolio .explore-heading { padding-right: 0; }
+  body.atp-complete-create #root:has(> .app-nav-bar) > main > div:first-child { padding-top: 0; }
+
+  /* 分頁列：選中項用色塊膠囊包住圖示，比只改字重更好辨識。 */
+  #root .app-mobile-nav { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  #root .app-mobile-nav a { gap: 2px; }
+  #root .app-mobile-nav a > svg {
+    box-sizing: content-box;
+    padding: 3px 14px;
+    border-radius: 999px;
+    transition: background-color .2s ease, transform .12s ease;
+  }
+  #root .app-mobile-nav a[aria-current="page"] > svg { background: var(--app-segment); }
+  #root .app-mobile-nav a:active > svg { transform: scale(.9); }
+
+  /* 點擊回饋 */
+  #root :is(.fund-row, .creator-table tbody tr, .app-portfolio-ledger > li, .recent-trades li) {
+    transition: background-color .12s ease;
+  }
+  #root :is(.fund-row, .creator-table tbody tr, .app-portfolio-ledger > li):active { background: var(--app-grouped); }
+  #root :is(.btn, [data-slot="button"], .header-wallet) { transition: transform .12s ease, background-color .15s ease; }
+  #root :is(.btn, [data-slot="button"], .header-wallet):not(:disabled):active { transform: scale(.97); }
+
+  /* 「人名 · 機構」→ 兩行 */
+  #root .fund-row .fund-name-sep { display: none; }
+  #root .fund-row .fund-name-org {
+    display: block;
+    margin-top: 1px;
+    color: var(--steel);
+    font: 400 .8125rem/1.35 var(--app-native-font);
+    letter-spacing: 0;
+  }
+
+  /* Creators：一列就是一個 creator，手機不需要表頭。 */
+  #creator-leaderboard .creator-count::after { content: " funds"; color: var(--steel); font: 400 .8125rem var(--app-native-font); }
+  #creator-leaderboard .creator-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+}
+@media (max-width: 719px) and (prefers-reduced-motion: reduce) {
+  #root .app-nav-bar, .app-nav-bar-title, #root .app-mobile-nav a > svg,
+  #root :is(.btn, [data-slot="button"], .header-wallet) { transition: none; }
+  #root :is(.btn, [data-slot="button"], .header-wallet):active,
+  #root .app-mobile-nav a:active > svg { transform: none; }
 }

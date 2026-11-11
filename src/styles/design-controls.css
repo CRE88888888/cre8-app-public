@@ -96,3 +96,70 @@
 body.atp-complete-create #root div[data-fund-cover],
 body.atp-complete-create #root button[data-fund-cover] { border-radius: 12px !important; overflow: hidden; }
 body.atp-complete-create #root button[data-fund-cover] img { border-radius: 8px !important; }
+
+/*
+ * ── 全站版面格線（桌面與平板）──
+ * 原本頁首 1240／24、基金列表 1344／40、Portfolio 與基金詳情 1120／24、Create 1240／24，
+ * 同一個視窗裡五個頁面的左緣落在五個位置，換頁時整個版面會「跳」。
+ * 統一成 DESIGN.md 的 1344px／40px gutter：logo、頁標題、返回連結與內容都對齊同一條線。
+ */
+@media (min-width: 720px) {
+  :root { --page-max: 1344px; --page-gutter: 40px; }
+  #root .app-masthead .wrap,
+  #root > main.explore-wrap,
+  #root > main.vault-content,
+  #root > main.page,
+  body.atp-complete-create #root > main {
+    max-width: var(--page-max);
+    margin-inline: auto;
+    padding-left: var(--page-gutter);
+    padding-right: var(--page-gutter);
+  }
+  body.atp-complete-market #root > main.explore-wrap { padding-left: var(--page-gutter); padding-right: var(--page-gutter); }
+
+  /* 基金詳情：主欄變寬後封面改 21:9，報酬數字才不會被推到第一屏以外。 */
+  body.atp-formal-fund .vgrid { grid-template-columns: minmax(0, 1fr) 360px; gap: 64px; }
+  body.atp-formal-fund #atp-fund-cover { aspect-ratio: 21 / 9; }
+  body.atp-formal-fund .vgrid > .main :is(.vault-about, .recent-trades) p { max-width: 72ch; }
+
+  /* 頁標題：各頁同一個字級與節奏（Create 原本是 32px、其他是 44px）。 */
+  body.atp-complete-create #root > main > div:first-child > h1 {
+    font: 600 44px/1.15 var(--sans);
+    letter-spacing: -1.6px;
+  }
+
+  /*
+   * 基金列表密度：原本一列約 140px 卻只有名字、報酬與三個 logo。
+   * 縮圖 88→64、上下留白 26→16，並把手機版已有的走勢小圖帶回桌面，
+   * 一屏可看到的基金數約多一倍，且一眼能比較走勢而不只是一個數字。
+   */
+  body.atp-formal-market #fund-explore .fund-row-link,
+  body.atp-formal-market #fund-explore .fund-list-columns {
+    grid-template-columns: 64px minmax(0, 1fr) 120px 112px 172px;
+  }
+  body.atp-formal-market #fund-explore .fund-list-columns > span:first-child { grid-column: 1 / span 3; }
+  body.atp-formal-market #fund-explore .fund-row-link { padding: 16px 0; }
+  body.atp-formal-market #fund-explore .fund-thumb,
+  body.atp-formal-market #fund-explore .public-portrait { width: 64px; height: 64px; }
+  body.atp-formal-market #fund-explore .fund-list-body h3 { margin-bottom: 4px; font-size: 19px; letter-spacing: -.3px; }
+  body.atp-formal-market #fund-explore .fund-list-trend {
+    display: block;
+    width: 100%;
+    height: 32px;
+  }
+  .fund-list-trend.pos { color: var(--positive); }
+  .fund-list-trend.neg { color: var(--negative); }
+  body.atp-formal-market .fund-row { transition: background-color .15s ease; }
+  body.atp-formal-market .fund-row:hover { background: var(--paper); }
+}
+@media (min-width: 720px) and (max-width: 1023px) {
+  :root { --page-gutter: 24px; }
+  #root .app-masthead .wrap { gap: 28px; }
+  body.atp-formal-market #fund-explore .fund-row-link,
+  body.atp-formal-market #fund-explore .fund-list-columns { grid-template-columns: 56px minmax(0, 1fr) 96px 100px; column-gap: 16px; }
+  body.atp-formal-market #fund-explore .fund-list-columns > span:last-child,
+  body.atp-formal-market #fund-explore .fund-asset-icons { display: none; }
+  body.atp-formal-market #fund-explore .fund-thumb,
+  body.atp-formal-market #fund-explore .public-portrait { width: 56px; height: 56px; }
+  body.atp-formal-fund .vgrid { grid-template-columns: minmax(0, 1fr) 300px; gap: 32px; }
+}

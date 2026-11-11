@@ -52,3 +52,13 @@
 此分支的手機版採用 iOS 風格的共用線條圖示、圓角卡片、浮動導覽與分段控制；適用於探索、基金詳情、交易票券及 Portfolio。紙白與藍灰區隔資訊層級，狀態仍同時用文字表示。基金資料、錢包驗證和交易行為沿用既有流程。
 
 手機版使用系統字體、中性分組背景、白色卡片，以及 CRE8 steel／deep 灰藍作為操作色。探索和 Portfolio 直接以頁面標題開始，基金頁只保留返回及分享圖示；入金／提領抽屜由入口決定模式，不重複呈現切換列。行動與桌面皆保留原本的導覽目的地。
+
+## 2026-11-11 版面與 App 殼層調整
+
+- 桌面（≥720px）頁首、Funds、Creators、Portfolio、Manage、Create、基金詳情共用同一條左緣：1344px／40px gutter（720–1023px 為 24px）。規則集中在 `design-controls.css` 末段。
+- 基金列表桌面版：縮圖 64px、列距 16px，並顯示與手機相同的走勢小圖；720–1023px 隱藏資產圖示欄。
+- 頁標題一律使用 fog 句點（Explore funds. / Creators. / Portfolio. / Manage.），手機隱藏句點。桌面主導覽「Leaderboard」改稱 Creators，與頁標題及手機分頁一致。
+- 手機分頁根目錄（Funds、Creators、Create、Portfolio、Manage）不顯示網站 logo 列，改為原生式導覽列：右上錢包、頁面 h1 作大標題；捲過約 56px 後導覽列出現毛玻璃底與置中小標題。頁面已有大型連線按鈕時，導覽列錢包圖示隱藏。
+- 手機分頁順序：Funds、Creators、Create、Portfolio、Manage；選中項以膠囊底色包住圖示。列表與按鈕有按壓回饋，`prefers-reduced-motion` 時關閉。
+- 「人名 · 機構」在手機列表中拆成兩行。
+- 支援加到主畫面：`public/manifest.webmanifest`（standalone、start_url `/vaults`）與 `public/app-icons/`。
