@@ -266,17 +266,23 @@ export function VaultsPage() {
           </>
         ) : (
           <>
+            {search}
+            {/* 一顆 Filters 收進所有篩選（與手機一致）：原本 Assets、Advanced 兩顆，使用者得先決定要開哪一個。 */}
             <div className="explore-filter-list">
-              <details className="explore-filter" name="fund-filter" onBlur={closeOnBlur} onKeyDown={closeOnEscape}>
-                <summary><AppIcon name="holdings" size={16} />Assets</summary>
-                <div className="explore-filter-panel">{assetOptions}</div>
-              </details>
-              <details className="explore-filter" name="fund-filter" onBlur={closeOnBlur} onKeyDown={closeOnEscape}>
-                <summary><AppIcon name="filter" size={16} />Advanced</summary>
-                <div className="explore-filter-panel">{advancedOptions}</div>
+              <details className="explore-filter explore-filter--all" name="fund-filter" onBlur={closeOnBlur} onKeyDown={closeOnEscape}>
+                <summary>
+                  <AppIcon name="filter" size={16} />Filters
+                  {filterCount > 0 && <span className="app-filter-count" aria-label={`${filterCount} applied`}>{filterCount}</span>}
+                </summary>
+                <div className="explore-filter-panel">
+                  <fieldset className="app-filter-fields">
+                    <legend>Asset type</legend>
+                    {assetOptions}
+                  </fieldset>
+                  <div className="app-filter-options">{advancedOptions}</div>
+                </div>
               </details>
             </div>
-            {search}
           </>
         )}
       </div>

@@ -436,12 +436,12 @@ export function ActivateFundPage(): ReactNode {
               <button
                 type="button"
                 className="btn btn--sm"
-                onClick={() => navigate('/portfolios')}
+                onClick={() => navigate('/studio/funds')}
               >
-                Open the portfolio
+                See it in My funds
               </button>
-              <Link className="btn btn--sm btn--ghost" to="/vaults">
-                Back to vaults
+              <Link className="btn btn--sm btn--ghost" to="/portfolios">
+                Open the portfolio
               </Link>
             </div>
           </Note>

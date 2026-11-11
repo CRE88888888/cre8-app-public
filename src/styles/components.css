@@ -173,36 +173,35 @@
   color: var(--muted);
 }
 
-/* badge */
+/*
+ * badge：狀態用「色點＋文字」，不用外框小方塊。外框＋等寬字的標籤一多，畫面就像模板；
+ * 色點已足夠分辨狀態，文字本身仍寫出狀態（不只靠顏色）。
+ */
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 22px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid var(--hair);
-  background: var(--white);
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.04em;
+  min-height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--steel);
+  font: 500 13px/1.3 var(--sans);
+  letter-spacing: 0;
   white-space: nowrap;
 }
-
-.badge--ok {
-  border-color: rgba(31, 122, 85, 0.35);
-  color: var(--pos);
+.badge::before {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
 }
 
-.badge--warn {
-  border-color: rgba(138, 90, 31, 0.35);
-  color: var(--warn);
-}
-
-.badge--bad {
-  border-color: rgba(178, 59, 59, 0.35);
-  color: var(--neg);
-}
+.badge--ok { color: var(--pos); }
+.badge--warn { color: var(--warn); }
+.badge--bad { color: var(--neg); }
 
 /* 提示區塊 */
 .note {

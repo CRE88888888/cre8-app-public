@@ -96,7 +96,11 @@ export function PortfoliosPage(): ReactNode {
       </header>
 
       {token === null ? (
-        <section className="app-portfolio-summary app-portfolio-guest" aria-label="Portfolio access">
+        <section className="app-portfolio-summary app-portfolio-guest" aria-labelledby="portfolio-guest-title">
+          {/* 未連錢包時只放一顆按鈕，使用者不知道連了之後會看到什麼；先說明這頁的用途再請他連線。 */}
+          <span className="app-icon-tile app-portfolio-hero-icon"><AppIcon name="wallet" size={22} /></span>
+          <h2 id="portfolio-guest-title">See your funds in one place</h2>
+          <p>Connect your wallet to see each fund account you hold, its current value, and every rebalance.</p>
           <WalletMenu inline />
           <Link to="/vaults">Explore funds <AppIcon name="right" size={16} /></Link>
         </section>

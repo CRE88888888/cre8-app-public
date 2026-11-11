@@ -24,6 +24,8 @@ import { useBodyClass } from '../../lib/use-body-class';
 import { useOwnerWallet } from '../../lib/use-owner-wallet';
 import { useConnectedSessionToken } from '../../lib/use-connected-session';
 import { WalletMenu } from '../../components/WalletMenu';
+import { isLiveFund, WHITELIST_COPY } from '../../lib/live-funds';
+import { useWallet } from '../../store/wallet';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge, ErrorNote, Note, Spinner } from '../../components/ui';
@@ -247,6 +249,14 @@ export function FundPage(): ReactNode {
    */
   const [walletUsdt, setWalletUsdt] = useState<bigint | null>(null);
   const [closing, setClosing] = useState(false);
+  /**
+   * Demo：不在開放清單上的基金是 whitelist-only。只要錢包連上就能操作到送出，
+   * 送出時顯示 whitelist 提示，不簽名、不送交易（見 lib/live-funds.ts）。
+   */
+  // Community 策略（/funds/strategy/:id，真的上鏈的 ATP 策略）照常可以存入；只有範例基金是 whitelist-only。
+  const whitelistOnly = strategyId === null && !isLiveFund(slug);
+  const connectedAddress = useWallet((state) => state.address);
+  const [whitelistNotice, setWhitelistNotice] = useState<TicketAction | null>(null);
   const [reviewKey, setReviewKey] = useState<string | null>(null);
   const [ticketProgress, setTicketProgress] = useState<{ scope: string; progress: TicketProgress } | null>(null);
   const reviewHeading = useRef<HTMLHeadingElement>(null);
@@ -416,6 +426,7 @@ export function FundPage(): ReactNode {
   const withdrawValid = /^(?:\d+(?:\.\d*)?|\.\d+)$/.test(withdrawAmount) &&
     Number.isFinite(withdrawRequested) && withdrawRequested > 0.000001;
   const withdrawLimit = Math.min(withdrawRequested, totalUsd());
+  const gatedDepositValid = /^(?:\d+(?:\.\d*)?|\.\d+)$/.test(amount) && Number(amount) > 0;
 
   function openMobileTicket(action: TicketAction) {
     setReviewKey(null);
@@ -426,6 +437,22 @@ export function FundPage(): ReactNode {
 
   function submitTicket(action: TicketAction) {
     if (ticketBusy) return;
+    if (whitelistOnly) {
+      if (connectedAddress === null) return;
+      if (action === 'deposit' && !gatedDepositValid) return;
+      if (action === 'withdraw' && !withdrawValid) return;
+      if (mobile && !reviewMatches) {
+        setReviewKey(reviewId);
+        return;
+      }
+      setReviewKey(null);
+      if (mobile) {
+        showProgress({ tone: 'notice', title: WHITELIST_COPY.title, detail: WHITELIST_COPY[action], restricted: true });
+      } else {
+        setWhitelistNotice(action);
+      }
+      return;
+    }
     if (mobile) {
       if (token === null || wallet === null || usdt === undefined) return;
       if (action === 'deposit' && (depositUnits <= 0n || depositTooLarge || strategy === undefined)) return;
@@ -462,13 +489,13 @@ export function FundPage(): ReactNode {
                 )}
               <div className="panel-b">
                 {tab === 'withdraw' ? (
-                  token !== null && withdrawLoadError !== null ? (
+                  !whitelistOnly && token !== null && withdrawLoadError !== null ? (
                     <ErrorNote error={withdrawLoadError} />
-                  ) : token !== null && withdrawLoading ? (
+                  ) : !whitelistOnly && token !== null && withdrawLoading ? (
                     <div className="row">
                       <Spinner /> <span className="muted">Reading balances…</span>
                     </div>
-                  ) : token !== null && holding === undefined ? (
+                  ) : !whitelistOnly && token !== null && holding === undefined ? (
                     <Note>This wallet has no position in this fund.</Note>
                   ) : (
                     <form
@@ -504,7 +531,16 @@ export function FundPage(): ReactNode {
                           </>
                         ) : <span className="swap-sub">USDT → {walletAddress === null ? 'your wallet' : shortAddress(walletAddress)}</span>}
                       </div>
-                      {token === null ? <WalletMenu inline /> : (
+                      {whitelistOnly ? (
+                        connectedAddress === null ? <WalletMenu inline /> : (
+                          <>
+                            <button type="submit" className="btn primary block" disabled={!withdrawValid}>
+                              {mobile ? 'Review withdrawal' : 'Withdraw in USDT'}
+                            </button>
+                            {whitelistNotice === 'withdraw' && <WhitelistNote action="withdraw" />}
+                          </>
+                        )
+                      ) : token === null ? <WalletMenu inline /> : (
                         <>
                           {!mobile && <p className="fine">
                             Cash {formatUsd(cashUsd())} · positions {formatUsd(Math.max(0, totalUsd() - cashUsd()))} · total{' '}
@@ -558,11 +594,11 @@ export function FundPage(): ReactNode {
                       )}
                     </form>
                   )
-                ) : token !== null && depositLoadError !== null ? (
+                ) : !whitelistOnly && token !== null && depositLoadError !== null ? (
                   <ErrorNote error={depositLoadError} />
-                ) : token !== null && (strategies.isPending || assets.isPending) ? (
+                ) : !whitelistOnly && token !== null && (strategies.isPending || assets.isPending) ? (
                   <div className="row"><Spinner /> <span className="muted">Loading deposit details…</span></div>
-                ) : token !== null && strategy === undefined ? (
+                ) : !whitelistOnly && token !== null && strategy === undefined ? (
                   <Note>
                     This fund exists only as an example in the catalogue — nobody has published it on-chain yet, so
                     there is nothing to deposit into.
@@ -628,7 +664,16 @@ export function FundPage(): ReactNode {
                         <button type="button" onClick={() => setAmount(maxDepositLabel())}>Max</button>
                       </div>
                     )}
-                    {token === null ? <WalletMenu inline /> : (
+                    {whitelistOnly ? (
+                      connectedAddress === null ? <WalletMenu inline /> : (
+                        <>
+                          <button type="submit" className="btn primary block" disabled={!gatedDepositValid}>
+                            {mobile ? 'Review deposit' : 'Deposit'}
+                          </button>
+                          {whitelistNotice === 'deposit' && <WhitelistNote action="deposit" />}
+                        </>
+                      )
+                    ) : token === null ? <WalletMenu inline /> : (
                       <button type="submit" className="btn primary block" disabled={ticketBusy || wallet === null || usdt === undefined || depositTooLarge || (mobile && depositUnits <= 0n)}>
                         {busy ? 'Sending…' : mobile ? 'Review deposit' : 'Deposit'}
                       </button>
@@ -679,10 +724,12 @@ export function FundPage(): ReactNode {
                   {ticketFund}
                   {reviewMatches ? <TicketReview
                     action={tab}
-                    amount={tab === 'deposit' ? `${formatUnits(depositUnits, usdtDecimals)} ${usdt?.symbol ?? 'USDT'}` : `${withdrawLimit.toLocaleString('en-US', { maximumFractionDigits: 6 })} USDT`}
+                    amount={tab === 'deposit'
+                      ? `${whitelistOnly ? Number(amount).toLocaleString('en-US', { maximumFractionDigits: 6 }) : formatUnits(depositUnits, usdtDecimals)} ${usdt?.symbol ?? 'USDT'}`
+                      : `${(whitelistOnly ? withdrawRequested : withdrawLimit).toLocaleString('en-US', { maximumFractionDigits: 6 })} USDT`}
                     destination={tab === 'deposit' ? (holding?.smartAccounts[0]?.address ?? 'Your new fund account') : (walletAddress ?? 'Your wallet')}
                     network={appChain.name}
-                    note={tab === 'deposit'
+                    note={whitelistOnly ? undefined : tab === 'deposit'
                       ? 'Your wallet may also ask for a BNB top-up or token approval.'
                       : [
                         withdrawRequested > totalUsd() && 'Limited to the current fund value.',
@@ -1619,3 +1666,13 @@ async function sendUsdt(
 // AssetLogo 目前沒用到（表格用符號），保留 import 會讓 typecheck 失敗，所以標記為已使用。
 void AssetLogo;
 void Spinner;
+
+/** 桌面版：whitelist-only 的基金按下送出後，在按鈕下方說明。手機版改用 TicketReceipt 顯示同一段文字。 */
+function WhitelistNote({ action }: { action: TicketAction }): ReactNode {
+  return (
+    <div className="app-whitelist-note" role="status">
+      <strong>{WHITELIST_COPY.title}</strong>
+      <p>{WHITELIST_COPY[action]}</p>
+    </div>
+  );
+}

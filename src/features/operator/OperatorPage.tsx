@@ -11,6 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Badge, ErrorNote, Spinner } from '../../components/ui';
 import { toast } from '../../components/Toast';
+import { Link } from 'react-router-dom';
+import { AppIcon } from '../../components/AppIcon';
 import { WalletMenu } from '../../components/WalletMenu';
 
 /** 相對時間（「12 秒前」）比絕對時間更能回答「現在有沒有在跑」。 */
@@ -491,11 +493,16 @@ export function OperatorPage(): ReactNode {
   return (
     <main className="explore-wrap app-manage">
       <header className="explore-heading">
-        <h1>Manage</h1>
+        <h1>Operations<span>.</span></h1>
       </header>
-      <div className="directory-empty">
-        <div className="directory-empty-actions"><WalletMenu inline /></div>
-      </div>
+      {/* 這是 CRE8 內部的營運後台，不是 creator 的管理頁（creator 用 Studio）。 */}
+      <section className="app-portfolio-summary app-portfolio-guest" aria-labelledby="ops-guest-title">
+        <span className="app-icon-tile app-portfolio-hero-icon"><AppIcon name="manage" size={22} /></span>
+        <h2 id="ops-guest-title">Operations console</h2>
+        <p>This console is for the CRE8 operations team. Creators manage their funds in Studio.</p>
+        <WalletMenu inline />
+        <Link to="/studio">Go to Studio <AppIcon name="right" size={16} /></Link>
+      </section>
     </main>
   );
 }
@@ -517,7 +524,7 @@ function CreatorOperatorPage({ token }: { token: string }): ReactNode {
     <main className="explore-wrap app-manage">
       <header className="explore-heading">
         <div>
-          <h1>Manage</h1>
+          <h1>Operations<span>.</span></h1>
         </div>
         <div className="explore-heading-actions">
           <button type="button" className="btn" disabled={overview.isFetching} onClick={() => void overview.refetch()}>
