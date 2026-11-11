@@ -580,3 +580,15 @@ body.atp-complete-fund #ticket .swap .btn.block {
     height: 60px;
   }
 }
+
+/* whitelist-only 基金按下送出後的說明（桌面在按鈕下方；手機用 TicketReceipt）。 */
+.app-whitelist-note {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: var(--snow);
+  color: var(--ink);
+}
+.app-whitelist-note strong { font: 600 14px/1.35 var(--sans); }
+.app-whitelist-note p { margin: 0; color: var(--steel); font: 400 13px/1.5 var(--sans); }

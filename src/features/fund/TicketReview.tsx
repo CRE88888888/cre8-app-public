@@ -10,6 +10,8 @@ export type TicketProgress = {
   tone: 'pending' | 'confirmed' | 'notice' | 'error';
   hash?: string;
   amount?: string;
+  /** whitelist-only：沒有送出任何東西，所以不給「View portfolio」，只給完成與改金額。 */
+  restricted?: boolean;
 };
 
 export function TicketFund({ name, image }: {
@@ -68,7 +70,7 @@ export function TicketReceipt({
   explorerUrl?: string;
   busy: boolean;
 }) {
-  const icon = progress.tone === 'confirmed' ? 'check' : progress.tone === 'notice' ? 'clock' : 'alert';
+  const icon = progress.restricted ? 'info' : progress.tone === 'confirmed' ? 'check' : progress.tone === 'notice' ? 'clock' : 'alert';
   return (
     <div className="app-ticket-receipt">
       <div className="app-ticket-result" data-tone={progress.tone} role="status">
@@ -87,7 +89,12 @@ export function TicketReceipt({
       )}
       {!busy && (
         <div className="app-sheet-actions app-sheet-actions-stacked">
-          {progress.tone === 'error' && !progress.hash ? (
+          {progress.restricted ? (
+            <>
+              <button type="button" className="btn primary" onClick={onDone}>Done</button>
+              <button type="button" className="btn ghost" onClick={onBack}><AppIcon name="left" size={16} /> Back to amount</button>
+            </>
+          ) : progress.tone === 'error' && !progress.hash ? (
             <button type="button" className="btn primary" onClick={onBack}><AppIcon name="left" size={16} /> Back to amount</button>
           ) : (
             <>

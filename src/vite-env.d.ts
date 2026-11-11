@@ -5,6 +5,8 @@ interface ImportMetaEnv {
   readonly VITE_API_BASE?: string;
   /** 讀鏈用的 RPC。只在 dev 私鑰模式需要（錢包模式借錢包的 transport）。 */
   readonly VITE_RPC_URL?: string;
+  /** 真的開放存入／提領的基金 slug（逗號分隔）。其餘基金為 whitelist-only，見 `lib/live-funds.ts`。 */
+  readonly VITE_LIVE_FUNDS?: string;
 }
 
 interface ImportMeta {

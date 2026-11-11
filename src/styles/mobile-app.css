@@ -1476,21 +1476,22 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
 @layer app-shapes {
   :is(#root, body) :is(.btn, [data-slot="button"], .app-mode-switch, .header-wallet, .app-wallet-toolbar,
       .app-filter-trigger, .creator-filter-trigger, .explore-search, .creator-search, .creator-periods,
-      .creator-periods button, .public-periods, .public-periods button, .collection-tabs > a,
+      .creator-periods button, .public-periods, .public-periods button,
       .atp-facts-trigger, .app-ticket-presets button, .wallet-menu__item,
       [data-slot="sheet-close"], .app-fund-toolbar > :is(a, button), .fund-cover-nav > :is(a, button),
       .explore-filter > summary, .app-mobile-nav, .app-mobile-nav a, .public-mobile-cta,
       .app-nav-bar .app-mode-label) {
     border-radius: 999px !important;
   }
-  /* 分頁標籤：桌面是底線式導覽（沒有外框，跟主導覽一樣不需要形狀）；手機是分段控制，跟按鈕一樣是膠囊。 */
-  :is(#root, body) [data-slot="tabs-trigger"] { border-radius: 0 !important; }
+  /* 分頁標籤與基金分類：桌面是底線式導覽（底線必須是直的）；手機是分段控制，跟按鈕一樣是膠囊。 */
+  :is(#root, body) :is([data-slot="tabs-trigger"], .collection-tabs > a) { border-radius: 0 !important; }
   @media (max-width: 719px) {
-    :is(#root, body) :is([data-slot="tabs-trigger"], [data-slot="tabs-list"]) { border-radius: 999px !important; }
+    :is(#root, body) :is([data-slot="tabs-trigger"], [data-slot="tabs-list"], .collection-tabs > a) { border-radius: 999px !important; }
   }
   :is(#root, body) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
     border-radius: 12px !important;
   }
+  :is(#root, body) .app-whitelist-note { border-radius: 12px !important; }
   /* 搜尋欄本身是膠囊，裡面的輸入框不再自帶一層圓角矩形。 */
   :is(#root, body) :is(.explore-search, .creator-search) input { border-radius: 0 !important; }
   #root .app-masthead .app-mode-label { border-radius: 6px !important; }
