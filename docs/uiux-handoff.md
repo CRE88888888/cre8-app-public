@@ -3,7 +3,7 @@
 > 給接手這個前端的 agent（或下一輪的自己）。
 > 讀完這份你應該能：改一個頁面而不弄壞另一個、知道哪些 class 不能碰、知道改完要驗什麼。
 >
-> 最後更新：2026-11-11 · 對應 commit：見 `git log --oneline -5`
+> 最後更新：2026-11-11 · 對應 commit：`65b2550`（含另一次大規模 UI 同步，見 §12）
 
 ---
 
@@ -46,7 +46,7 @@ bun run build      # = typecheck + vite build
 
 | | **A. 公開市集頁** | **B. 營運/工具頁** |
 |---|---|---|
-| 路由 | `/vaults`、`/funds/:slug`、`/strategies/:id`、`/portfolios` | `/operator`、`/create`、抽屜、表單 |
+| 路由 | `/`（landing）、`/vaults`、`/leaderboard`、`/creator/:id`、`/vault/:slug`、`/funds/:slug`、`/asset/:slug`、`/portfolio` | `/operator`、`/create`、`/create/activate`、`/strategies/:id`、抽屜、表單 |
 | 樣式來源 | `styles/vendor/design.css` + `fund-explore.css`（**設計稿的逐字複本**）| 我們自己寫的 class + shadcn |
 | 方針 | **保留手寫 class**，不要換成 shadcn | **優先使用 shadcn 元件** |
 | 為什麼 | 那些 class 就是設計稿的一部分，換掉等於重新設計 | 這裡的價值是 a11y / focus trap / 鍵盤操作 |
@@ -61,12 +61,28 @@ bun run build      # = typecheck + vite build
 
 ### 已存在的 `src/styles/`
 
+`src/main.tsx` 依序匯入 12 個（**順序就是優先權，改順序會改變外觀**）：
+
 ```
-vendor/design.css        設計稿複本（4506 行）—— 只讀
-vendor/fund-explore.css  市集頁版面 —— 只讀
-base.css / components.css / tokens.css / phase-banner.css   我們自己的
-shadcn.css               Tailwind 入口 + shadcn token（見 §3）
+vendor/fonts.css           自架字體
+vendor/design.css          設計稿複本 —— 只讀
+vendor/fund-explore.css    市集頁版面 —— 只讀
+tokens.css                 顏色/間距變數
+shadcn.css                 Tailwind 入口 + shadcn token（見 §3）
+base.css                   版面基礎
+components.css             共用元件樣式
+formal-ui.css              正式版 UI 的微調層
+public-fund-explore.css    公開頁（landing/榜單）版面
+public-detail-source.css   詳情頁（基金/資產）
+complete-ui.css            登入後 UI 的整合層（604 行，最大的一層）
+design-controls.css        按鈕高度/間距的定案微調
+creators.css               Creator 榜單
+
+（`phase-banner.css` 已移除；`PhaseBanner.tsx`、`RequireSession.tsx` 兩個元件也已刪除。）
 ```
+
+**加新樣式時問自己**：這是「設計稿複本」（→ 不要碰）還是「我們的調整層」（→ 加到對應的層，
+不要另開新檔）。目前已經有 13 個 CSS 檔，再加一層會讓「哪個檔案決定這個外觀」更難查。
 
 ---
 
@@ -259,10 +275,16 @@ src/
 │   └── ui.tsx              Note / ErrorNote / Badge / Spinner（design.css 樣式）
 ├── features/
 │   ├── fund/FundPage.tsx   ★ 最複雜的一頁：Deposit / Withdraw / Close、兩個抽屜
+│   ├── reference/          ★ 公開頁（landing/榜單/Creator/資產詳情/基金總覽）
+│   │                       12 個檔案：Leaderboard、CreatorPage、FundOverview、AssetPage、
+│   │                       Performance、Profile、RecentTrades、ReferenceSheet…
 │   ├── operator/           Operator dashboard（scheduler 心跳、活動流、Run round）
-│   ├── create/             建基金
+│   ├── create/             建基金（DesignFundPage 是設計稿版流程）
 │   ├── vaults/             市集目錄
 │   └── strategy/, portfolios/, auth/
+├── reference/              ★ 公開頁用的靜態資料樹（components/data/lib）
+│   ├── data/               示範基金、資產、走勢資料（stock-venue-data.ts 1077 行）
+│   └── lib/
 ├── lib/
 │   ├── api.ts              所有 API 型別與呼叫（Bearer token）
 │   ├── kernel.ts           ★ CHAIN_ID、sendSudoCalls、approve、sendSweep、sendWithdraw
@@ -280,12 +302,15 @@ src/
 ```
 □ bun run typecheck              零錯誤（noUnusedLocals 會抓未使用的 import）
 □ bun run build                  成功
-□ 手動看三個畫面：
-   /vaults                       市集頁版面**沒有變**（這是最容易被 shadcn 弄壞的地方）
-   /funds/elon-universe          Deposit / Withdraw / Close 都按得到
-   /operator                     System 區塊的標籤**看得清楚**（深灰，不是近白）
+□ bun run test                   18 pass / 0 fail（tests/ 三個檔案）
+□ 手動看四個畫面：
+   /                            **landing**（不是 SPA 的 /vaults）
+   /vaults                      市集頁版面**沒有變**（最容易被 shadcn 弄壞的地方）
+   /funds/elon-universe         Deposit / Withdraw / Close 都按得到
+   /operator                    System 區塊的標籤**看得清楚**（深灰，不是近白）
 □ 深連結可開抽屜：?facts=1 / ?position=1
 □ 有一個 toast 會出現且會消失（不是永遠在轉）
+□ 訪客（未登入）能看 `/vaults`、`/funds/:slug`、`/portfolio`（見 §12）
 ```
 
 ---
@@ -387,3 +412,50 @@ Cloudflare Pages（專案 cre8-atp）+ `public/_worker.js` 代理 /api → Railw
   這不是持有人收益或真實 AUM。沒有相加基金 followers 以冒充去重人數。
 * Creator 詳情只顯示該地址的基金；搜尋、期間與返回路徑保留，沿用本站返回 URL 驗證。
 * Kernel、API、wallet、SIWE、session 與交易 handler 均未變動。UI 驗收不簽名、不送出交易。
+
+---
+
+## 15. 接手者補充（2026-11-11 整合後，前一位 agent 的記錄）
+
+§12–§14 是整合者自己寫的。這裡只補他們沒寫、但會咬人的幾件事。
+
+### 15.1 `/` 是 landing，靠**兩個地方**實作 —— 缺一就會壞
+
+```
+dev / preview ：vite.config.ts 的 `landing-home` middleware
+               把 `/` 改寫成 `/landing/index.html`
+production    ：public/_worker.js
+               把 `/` 改寫成 `/landing/` 再交給 env.ASSETS
+```
+
+**改首頁時兩邊都要看**：只改 vite，本機對、線上不一定；只改 worker，`vite dev` 看不到效果。
+靜態檔在 `public/landing/`，build 後是 `dist/landing/`。
+
+### 15.2 `_worker.js` 以前完全沒有測試覆蓋
+
+`vite dev` 不會執行它，所以只有部署後才會發現問題。整合者補了 `tests/worker.test.ts`（129 行），
+涵蓋 `/api` 代理與 `/` → landing 改寫。**動 `_worker.js` 就跑 `bun run test`。**
+
+### 15.3 我的三個修正被保留下來（後續別誤刪）
+
+```
+vite.config.ts 的 events → node_modules/events/events.js 別名   （@zerodev/sdk 需要）
+package.json 的 @types/node + tsconfig 的 "node"                （vite.config 用 node:url）
+.github/workflows/ci.yml                                       （PR 的 typecheck/build 檢查）
+```
+
+原因見 §6.5：這三個都是「本機靠家目錄 `~/node_modules` 才過、CI 掛掉」的修正。
+
+### 15.4 驗證本次整合的實際數字
+
+```
+bun run typecheck  → 0 錯誤
+bun run test       → 18 pass / 0 fail（3 個檔案）
+bun run build      → built in 2.51s
+dist/              → 含 _worker.js、landing/、fund-covers/
+chainId            → bundle 內 `chainId:56` 出現 23 處、`chainId:1337` 0 處
+```
+
+> ⚠ **不要用「bundle 裡有沒有 `1337` 這個字串」判斷鏈設定**。走勢圖的資料點就含
+> `0.9340011421991337` 這種小數 —— 我一度因此誤報 production 連到本機鏈。
+> 要看帶欄位名的形式（`chainId:56`），或用 `vite` 的 `loadEnv`。
