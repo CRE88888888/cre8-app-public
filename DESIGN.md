@@ -58,7 +58,9 @@
 - 桌面（≥720px）頁首、Funds、Creators、Portfolio、Manage、Create、基金詳情共用同一條左緣：1344px／40px gutter（720–1023px 為 24px）。規則集中在 `design-controls.css` 末段。
 - 基金列表桌面版：縮圖 64px、列距 16px，並顯示與手機相同的走勢小圖；720–1023px 隱藏資產圖示欄。
 - 頁標題一律使用 fog 句點（Explore funds. / Creators. / Portfolio. / Manage.），手機隱藏句點。桌面主導覽「Leaderboard」改稱 Creators，與頁標題及手機分頁一致。
-- 手機分頁根目錄（Funds、Creators、Create、Portfolio、Manage）不顯示網站 logo 列，改為原生式導覽列：右上錢包、頁面 h1 作大標題；捲過約 56px 後導覽列出現毛玻璃底與置中小標題。頁面已有大型連線按鈕時，導覽列錢包圖示隱藏。
-- 手機分頁順序：Funds、Creators、Create、Portfolio、Manage；選中項以膠囊底色包住圖示。列表與按鈕有按壓回饋，`prefers-reduced-motion` 時關閉。
+- 手機分頁根目錄（Funds、Creators、Create、Portfolio、Manage）不顯示網站 logo 列：頁面 h1 作大標題，右上為玻璃圓鈕錢包。捲過約 56px 後出現 scroll edge 霧化與置中小標題。頁面已有大型連線按鈕時，右上錢包隱藏。
+- 手機控制層採 Liquid Glass 語言：分頁列與基金頁 Deposit／Withdraw 為浮動玻璃膠囊（半透明白、模糊＋飽和＋提亮、內緣高光、柔和陰影），選中分頁為膠囊內的淡色膠囊。玻璃只用於浮在內容上的控制層，內容本身不用。瀏覽器無法在 iOS Safari 做真正折射，故不使用 SVG displacement；`prefers-reduced-transparency` 或不支援 `backdrop-filter` 時退回實心白。
+- 手機分頁順序：Funds、Creators、Create、Portfolio、Manage（左側是市場、中間是建立、右側是「我的」）。列表與按鈕有按壓回饋，`prefers-reduced-motion` 時關閉。
+- 手機 Funds 列表一屏約十檔：列高約 72px、縮圖 44px、名稱最多兩行（有機構名時三行）。分類（All／Themes／Public figures／X voices）捲動時固定在頂部列下方。
 - 「人名 · 機構」在手機列表中拆成兩行。
 - 支援加到主畫面：`public/manifest.webmanifest`（standalone、start_url `/vaults`）與 `public/app-icons/`。

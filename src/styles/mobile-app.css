@@ -1183,17 +1183,34 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
 
 /*
  * ── App shell（手機，2026-11-11）──
- * 目標是「打開像 App，不像縮小的網站」：
- *   1. 分頁根目錄不再放網站式 logo 列，改成原生導覽列：右上錢包、下方大標題；
- *      捲過大標題後導覽列才浮出毛玻璃底與置中小標題（iOS large title 的收合行為）。
- *   2. 點擊有即時回饋（列表變灰、按鈕微縮），取消瀏覽器的藍色點擊高亮。
- *   3. 「人名 · 機構」把機構放到第二行，列表不再折成三行。
+ * 目標是「打開像 App，不像縮小的網站」，視覺語言對齊 iOS 26 的 Liquid Glass：
+ *   1. 玻璃只用在「浮在內容上方的控制層」（分頁列、頂部按鈕、底部交易列），內容本身不上玻璃。
+ *   2. 分頁列與交易列是浮動膠囊，不貼齊螢幕邊；內容可以從下方透出來。
+ *   3. 頂部不是一整條實心導覽列，而是 scroll edge effect：內容捲到下面時才出現由上而下的柔和霧化，
+ *      小標題同時淡入。大標題由頁面自己的 h1 擔任。
+ *   4. 瀏覽器做不到真正的折射（SVG displacement 的 backdrop-filter 只有 Chromium 支援，iOS Safari 不行），
+ *      所以用模糊＋飽和＋提亮＋內緣高光來模擬玻璃的厚度與反光。
+ *   5. 「減少透明度」或不支援 backdrop-filter 時退回實心白底，文字對比不受影響。
  */
 .app-nav-bar { display: none; }
 @media (max-width: 719px) {
+  :root {
+    --glass-fill: rgb(255 255 255 / 58%);
+    --glass-edge: rgb(255 255 255 / 75%);
+    --glass-blur: blur(18px) saturate(190%) brightness(1.06);
+    --glass-shadow:
+      0 12px 32px rgb(22 34 45 / 13%),
+      0 2px 6px rgb(22 34 45 / 7%),
+      inset 0 1px 0 rgb(255 255 255 / 90%),
+      inset 0 -1px 1px rgb(22 34 45 / 5%);
+    --glass-press: rgb(22 34 45 / 7%);
+    --app-dock-gap: max(10px, calc(env(safe-area-inset-bottom) - 10px));
+    --app-dock-height: calc(64px + var(--app-dock-gap) + 14px);
+  }
   html { -webkit-tap-highlight-color: transparent; }
   #root a, #root button, #root summary { touch-action: manipulation; }
 
+  /* 頂部：透明列＋右上玻璃按鈕；捲動後出現 scroll edge 霧化與小標題。 */
   #root .app-nav-bar {
     position: sticky;
     top: 0;
@@ -1202,21 +1219,28 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
     align-items: center;
     justify-content: flex-end;
     min-height: calc(52px + env(safe-area-inset-top));
-    padding: env(safe-area-inset-top) max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
-    border-bottom: .5px solid transparent;
-    background: rgb(255 255 255 / 0%);
-    transition: background-color .2s ease, border-color .2s ease;
+    padding: env(safe-area-inset-top) max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left));
+    background: transparent;
   }
-  #root .app-nav-bar[data-scrolled="true"] {
-    border-bottom-color: var(--app-card-line);
-    background: rgb(255 255 255 / 82%);
-    -webkit-backdrop-filter: saturate(180%) blur(20px);
-    backdrop-filter: saturate(180%) blur(20px);
+  #root .app-nav-bar::before {
+    position: absolute;
+    z-index: -1;
+    inset: 0 0 -18px;
+    background: linear-gradient(rgb(255 255 255 / 90%) 0%, rgb(255 255 255 / 72%) 62%, rgb(255 255 255 / 0%) 100%);
+    -webkit-backdrop-filter: blur(10px) saturate(160%);
+    backdrop-filter: blur(10px) saturate(160%);
+    -webkit-mask-image: linear-gradient(#000 60%, transparent);
+    mask-image: linear-gradient(#000 60%, transparent);
+    opacity: 0;
+    transition: opacity .25s ease;
+    content: "";
+    pointer-events: none;
   }
+  #root .app-nav-bar[data-scrolled="true"]::before { opacity: 1; }
   .app-nav-bar-title {
     position: absolute;
-    left: 64px;
-    right: 64px;
+    left: 72px;
+    right: 72px;
     bottom: 0;
     overflow: hidden;
     color: var(--ink);
@@ -1230,6 +1254,13 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
     pointer-events: none;
   }
   .app-nav-bar[data-scrolled="true"] > .app-nav-bar-title { opacity: 1; transform: none; }
+  #root .app-nav-bar .header-wallet.app-wallet-toolbar {
+    border: 1px solid var(--glass-edge);
+    background: var(--glass-fill);
+    box-shadow: var(--glass-shadow);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+  }
   /* 導覽列已佔住頂部安全區，頁面不必再自己留一次。 */
   html body #root:has(> .app-nav-bar) > main { padding-top: 2px; }
   #root:has(> .app-nav-bar) > main :is(.explore-heading h1),
@@ -1239,23 +1270,98 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
   }
   #root .app-portfolio .explore-heading { padding-right: 0; }
   body.atp-complete-create #root:has(> .app-nav-bar) > main > div:first-child { padding-top: 0; }
+  /* 頁面本身已有大的連線按鈕時，右上角不再重複一個。 */
+  #root:has(.app-portfolio-guest) .app-nav-bar .header-wallet[data-wallet-state="disconnected"] { visibility: hidden; }
 
-  /* 分頁列：選中項用色塊膠囊包住圖示，比只改字重更好辨識。 */
+  /* 底部：浮動玻璃膠囊（分頁列與基金頁的交易列共用同一個造型）。 */
+  #root .app-mobile-nav,
+  #root .public-mobile-cta {
+    inset: auto max(14px, env(safe-area-inset-left)) var(--app-dock-gap) max(14px, env(safe-area-inset-right));
+    min-height: 64px;
+    padding: 5px;
+    border: 1px solid var(--glass-edge);
+    background: var(--glass-fill);
+    box-shadow: var(--glass-shadow);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+  }
   #root .app-mobile-nav { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-  #root .app-mobile-nav a { gap: 2px; }
-  #root .app-mobile-nav a > svg {
-    box-sizing: content-box;
-    padding: 3px 14px;
-    border-radius: 999px;
+  #root .app-mobile-nav a {
+    min-height: 52px;
+    gap: 2px;
     transition: background-color .2s ease, transform .12s ease;
   }
-  #root .app-mobile-nav a[aria-current="page"] > svg { background: var(--app-segment); }
-  #root .app-mobile-nav a:active > svg { transform: scale(.9); }
+  /* 選中項：玻璃膠囊裡再嵌一顆淡色膠囊，跟 iOS 26 分頁列一樣用「位置＋底色＋顏色」三重標示。 */
+  #root .app-mobile-nav a[aria-current="page"] { background: rgb(22 34 45 / 8%); color: var(--ink); }
+  #root .app-mobile-nav a:active { transform: scale(.94); background: var(--glass-press); }
+  #root .public-mobile-cta { gap: 6px; }
+  #root .public-mobile-cta .btn { min-height: 52px; }
+  #root .public-mobile-cta .btn.ghost { background: rgb(22 34 45 / 6%); border-color: transparent; }
+  body.atp-complete-fund .vault-content { padding-bottom: calc(var(--app-dock-height) + 24px); }
+
+  /* 基金封面上的返回／分享鈕：深色玻璃圓鈕。 */
+  #atp-fund-cover .fund-cover-nav > :is(a, button) {
+    border: 1px solid rgb(255 255 255 / 22%);
+    background: rgb(22 34 45 / 34%);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 28%), 0 4px 14px rgb(0 0 0 / 18%);
+    -webkit-backdrop-filter: blur(14px) saturate(160%);
+    backdrop-filter: blur(14px) saturate(160%);
+  }
+
+  /*
+   * Funds 列表：一屏約十檔。原本每列 61px、一屏約 12 檔，名字、走勢與報酬擠在一起。
+   * 列高拉到約 72px，縮圖 36→44px，名稱 17px，報酬 17px，留白讓每檔基金是一個清楚的點擊目標。
+   */
+  #fund-explore .fund-row-link {
+    grid-template-columns: 44px minmax(0, 1fr) clamp(40px, 12vw, 56px) max-content;
+    column-gap: 12px;
+    min-height: 72px;
+    padding: 12px 0;
+  }
+  body.atp-formal-market #fund-explore :is(.public-portrait, .fund-thumb) {
+    width: 44px;
+    height: 44px;
+    max-width: 44px;
+    max-height: 44px;
+  }
+  #fund-explore .fund-list-result strong { font: 600 1.0625rem/1.25 var(--sans); }
+  #fund-explore .fund-list-trend { height: 26px; }
+  /* 名稱最多兩行，超過以刪節號收尾，列高才會一致。 */
+  #fund-explore .fund-list-body h3 .fund-title-link {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  /* 有機構名時，機構那一行另外算：名字兩行＋機構一行。 */
+  #fund-explore .fund-list-body h3 .fund-title-link:has(.fund-name-org) { -webkit-line-clamp: 3; }
+
+  /* 分類（All / Themes / Public figures / X voices）捲動時固定在頂部，不必捲回最上面才能切換。 */
+  #fund-explore > .collection-tabs {
+    position: sticky;
+    top: calc(52px + env(safe-area-inset-top));
+    z-index: 43;
+    /* 撐滿整個螢幕寬，背景不會在右側缺一截。 */
+    width: auto;
+    margin-inline: calc(50% - 50vw);
+    padding: 6px 16px 8px;
+    background: rgb(255 255 255 / 97%);
+    scrollbar-width: none;
+  }
+  #fund-explore > .collection-tabs::-webkit-scrollbar { display: none; }
+  #fund-explore > .collection-tabs > a { flex: none; }
+  /* Funds 頁捲動後，頂部列與分類連成同一塊頁首（同樣的白），不讓列表從兩者之間的縫透出來。 */
+  #root:has(#fund-explore) .app-nav-bar::before {
+    inset: 0;
+    background: rgb(255 255 255 / 97%);
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  /* 標題列也固定時，各區塊標題捲到分類下方仍要看得到。 */
+  #fund-explore .explore-collection > header { scroll-margin-top: calc(110px + env(safe-area-inset-top)); }
 
   /* 點擊回饋 */
-  #root :is(.fund-row, .creator-table tbody tr, .app-portfolio-ledger > li, .recent-trades li) {
-    transition: background-color .12s ease;
-  }
+  #root :is(.fund-row, .creator-table tbody tr, .app-portfolio-ledger > li) { transition: background-color .12s ease; }
   #root :is(.fund-row, .creator-table tbody tr, .app-portfolio-ledger > li):active { background: var(--app-grouped); }
   #root :is(.btn, [data-slot="button"], .header-wallet) { transition: transform .12s ease, background-color .15s ease; }
   #root :is(.btn, [data-slot="button"], .header-wallet):not(:disabled):active { transform: scale(.97); }
@@ -1274,9 +1380,27 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
   #creator-leaderboard .creator-count::after { content: " funds"; color: var(--steel); font: 400 .8125rem var(--app-native-font); }
   #creator-leaderboard .creator-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 }
+/* 圓角規則在 app-shapes layer 內用 !important，覆蓋也必須寫在同一個 layer 才會生效。 */
+@layer app-shapes {
+  @media (max-width: 719px) {
+    #root :is(.app-mobile-nav, .public-mobile-cta, .app-mobile-nav a, .public-mobile-cta .btn,
+        .app-nav-bar .header-wallet),
+    #fund-explore > .collection-tabs > a {
+      border-radius: 999px !important;
+    }
+  }
+}
+@media (max-width: 719px) and (prefers-reduced-transparency: reduce) {
+  :root { --glass-fill: var(--white); }
+  #root .app-nav-bar::before { background: var(--white); -webkit-backdrop-filter: none; backdrop-filter: none; -webkit-mask-image: none; mask-image: none; }
+  #root :is(.app-mobile-nav, .public-mobile-cta, .app-nav-bar .header-wallet) { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  :root { --glass-fill: var(--white); }
+}
 @media (max-width: 719px) and (prefers-reduced-motion: reduce) {
-  #root .app-nav-bar, .app-nav-bar-title, #root .app-mobile-nav a > svg,
+  #root .app-nav-bar::before, .app-nav-bar-title, #root .app-mobile-nav a,
   #root :is(.btn, [data-slot="button"], .header-wallet) { transition: none; }
   #root :is(.btn, [data-slot="button"], .header-wallet):active,
-  #root .app-mobile-nav a:active > svg { transform: none; }
+  #root .app-mobile-nav a:active { transform: none; }
 }
