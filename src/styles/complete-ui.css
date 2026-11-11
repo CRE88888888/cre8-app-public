@@ -458,7 +458,7 @@ body.atp-complete-fund .holdings-table :is(th, td):nth-child(3) {
 body.atp-complete-fund .holdings-table :is(th, td):nth-child(4) {
   width: 18%;
 }
-body.atp-complete-fund #ticket .wallet-menu--inline > .btn {
+body.atp-complete-fund #ticket .swap .btn.block {
   min-height: 52px;
 }
 
