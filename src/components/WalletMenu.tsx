@@ -5,32 +5,24 @@ import { connectProvider, discoverProviders, ensureChain } from '../lib/wallet';
 import { CHAIN_ID } from '../lib/kernel';
 import type { ProviderDetail } from '../lib/wallet';
 import { shortAddress } from '../lib/format';
+import { useConnectedSessionToken } from '../lib/use-connected-session';
 import { useSession } from '../store/session';
 import { useWallet } from '../store/wallet';
 import { siwePhaseLabel, useSiweSignIn } from '../features/auth/use-siwe-signin';
 import { useWalletDiagnostics } from '../lib/use-wallet-diagnostics';
 import { ErrorNote } from './ui';
 
-/** 任何地方都可以叫出錢包選單（例如 `RequireSession` 的「Sign in」）。 */
+/** 任何地方都可以叫出錢包選單。 */
 export const OPEN_WALLET_MENU = 'cre8:open-wallet-menu';
 
 export function openWalletMenu(): void {
   window.dispatchEvent(new Event(OPEN_WALLET_MENU));
 }
 
-/**
- * 標頭的錢包選單。**取代了原本的 `/login` 整頁**。
- *
- * 為什麼改成下拉：登入其實只有兩個決策（哪個錢包、要不要簽名），而整頁把使用者帶離他正在看的
- * 內容。下拉的狀態機刻意寫死在這裡，因為「現在卡在哪一步」是使用者最需要看到的資訊：
- *
- *   錢包未連 → 列出偵測到的 EIP-6963 錢包（+ DEV build 的私鑰入口）
- *   已連未登入 → `Sign in with SIWE` 按鈕與它的三個階段（取 nonce / 等簽名 / 換 token）
- *   已登入 → 位址、`Signed in`、Portfolio 連結、Sign out
- */
-export function WalletMenu(): ReactNode {
+/** 標頭與頁面內共用錢包選擇及驗證流程。 */
+export function WalletMenu({ inline = false }: { inline?: boolean }): ReactNode {
   const wallet = useWallet();
-  const token = useSession((state) => state.token);
+  const token = useConnectedSessionToken();
   const clearSession = useSession((state) => state.clear);
 
   const [open, setOpen] = useState(false);
@@ -41,7 +33,7 @@ export function WalletMenu(): ReactNode {
 
   const siwe = useSiweSignIn(() => setOpen(false));
   // 錢包讀的是它自己的 RPC，所以「餘額不足」常常是連錯網路（chain 56 有兩個：主網與我們的 fork）。
-  const diagnostics = useWalletDiagnostics(wallet.address, wallet.provider);
+  const diagnostics = useWalletDiagnostics(open ? wallet.address : null, wallet.provider);
 
   const refreshProviders = useCallback(async () => {
     try {
@@ -75,15 +67,16 @@ export function WalletMenu(): ReactNode {
 
   // 深連結：`/#wallet` 直接打開選單。支援文件可以指向這個錨點，截圖/驗證也不必先模擬點擊。
   useEffect(() => {
-    if (window.location.hash === '#wallet') setOpen(true);
-  }, []);
+    if (!inline && window.location.hash === '#wallet') setOpen(true);
+  }, [inline]);
 
-  // 別的頁面（RequireSession / vaults 的「Sign in」）也能叫出這個選單。
+  // 別的頁面也能叫出這個選單。
   useEffect(() => {
+    if (inline) return;
     const onOpen = (): void => setOpen(true);
     window.addEventListener(OPEN_WALLET_MENU, onOpen);
     return () => window.removeEventListener(OPEN_WALLET_MENU, onOpen);
-  }, []);
+  }, [inline]);
 
   const connect = useCallback(
     async (detail: ProviderDetail) => {
@@ -118,18 +111,16 @@ export function WalletMenu(): ReactNode {
     [wallet],
   );
 
-  const label =
-    token !== null && wallet.address !== null
-      ? shortAddress(wallet.address)
-      : wallet.address !== null
-        ? 'Sign in'
-        : 'Connect wallet';
+  let label = 'Connect wallet';
+  if (wallet.address !== null) {
+    label = token !== null ? shortAddress(wallet.address) : inline ? 'Verify wallet' : 'Sign in';
+  }
 
   return (
-    <div className="wallet-menu" ref={rootRef}>
+    <div className={inline ? "wallet-menu wallet-menu--inline" : "wallet-menu"} ref={rootRef}>
       <button
         type="button"
-        className="btn sm header-wallet"
+        className={inline ? "btn primary block" : "btn sm header-wallet"}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
@@ -175,10 +166,9 @@ export function WalletMenu(): ReactNode {
             </>
           ) : token === null ? (
             <>
-              <p className="wallet-menu__title">Sign in with SIWE</p>
+              {!inline && <p className="wallet-menu__title">Sign in with SIWE</p>}
               <p className="wallet-menu__hint">
-                Session-key permissions live on-chain; signing in only proves to the backend that this wallet owns
-                the account. EIP-4361, no transaction, no gas.
+                {inline ? 'Sign a message to verify your wallet.' : 'Sign a message to verify ownership of the connected wallet.'}
               </p>
               <p className="wallet-menu__addr mono">{shortAddress(wallet.address)}</p>
               <button
@@ -187,10 +177,10 @@ export function WalletMenu(): ReactNode {
                 disabled={siwe.phase !== 'idle'}
                 onClick={() => void siwe.signIn()}
               >
-                {siwePhaseLabel(siwe.phase)}
+                {inline && siwe.phase === "idle" ? "Sign message" : siwePhaseLabel(siwe.phase)}
               </button>
               <ErrorNote error={siwe.error} />
-              <button type="button" className="wallet-menu__link" onClick={() => wallet.disconnect()}>
+              <button type="button" className="wallet-menu__link" onClick={() => { clearSession(); wallet.disconnect(); }}>
                 Disconnect
               </button>
             </>

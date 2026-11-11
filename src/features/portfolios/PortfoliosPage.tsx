@@ -6,11 +6,11 @@ import type { PortfolioActivity } from '../../lib/api';
 import { formatUsdE8, shortAddress } from '../../lib/format';
 import { queryKeys } from '../../lib/query';
 import { useBodyClass } from '../../lib/use-body-class';
-import { useSession } from '../../store/session';
+import { useConnectedSessionToken } from '../../lib/use-connected-session';
 import { useWallet } from '../../store/wallet';
 import { MOCK_FUNDS } from '../../data/mock-funds';
 import { Badge, ErrorNote, Spinner } from '../../components/ui';
-import { SignInButton } from '../../components/WalletMenu';
+import { WalletMenu } from '../../components/WalletMenu';
 
 /**
  * 投組頁。照參考站 `portfolio.html` 的區塊順序：
@@ -24,9 +24,8 @@ import { SignInButton } from '../../components/WalletMenu';
  */
 export function PortfoliosPage(): ReactNode {
   useBodyClass('portfolio-page', 'fund-explore');
-  const token = useSession((state) => state.token);
-  const sessionAddress = useSession((state) => state.address);
-  const walletAddress = useWallet((state) => state.address);
+  const token = useConnectedSessionToken();
+  const address = useWallet((state) => state.address);
 
   const portfolios = useQuery({
     queryKey: queryKeys.portfolios(token),
@@ -52,7 +51,6 @@ export function PortfoliosPage(): ReactNode {
     })),
   });
 
-  const address = sessionAddress ?? walletAddress;
   const totalUsdE8 = statuses.reduce((sum, row) => sum + BigInt(row.data?.totalUsdE8 ?? '0'), 0n);
 
   // 合併所有投組的執行紀錄，新到舊。`portfolioId` 要留著才知道是哪一檔。
@@ -72,32 +70,25 @@ export function PortfoliosPage(): ReactNode {
           <h1>
             Portfolio<span>.</span>
           </h1>
-          <p>
-            {address === null ? (
-              <>
-                <SignInButton /> to see the funds this wallet owns.
-              </>
-            ) : (
-              <>
-                Signed in as <span className="mono">{shortAddress(address)}</span> — every fund below is a smart
-                account this wallet owns.
-              </>
-            )}
-          </p>
+          {token !== null && address !== null && (
+            <p>Wallet <span className="mono">{shortAddress(address)}</span></p>
+          )}
         </div>
-        <div className="explore-heading-actions">
-          <Link className="btn" to="/create">
-            Create a fund <span aria-hidden="true">↗</span>
-          </Link>
-        </div>
+        {token !== null && (
+          <div className="explore-heading-actions">
+            <Link className="btn" to="/create">
+              Create a fund <span aria-hidden="true">↗</span>
+            </Link>
+          </div>
+        )}
       </header>
 
       {token === null ? (
         <div className="directory-empty">
-          <strong>Not signed in</strong>
-          <p>
-            Connect a wallet and sign in with SIWE. <SignInButton /> opens the wallet menu in the header.
-          </p>
+          <p>View your funds and activity.</p>
+          <div className="directory-empty-actions">
+            <WalletMenu inline />
+          </div>
         </div>
       ) : (
         <>

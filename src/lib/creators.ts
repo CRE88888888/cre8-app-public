@@ -4,6 +4,10 @@ import type { ReferenceFund } from './public-funds';
 
 // 名稱只映射已知的目錄建立者，不用基金題材人物或 X handle 推測身分。
 export const CRE8_CREATOR = '0x7b2938433f063553a6bf70a8161121010e391a11';
+export function isCre8CreatorWallet(address: string | null): boolean {
+  return address?.toLowerCase() === CRE8_CREATOR;
+}
+
 export type Creator = {
   id: string;
   name: string;

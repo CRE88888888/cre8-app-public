@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
+import { isCre8CreatorWallet } from '../lib/creators';
+import { useWallet } from '../store/wallet';
 import { WalletMenu } from './WalletMenu';
 
 /**
@@ -30,15 +32,9 @@ function C8Logo(): ReactNode {
   );
 }
 
-/**
- * 標頭。刻意照原站的 markup 寫（`header.masthead.app-masthead > .wrap`），因為樣式全在 `design.css` 裡：
- * 換掉結構就會掉樣式 —— 這是這一輪「UI 看起來不像原站」最主要的原因。
- *
- * 導覽只放**真的有頁面**的兩項。原站還有 `CRE8 AI` 與 `Leaderboard`，我們沒有那兩個頁面；
- * 放上去就是死連結，比少一個項目更糟。
- */
 export function TopBar(): ReactNode {
   const { pathname } = useLocation();
+  const showRebalance = useWallet((state) => isCre8CreatorWallet(state.address));
   return (
     <header className="masthead app-masthead">
       <div className="wrap">
@@ -54,10 +50,11 @@ export function TopBar(): ReactNode {
           <NavLink to="/create" className={({ isActive }) => (isActive ? 'active' : '')}>
             Create fund
           </NavLink>
-          {/* 內部維運入口。使用者說先全開放，之後再加 OPERATOR_WALLETS 白名單。 */}
-          <NavLink to="/operator" className={({ isActive }) => (isActive ? 'active' : '')}>
-            Rebalance
-          </NavLink>
+          {showRebalance && (
+            <NavLink to="/operator" className={({ isActive }) => (isActive ? 'active' : '')}>
+              Rebalance
+            </NavLink>
+          )}
         </nav>
 
         <div className="head-right">

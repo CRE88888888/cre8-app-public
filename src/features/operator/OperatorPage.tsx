@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
@@ -6,12 +7,14 @@ import type { OperatorActivityRow, OperatorOverview, OperatorRow } from '../../l
 import { formatEther } from 'viem';
 import { formatUsdE8, shortAddress } from '../../lib/format';
 import { useBodyClass } from '../../lib/use-body-class';
-import { useSession } from '../../store/session';
+import { useConnectedSessionToken } from '../../lib/use-connected-session';
+import { isCre8CreatorWallet } from '../../lib/creators';
+import { useWallet } from '../../store/wallet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge, ErrorNote, Spinner } from '../../components/ui';
 import { toast } from '../../components/Toast';
-import { SignInButton } from '../../components/WalletMenu';
+import { WalletMenu } from '../../components/WalletMenu';
 
 /** 相對時間（「12 秒前」）比絕對時間更能回答「現在有沒有在跑」。 */
 function ago(iso: string | null): string {
@@ -469,8 +472,21 @@ function Dashboard({
  * 代價是「Observed」可能是幾分鐘前 —— 所以那一欄直接顯示相對時間，新鮮度自己看得到。
  */
 export function OperatorPage(): ReactNode {
+  const canView = useWallet((state) => isCre8CreatorWallet(state.address));
+  if (!canView) {
+    return (
+      <main className="page">
+        <h1>Page unavailable</h1>
+        <Link to="/vaults">Browse funds</Link>
+      </main>
+    );
+  }
+  return <CreatorOperatorPage />;
+}
+
+function CreatorOperatorPage(): ReactNode {
   useBodyClass('portfolio-page', 'fund-explore');
-  const token = useSession((state) => state.token);
+  const token = useConnectedSessionToken();
 
   const overview = useQuery({
     queryKey: ['operator-overview', token],
@@ -491,19 +507,19 @@ export function OperatorPage(): ReactNode {
             ones need attention. Auto-refreshes every 15 seconds.
           </p>
         </div>
-        <div className="explore-heading-actions">
-          <button type="button" className="btn" disabled={overview.isFetching} onClick={() => void overview.refetch()}>
-            {overview.isFetching ? 'Refreshing…' : 'Refresh'}
-          </button>
-        </div>
+        {token !== null && (
+          <div className="explore-heading-actions">
+            <button type="button" className="btn" disabled={overview.isFetching} onClick={() => void overview.refetch()}>
+              {overview.isFetching ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </div>
+        )}
       </header>
 
       {token === null ? (
         <div className="directory-empty">
-          <strong>Sign in to see the operator view</strong>
-          <p>
-            <SignInButton /> opens the wallet menu in the header.
-          </p>
+          <p>Verify your wallet to manage rebalancing.</p>
+          <div className="directory-empty-actions"><WalletMenu inline /></div>
         </div>
       ) : overview.isPending ? (
         <div className="card row">

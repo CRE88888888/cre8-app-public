@@ -3,7 +3,6 @@ import {refreshReferenceData,subscribeReference,referenceRevision} from './lib/r
 import type { ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { Toaster } from './components/Toast';
-import { RequireSession } from './components/RequireSession';
 import { TopBar } from './components/TopBar';
 import { useAutoConnect } from './lib/use-auto-connect';
 import { useAccountWatch } from './lib/use-account-watch';
@@ -46,15 +45,7 @@ export function App(): ReactNode {
         <Route path="/vault/:slug" element={<FundPage />} />
         <Route path="/asset/:slug" element={<AssetPage />} />
         <Route path="/assets/:slug" element={<AssetPage />} />
-        {/* 舊的「只有列表」頁保留：它比 vaults 更適合 debug（沒有範例資料）。 */}
-        <Route
-          path="/portfolios"
-          element={
-            <RequireSession>
-              <PortfoliosPage />
-            </RequireSession>
-          }
-        />
+        <Route path="/portfolios" element={<PortfoliosPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       </Suspense>

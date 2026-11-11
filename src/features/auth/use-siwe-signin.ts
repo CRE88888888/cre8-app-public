@@ -71,6 +71,9 @@ export function useSiweSignIn(onDone?: () => void): {
 
       setPhase('exchanging');
       const credentials = await postLogin(message, signature);
+      if (useWallet.getState().address?.toLowerCase() !== wallet.address.toLowerCase()) {
+        throw new Error('Wallet changed. Verify the connected wallet.');
+      }
       setSession({ token: credentials.token, expiresAt: credentials.expiresAt, address: wallet.address });
       setPhase('idle');
       onDone?.();

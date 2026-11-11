@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useWallet } from '../store/wallet';
 import type { RenewalWallet } from './kernel';
 
@@ -9,11 +10,13 @@ import type { RenewalWallet } from './kernel';
  */
 export function useOwnerWallet(): RenewalWallet | null {
   const wallet = useWallet();
-  if (wallet.kind === 'injected' && wallet.provider !== null && wallet.address !== null) {
-    return { kind: 'injected', address: wallet.address as `0x${string}`, provider: wallet.provider };
-  }
-  if (wallet.kind === 'dev' && wallet.devSigner !== null) {
-    return { kind: 'dev', address: wallet.devSigner.address as `0x${string}`, account: wallet.devSigner.account };
-  }
-  return null;
+  return useMemo(() => {
+    if (wallet.kind === 'injected' && wallet.provider !== null && wallet.address !== null) {
+      return { kind: 'injected', address: wallet.address as `0x${string}`, provider: wallet.provider };
+    }
+    if (wallet.kind === 'dev' && wallet.devSigner !== null) {
+      return { kind: 'dev', address: wallet.devSigner.address as `0x${string}`, account: wallet.devSigner.account };
+    }
+    return null;
+  }, [wallet]);
 }

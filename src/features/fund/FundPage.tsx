@@ -5,7 +5,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { encodeFunctionData, formatEther, formatUnits, parseEther, parseUnits } from 'viem';
 import type { Address } from 'viem';
 import { closePosition, enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, listStrategies, postRebalance, redeemPortfolio } from '../../lib/api';
-import { CHAIN_ID, approveCalldata, bsc as appChain, readOnlyClient, sendGasTopUp, sendSudoCalls, sendSweep, sendWithdraw } from '../../lib/kernel';
+import { CHAIN_ID, approveCalldata, bsc as appChain, publicClientFor, readOnlyClient, sendGasTopUp, sendSudoCalls, sendSweep, sendWithdraw } from '../../lib/kernel';
 import type { PortfolioStatus } from '../../lib/api';
 import { MOCK_FUNDS } from '../../data/mock-funds';
 import {safePublicReturn} from '../../lib/public-navigation';
@@ -19,8 +19,8 @@ import { shortAddress } from '../../lib/format';
 import { queryKeys } from '../../lib/query';
 import { useBodyClass } from '../../lib/use-body-class';
 import { useOwnerWallet } from '../../lib/use-owner-wallet';
-import { useSession } from '../../store/session';
-import { SignInButton } from '../../components/WalletMenu';
+import { useConnectedSessionToken } from '../../lib/use-connected-session';
+import { WalletMenu } from '../../components/WalletMenu';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge, ErrorNote, Note, Spinner } from '../../components/ui';
@@ -58,7 +58,7 @@ function pct(bps: number, digits = 2): string {
 export function FundPage(): ReactNode {
   useBodyClass('vault-page', 'fund-detail-redesign', 'atp-formal-fund', 'atp-complete-fund');
   const { slug } = useParams<{ slug: string }>();
-  const token = useSession((state) => state.token);
+  const token = useConnectedSessionToken();
   const wallet = useOwnerWallet();
   const queryClient = useQueryClient();
 
@@ -158,28 +158,26 @@ export function FundPage(): ReactNode {
     }
   })();
   useEffect(() => {
-    if (walletAddress === null || usdtAddress === undefined) {
-      setWalletUsdt(null);
-      return;
-    }
+    setWalletUsdt(null);
+    if (wallet === null || usdtAddress === undefined) return;
     let cancelled = false;
-    void readOnlyClient()
-      .readContract({
-        address: usdtAddress as Address,
-        abi: ERC20_ABI,
-        functionName: 'balanceOf',
-        args: [walletAddress as Address],
-      })
-      .then((value) => {
-        if (!cancelled) setWalletUsdt(value as bigint);
-      })
-      .catch(() => {
+    void (async () => {
+      try {
+        const reader = publicClientFor(wallet);
+        if (await reader.getChainId() !== CHAIN_ID) return;
+        const balance = await reader.readContract({
+          address: usdtAddress as Address,
+          abi: ERC20_ABI,
+          functionName: 'balanceOf',
+          args: [wallet.address],
+        });
+        if (!cancelled) setWalletUsdt(balance as bigint);
+      } catch {
         if (!cancelled) setWalletUsdt(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [walletAddress, usdtAddress]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [wallet, usdtAddress]);
 
   const live = status.data;
 
@@ -197,13 +195,15 @@ export function FundPage(): ReactNode {
   /** 用字串當依賴：陣列每次 render 都是新參考，會讓 effect 無限重跑。 */
   const assetKey = assetRows.map((row) => row.asset.toLowerCase()).join(',');
   useEffect(() => {
-    if (executorForAllowance === null || accountForAllowance === null || assetKey === '') {
+    if (wallet === null || executorForAllowance === null || accountForAllowance === null || assetKey === '') {
       setUnapproved(null);
       return;
     }
+    setUnapproved(null);
     let cancelled = false;
     void (async () => {
-      const reader = readOnlyClient();
+      const reader = publicClientFor(wallet);
+      if (await reader.getChainId() !== CHAIN_ID) return;
       const missing = (
         await Promise.all(
           assetRows.map(async (row) => {
@@ -220,12 +220,14 @@ export function FundPage(): ReactNode {
         )
       ).filter((symbol): symbol is string => symbol !== null);
       if (!cancelled) setUnapproved(missing);
-    })();
+    })().catch(() => {
+      if (!cancelled) setUnapproved(null);
+    });
     return () => {
       cancelled = true;
     };
     // assetRows 用 assetKey 代表；其他依賴都是原始值。
-  }, [accountForAllowance, assetKey, executorForAllowance]);
+  }, [accountForAllowance, assetKey, executorForAllowance, wallet]);
 
   /**
    * 是否**真的持有**這個基金（而不是「有一列投組但裡面是空的」）。
@@ -253,6 +255,11 @@ export function FundPage(): ReactNode {
     : (live.drift.assets ?? []).map((row) => ({ symbol: row.symbol, targetBps: row.targetBps, currentBps: row.currentBps }));
 
 
+  const withdrawLoadError = strategies.error ?? portfolios.error ?? status.error;
+  const withdrawLoading = strategies.isPending || portfolios.isPending ||
+    (holding !== undefined && status.isPending);
+  const depositLoadError = strategies.error ?? assets.error;
+
   const ticket = (<>
             <section className="panel ticket" id="ticket">
               {/* Radix Tabs 取代手寫的 role="tablist" + 兩顆 button：拿到鍵盤左右鍵切換、
@@ -269,18 +276,14 @@ export function FundPage(): ReactNode {
                 </TabsList>
               <div className="panel-b">
                 {tab === 'withdraw' ? (
-                  token === null ? (
-                    <Note tone="warn">
-                      <SignInButton /> to withdraw.
-                    </Note>
-                  ) : holding === undefined ? (
-                    <Note>You do not follow this strategy, so there is nothing to withdraw.</Note>
-                  ) : live === undefined ? (
+                  token !== null && withdrawLoadError !== null ? (
+                    <ErrorNote error={withdrawLoadError} />
+                  ) : token !== null && withdrawLoading ? (
                     <div className="row">
                       <Spinner /> <span className="muted">Reading balances…</span>
                     </div>
-                  ) : wallet === null ? (
-                    <Note tone="warn">Connect the owner wallet in the header — a withdrawal is an owner-signed UserOp.</Note>
+                  ) : token !== null && holding === undefined ? (
+                    <Note>This wallet has no position in this fund.</Note>
                   ) : (
                     <form
                       className="swap"
@@ -295,7 +298,7 @@ export function FundPage(): ReactNode {
                             You receive
                           </label>
                           <span className="swap-picks">
-                            <button type="button" onClick={() => setWithdrawAmount(maxWithdrawLabel())}>
+                            <button type="button" disabled={live === undefined} onClick={() => setWithdrawAmount(maxWithdrawLabel())}>
                               Max
                             </button>
                           </span>
@@ -308,70 +311,72 @@ export function FundPage(): ReactNode {
                           value={withdrawAmount}
                           onChange={(event) => setWithdrawAmount(event.target.value)}
                         />
-                        <span className="swap-sub">USDT → {shortAddress(wallet.address)} (your wallet)</span>
+                        <span className="swap-sub">USDT → {walletAddress === null ? 'your wallet' : shortAddress(walletAddress)}</span>
                       </div>
-                      <p className="fine">
-                        Cash {formatUsd(cashUsd())} · positions {formatUsd(Math.max(0, totalUsd() - cashUsd()))} · total{' '}
-                        {formatUsd(totalUsd())}
-                        {withdrawAmount !== '' && Number(withdrawAmount) > cashUsd() ? (
-                          <>
-                            <br />
-                            The shortfall {formatUsd(Number(withdrawAmount) - cashUsd())} is sold from every position
-                            pro-rata first, so the fund stays on its mandate.
-                          </>
-                        ) : null}
-                      </p>
-                      <button
-                        type="submit"
-                        className="btn ghost block"
-                        disabled={withdrawBusy || totalUsd() === 0}
-                      >
-                        {withdrawBusy ? 'Working…' : 'Withdraw in USDT'}
-                      </button>
-                      {totalUsd() === 0 ? <p className="fine">This account holds nothing yet — deposit first.</p> : null}
-                      {gasTooLow(live) ? (
-                        <p className="fine">
-                          The account needs BNB for gas. Top it up on{' '}
-                          the “My position” drawer above first.
-                        </p>
-                      ) : null}
-                      {withdrawNote === null ? null : <p className="fine warn">{withdrawNote}</p>}
-                      {withdrawTx === null ? null : (
-                        <p className="fine">
-                          Withdrawn. tx <span className="mono">{withdrawTx}</span>
-                        </p>
+                      {token === null ? <WalletMenu inline /> : (
+                        <>
+                          <p className="fine">
+                            Cash {formatUsd(cashUsd())} · positions {formatUsd(Math.max(0, totalUsd() - cashUsd()))} · total{' '}
+                            {formatUsd(totalUsd())}
+                            {withdrawAmount !== '' && Number(withdrawAmount) > cashUsd() ? (
+                              <>
+                                <br />
+                                The shortfall {formatUsd(Number(withdrawAmount) - cashUsd())} is sold from every position
+                                pro-rata first, so the fund stays on its mandate.
+                              </>
+                            ) : null}
+                          </p>
+                          <button
+                            type="submit"
+                            className="btn ghost block"
+                            disabled={withdrawBusy || wallet === null || live === undefined || totalUsd() === 0}
+                          >
+                            {withdrawBusy ? 'Working…' : 'Withdraw in USDT'}
+                          </button>
+                          {totalUsd() === 0 ? <p className="fine">This account holds nothing yet — deposit first.</p> : null}
+                          {live !== undefined && gasTooLow(live) ? (
+                            <p className="fine">
+                              The account needs BNB for gas. Top it up on{' '}
+                              the “My position” drawer above first.
+                            </p>
+                          ) : null}
+                          {withdrawNote === null ? null : <p className="fine warn">{withdrawNote}</p>}
+                          {withdrawTx === null ? null : (
+                            <p className="fine">
+                              Withdrawn. tx <span className="mono">{withdrawTx}</span>
+                            </p>
+                          )}
+                          <ErrorNote error={withdrawError} />
+                          {/* 清倉：把全部部位賣成 USDT，再把 USDT 與所有殘留的股票代幣（塵埃）掃回錢包。 */}
+                          <button
+                            type="button"
+                            className="btn ghost block"
+                            disabled={closing || withdrawBusy || wallet === null || totalUsd() === 0}
+                            onClick={() => void closeAll()}
+                            style={{ marginTop: 8 }}
+                            title="Sell everything to USDT, then send the USDT and every leftover token back to your wallet"
+                          >
+                            {closing ? 'Closing…' : 'Close position'}
+                          </button>
+                          {totalUsd() === 0 ? (
+                            <p className="fine">
+                              This account is empty, so there is nothing to withdraw or close — deposit first.
+                            </p>
+                          ) : null}
+                          <p className="fine">
+                            Two signatures when cash is short: the fund sells pro-rata with its session key, then you sign
+                            one USDT transfer out. Selling the whole position back to cash would break the mandate and the
+                            scheduler would buy it straight back — pro-rata does not.
+                          </p>
+                        </>
                       )}
-                      <ErrorNote error={withdrawError} />
-                      {/* 清倉：把全部部位賣成 USDT，再把 USDT 與所有殘留的股票代幣（塵埃）掃回錢包。 */}
-                      <button
-                        type="button"
-                        className="btn ghost block"
-                        disabled={closing || withdrawBusy || wallet === null || totalUsd() === 0}
-                        onClick={() => void closeAll()}
-                        style={{ marginTop: 8 }}
-                        title="Sell everything to USDT, then send the USDT and every leftover token back to your wallet"
-                      >
-                        {closing ? 'Closing…' : 'Close position'}
-                      </button>
-                      {totalUsd() === 0 ? (
-                        <p className="fine">
-                          This account is empty, so there is nothing to withdraw or close — deposit first.
-                        </p>
-                      ) : null}
-                      <p className="fine">
-                        Two signatures when cash is short: the fund sells pro-rata with its session key, then you sign
-                        one USDT transfer out. Selling the whole position back to cash would break the mandate and the
-                        scheduler would buy it straight back — pro-rata does not.
-                      </p>
                     </form>
                   )
-                ) : token === null ? (
-                  <Note tone="warn">
-                    <SignInButton /> to deposit.
-                  </Note>
-                ) : strategies.error !== null && strategies.error !== undefined ? (
-                  <ErrorNote error={strategies.error} />
-                ) : strategy === undefined ? (
+                ) : token !== null && depositLoadError !== null ? (
+                  <ErrorNote error={depositLoadError} />
+                ) : token !== null && (strategies.isPending || assets.isPending) ? (
+                  <div className="row"><Spinner /> <span className="muted">Loading deposit details…</span></div>
+                ) : token !== null && strategy === undefined ? (
                   <Note>
                     This fund exists only as an example in the catalogue — nobody has published it on-chain yet, so
                     there is nothing to deposit into.
@@ -392,7 +397,7 @@ export function FundPage(): ReactNode {
                           You pay
                         </label>
                         <span className="swap-picks">
-                          <button type="button" onClick={() => setAmount(maxDepositLabel())}>
+                          <button type="button" disabled={walletUsdt === null} onClick={() => setAmount(maxDepositLabel())}>
                             Max
                           </button>
                         </span>
@@ -416,13 +421,13 @@ export function FundPage(): ReactNode {
                             ? 'your new account'
                             : shortAddress(holding.smartAccounts[0]?.address ?? '')}
                         </span>
-                        <span className="vault-balance-value">
+                        {token !== null && <span className="vault-balance-value">
                           · balance{' '}
                           {walletUsdt === null
                             ? '—'
                             : Number(formatUnits(walletUsdt, usdtDecimals)).toLocaleString('en-US', { maximumFractionDigits: 4 })}{' '}
                           {usdt?.symbol ?? 'USDT'}
-                        </span>
+                        </span>}
                       </span>
                       {depositTooLarge ? (
                         <p className="fine neg" style={{ margin: '6px 0 0' }}>
@@ -431,10 +436,11 @@ export function FundPage(): ReactNode {
                         </p>
                       ) : null}
                     </div>
-                    <button type="submit" className="btn primary block" disabled={busy || wallet === null || depositTooLarge}>
-                      {busy ? 'Sending…' : 'Deposit'}
-                    </button>
-                    {wallet === null ? <p className="fine">Connect the owner wallet in the header first.</p> : null}
+                    {token === null ? <WalletMenu inline /> : (
+                      <button type="submit" className="btn primary block" disabled={busy || wallet === null || usdt === undefined || depositTooLarge}>
+                        {busy ? 'Sending…' : 'Deposit'}
+                      </button>
+                    )}
                     <ErrorNote error={error} />
                   </form>
                 )}
@@ -451,8 +457,8 @@ export function FundPage(): ReactNode {
         <div className="vgrid">
           <div className="main">{reference&&<FundOverview key={reference.slug} fund={reference} backTo={backTo} factsTrigger={factsTrigger} onFacts={()=>setFacts(true)} onPosition={()=>setMyPosition(true)} held={held}/>}</div>
 
-          {mobile?<ReferenceSheet open={mobileTicket} onOpenChange={setTicketOpen} title={tab==='deposit'?'Invest':'Withdraw'}>{ticket}</ReferenceSheet>:<aside className="side">{ticket}</aside>}
-          <div className="public-mobile-cta"><button className="btn" onClick={()=>{setTab('deposit');setTicketOpen(true);}}>Invest</button><button className="btn ghost" onClick={()=>{setTab('withdraw');setTicketOpen(true);}}>Withdraw</button></div>
+          {mobile?<ReferenceSheet open={mobileTicket} onOpenChange={setTicketOpen} title={tab === 'deposit' ? 'Deposit' : 'Withdraw'}>{ticket}</ReferenceSheet>:<aside className="side">{ticket}</aside>}
+          <div className="public-mobile-cta"><button className="btn" onClick={()=>{setTab('deposit');setTicketOpen(true);}}>Deposit</button><button className="btn ghost" onClick={()=>{setTab('withdraw');setTicketOpen(true);}}>Withdraw</button></div>
         </div>
       </main>
 
