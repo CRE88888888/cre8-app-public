@@ -298,7 +298,9 @@ export function VaultsPage() {
               {filters.period === "ALL" ? "All time" : filters.period} return
             </span>
           </header>
-          <ul className="app-live-strategies" role="list">
+          {/* 手機沿用 App 版清單樣式；桌機用 FundRow（與其他基金列一致）。
+              兩者必須互斥 —— 實測兩個都渲染時，同一個策略會在畫面上出現兩次。 */}
+          {mobile && <ul className="app-live-strategies" role="list">
             {live.map((strategy) => {
               const yours = wallet !== null && strategy.provider?.toLowerCase() === wallet.toLowerCase();
               return (
@@ -316,7 +318,7 @@ export function VaultsPage() {
                 </li>
               );
             })}
-          </ul>
+          </ul>}
           {!mobile && (
             <>
               <div className="fund-list-columns" aria-hidden="true">
