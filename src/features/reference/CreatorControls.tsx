@@ -27,10 +27,15 @@ export function matchesReturn(value: number | null, direction: string) {
   return value !== null && (direction === 'positive' ? value > 0 : value < 0);
 }
 
-export function CreatorControls({ params, setParams, isLeaderboard }: {
+export function CreatorControls({ params, setParams, isLeaderboard, refinable = true }: {
   params: URLSearchParams;
   setParams: SetURLSearchParams;
   isLeaderboard: boolean;
+  /**
+   * 搜尋與篩選要不要出現。項目少時它們只是多一個要想的決定（只有一個 creator 卻能搜尋、篩選）；
+   * 但如果網址已經帶了篩選，仍然顯示，使用者才有辦法清掉。
+   */
+  refinable?: boolean;
 }) {
   const active = creatorFilters(params);
   const labelId = useId();
@@ -38,6 +43,7 @@ export function CreatorControls({ params, setParams, isLeaderboard }: {
   const period = performancePeriod(params.get('period'));
   const count = Number(active.order !== 'return') + Number(!!active.direction) +
     Number(!!active.asset) + Number(isLeaderboard && !!active.fundCount);
+  const showRefine = refinable || count > 0 || (params.get('q') ?? '') !== '';
 
   function update(values: Record<string, string>) {
     setParams((current) => {
@@ -70,7 +76,7 @@ export function CreatorControls({ params, setParams, isLeaderboard }: {
           </button>
         ))}
       </div>
-      <div className="creator-toolbar-actions">
+      {showRefine && <div className="creator-toolbar-actions">
         {isLeaderboard && (
           <label className="creator-search">
             <AppIcon name="search" size={18} />
@@ -82,7 +88,7 @@ export function CreatorControls({ params, setParams, isLeaderboard }: {
           aria-expanded={draft !== null} onClick={() => setDraft(active)}>
           <AppIcon name="filter" size={18} /> Filters{count > 0 && <span>{count}</span>}
         </button>
-      </div>
+      </div>}
       <ReferenceSheet open={draft !== null} onOpenChange={(open) => { if (!open) setDraft(null); }} title="Filters">
         {draft && (
           <form className="creator-filter-form" onSubmit={(event) => { event.preventDefault(); apply(draft); }}>

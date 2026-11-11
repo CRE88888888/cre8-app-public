@@ -29,7 +29,8 @@ export function Leaderboard() {
   return (
     <main className="explore-wrap" id="creator-leaderboard">
       <header className="explore-heading"><h1>Creators<span>.</span></h1></header>
-      <CreatorControls params={params} setParams={setParams} isLeaderboard />
+      {/* creator 少於 9 位時，一眼就看完了，不需要搜尋與篩選。 */}
+      <CreatorControls params={params} setParams={setParams} isLeaderboard refinable={ranked.length > 8} />
       {creators.length ? (
         <table className="creator-table">
           <caption className="sr-only">Creator rankings</caption>

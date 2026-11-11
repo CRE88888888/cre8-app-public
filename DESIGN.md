@@ -70,3 +70,4 @@
 - 桌面頁首：未連錢包時 Connect wallet 為深色主要按鈕，連上後為淺色帳戶膠囊；Studio／Investing 為次要文字按鈕。桌面主要按鈕一律深色（ink）。
 - 基金頁（桌面）：報酬標籤在數字上方（「Model return · 期間」），Max drawdown 與 Share price 並排；交易面板內的輸入區不再是框中框。
 - Demo 期間只有 `VITE_LIVE_FUNDS` 列出的基金走真實存入／提領；其餘基金可操作到送出，送出時顯示 whitelist 提示，不簽名、不送交易。
+- 少讓使用者做決定：同一畫面只放一個 Connect wallet／Create fund；項目少時不顯示搜尋與篩選（Creators 9 位以上才顯示，網址已帶篩選時仍顯示以便清除）；Funds 桌面的篩選收成一顆 Filters（與手機一致），有套用時顯示數量。空狀態在桌面置中。

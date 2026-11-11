@@ -1480,7 +1480,7 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
       .atp-facts-trigger, .app-ticket-presets button, .wallet-menu__item,
       [data-slot="sheet-close"], .app-fund-toolbar > :is(a, button), .fund-cover-nav > :is(a, button),
       .explore-filter > summary, .app-mobile-nav, .app-mobile-nav a, .public-mobile-cta,
-      .app-nav-bar .app-mode-label) {
+      .app-nav-bar .app-mode-label, .explore-filter--all .app-filter-count) {
     border-radius: 999px !important;
   }
   /* 分頁標籤與基金分類：桌面是底線式導覽（底線必須是直的）；手機是分段控制，跟按鈕一樣是膠囊。 */

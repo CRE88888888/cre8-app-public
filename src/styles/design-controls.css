@@ -275,3 +275,23 @@ body.atp-complete-create #root button[data-fund-cover] img { border-radius: 8px 
   /* 空狀態本身已經有「建立基金」的連結，標題旁那顆就不重複。 */
   #root .app-studio:has(.app-portfolio-guest) .app-portfolio-create { display: none; }
 }
+
+/* Funds 桌面的單一 Filters：面板靠右對齊按鈕，資產類型與排序／期間放在同一個面板。 */
+@media (min-width: 720px) {
+  #fund-explore .explore-filter--all { position: relative; }
+  #fund-explore .explore-filter--all > .explore-filter-panel { left: auto; right: 0; display: grid; gap: 16px; min-width: 340px; }
+  #fund-explore .explore-filter--all .app-filter-fields { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; }
+  #fund-explore .explore-filter--all .app-filter-fields > legend { margin-bottom: 6px; color: var(--steel); font: 500 13px/1.3 var(--sans); }
+  #fund-explore .explore-filter--all .app-filter-count {
+    display: inline-grid;
+    place-items: center;
+    min-width: 18px;
+    height: 18px;
+    margin-left: 6px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--ink);
+    color: var(--snow);
+    font: 600 11px/1 var(--sans);
+  }
+}
