@@ -32,6 +32,34 @@ html, body, body.create-page, #root .app-masthead { background: var(--white); }
   background: var(--app-action-hover);
 }
 .app-icon { display: block; flex: none; }
+.app-live-strategies {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.app-live-strategies > li + li { border-top: 1px solid var(--app-card-line); }
+.app-live-strategies a {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 7px 0;
+  color: var(--ink);
+  text-decoration: none;
+}
+.app-live-strategies h3 {
+  margin: 0;
+  font: var(--app-row-title, 600 1.0625rem/1.25 var(--sans));
+  overflow-wrap: anywhere;
+}
+.app-live-strategies .app-icon, .app-live-strategy-meta { color: var(--steel); }
+.app-live-strategy-meta {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 10px;
+  font: var(--app-caption, 400 .8125rem/1.4 var(--sans));
+}
 .app-icon-tile {
   display: inline-grid;
   place-items: center;
@@ -547,7 +575,7 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
   #fund-explore :is(.fund-thumb, .public-portrait) { max-width: 53px; }
   #fund-explore .fund-thumb { max-height: 53px; }
   #fund-explore .collection-tabs { gap: 3px; }
-  #fund-explore .collection-tabs > a { padding-inline: 8px; }
+  #fund-explore nav.collection-tabs > a { padding-inline: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .app-bottom-sheet[data-slot="sheet-content"] { animation: none; transition: none; }

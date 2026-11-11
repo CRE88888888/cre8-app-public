@@ -2,14 +2,6 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
-import type { Connect } from 'vite';
-
-const landingHome: Connect.NextHandleFunction = (request, _response, next) => {
-  if (request.url && /^\/(?:\?|$)/.test(request.url) && (request.method === 'GET' || request.method === 'HEAD')) {
-    request.url = `/landing/index.html${request.url.slice(1)}`;
-  }
-  next();
-};
 
 /**
  * Dev proxy：前端一律打 `/api/...`，由 Vite 轉到後端。
@@ -19,15 +11,7 @@ const landingHome: Connect.NextHandleFunction = (request, _response, next) => {
  * 部署時由反向代理做同一件事（`/api` → backend），前端不必改任何一行。
  */
 export default defineConfig({
-  plugins: [
-    {
-      name: 'landing-home',
-      configureServer: (server) => { server.middlewares.use(landingHome); },
-      configurePreviewServer: (server) => { server.middlewares.use(landingHome); },
-    },
-    react(),
-    tailwindcss(),
-  ],
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
       // shadcn 的元件一律用 `@/…` 匯入，Vite 與 TypeScript 都要知道這個別名。

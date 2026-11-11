@@ -30,7 +30,8 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    if (url.pathname === '/' && (request.method === 'GET' || request.method === 'HEAD')) {
+    if (url.hostname === 'beta.cre8.finance' && url.pathname === '/' &&
+        (request.method === 'GET' || request.method === 'HEAD')) {
       url.pathname = '/landing/';
       return env.ASSETS.fetch(new Request(url, request));
     }

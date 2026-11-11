@@ -14,7 +14,8 @@ export function Assets({ fund }: { fund: ReferenceFund }) {
     [sort, setSort] = useState<HoldingSort>("weight"),
     [asc, setAsc] = useState(false),
     [tokens, setTokens] = useState(params.get("tokens") === "1"),
-    rows = REFERENCE_METADATA[fund.slug].holdings;
+    // 同上：社群策略沒有 holdings metadata，用空陣列退回 fund.positions / backtest.targets。
+    rows = REFERENCE_METADATA[fund.slug]?.holdings ?? [];
   useEffect(() => {
     if (!root.current || !card.current) return;
     const binding = attachAssetPreviews(

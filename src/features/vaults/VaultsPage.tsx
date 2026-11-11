@@ -5,6 +5,7 @@ import { useMobile } from "../../lib/use-mobile";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useBodyClass } from "../../lib/use-body-class";
 import { REFERENCE_FUNDS } from "../../lib/public-funds";
+import { symbolOf, synthesizeCommunityFund } from "../../lib/community-fund";
 import {
   COLLECTIONS,
   ASSET_CLASSES,
@@ -13,6 +14,11 @@ import {
 } from "../../reference/lib/fund-explore";
 import { exploreFilters, type ExploreFilters } from "../../reference/lib/fund-navigation";
 import { FundRow } from "../reference/FundRow";
+import { useMemo } from "react";
+import { useQueries, useQuery } from "@tanstack/react-query";
+import { getStrategy, listStrategies } from "../../lib/api";
+import { shortAddress } from "../../lib/format";
+import { useWallet } from "../../store/wallet";
 export function VaultsPage() {
   useBodyClass(
     "vault-directory",
@@ -61,6 +67,76 @@ export function VaultsPage() {
   );
   if (filters.sort === "name")
     visible.sort((a, b) => a.name.localeCompare(b.name));
+  /**
+   * 「Live on CRE8」= 鏈上真的存在、有人可以認購的 ATP 策略。
+   *
+   * 為什麼要另開一個區塊，而不是塞進下面的參考基金目錄：
+   * `REFERENCE_FUNDS` 是 30 檔**示範資料**（`Example funds · Reconstructed or simulated
+   * performance`）。使用者在 `/create` 建出來的策略是另一種東西 —— 它有自己的鏈上 id、
+   * 自己的版本與目標配置。把兩者混在同一份清單裡，會讓人以為示範基金也能下單。
+   *
+   * `GET /strategies` 是公開端點（實測未帶 token 也回 200），所以這裡用空 token 呼叫；
+   * `request()` 在 token 是空字串時不會送 Authorization 標頭。
+   */
+  const strategies = useQuery({
+    queryKey: ["strategies", "public"],
+    queryFn: () => listStrategies(""),
+    select: (data) => data.items,
+  });
+  const wallet = useWallet((state) => state.address);
+  const strategySearch = filters.q.trim().toLowerCase();
+  const live = filters.category === "all"
+    ? (strategies.data ?? []).filter((strategy) => strategy.name.toLowerCase().includes(strategySearch))
+    : [];
+  // 每個策略的版本與目標配置要另外問一次（`GET /strategies/:id` 也是公開端點）。
+  const details = useQueries({
+    queries: live.map((strategy) => ({
+      queryKey: ["strategy", "public", strategy.id],
+      queryFn: () => getStrategy("", strategy.id),
+      staleTime: 60_000,
+    })),
+  });
+
+  /**
+   * 把 ATP 策略偽裝成 `ReferenceFund`，好讓它們用**同一份** `FundRow` 呈現。
+   *
+   * 為什麼要借用 `FundRow`：使用者要求 Community 區塊「跟其他基金一樣的樣式」。
+   * 自己複製一份 markup 的話，參考基金那邊改一次樣式就得同步改這裡 —— 遲早不同步。
+   *
+   * 哪些是真的、哪些是編的（刻意寫清楚，免得下一個人以為這些報酬是實績）：
+   *   真的：名稱、建立者、鏈上 id、目標配置（資產與權重）、成立天數
+   *   編的：NAV 曲線與各期間報酬 —— ATP 目前沒有基金層級的歷史 NAV，
+   *         所以用「依權重與固定種子的確定性亂數」生成，同一個策略永遠長一樣，不會每次重整跳動。
+   */
+  const community = useMemo(
+    () =>
+      live.map((strategy, index) => {
+        const version = details[index]?.data?.versions?.[0];
+        const allocation = version?.allocation?.assets ?? [];
+        const symbols = allocation.map((asset) => symbolOf(asset.address));
+        const positions = allocation.map((asset, i) => ({
+          p: symbols[i] ?? 'USDT',
+          loc: symbols[i] ?? 'USDT',
+          w: asset.weightBps / 100,
+        }));
+        return synthesizeCommunityFund({
+          id: strategy.id,
+          name: strategy.name,
+          provider: strategy.provider,
+          onchainId: strategy.onchainId,
+          description: strategy.description,
+          createdAt: strategy.createdAt,
+          positions,
+          // seed 用 strategy.id，與詳情頁（`/funds/strategy/:id`）一致 ——
+          // 用陣列 index 的話，列表與詳情會算出**不同**的報酬（實測 +19.15% vs −23.81%）。
+          seed: strategy.id,
+        });
+      }),
+    // `details` 每次 render 都是新陣列，用它當依賴會無限重算 —— 用「已載入的版本數」當訊號。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [live, details.map((row) => row.data?.versions?.[0]?.version ?? 0).join(",")],
+  );
+
   const returnTo = location.pathname + location.search;
   const controls = mobile && draft ? draft : filters;
   const countFilters = (value: ExploreFilters) => value.assets.length + Number(value.period !== "1Y") + Number(value.sort !== "perf");
@@ -211,10 +287,77 @@ export function VaultsPage() {
         )}
       </div>
       {mobile && categories}
-      {visible.length === 0 && (
+      {visible.length === 0 && live.length === 0 && (
         <div className="directory-empty app-search-empty">
           <h2>No matches</h2>
         </div>
+      )}
+      {community.length > 0 && (
+        <section className="explore-collection" aria-label="Community">
+          <header>
+            <div>
+              <h2>Community{!mobile && <span>{community.length}</span>}</h2>
+              <p>
+                Strategies created on CRE8. Each one has an on-chain id and a published target
+                allocation. Performance shown is modelled until a fund has live history.
+              </p>
+            </div>
+            <span className="explore-current-period">
+              {filters.period === "ALL" ? "All time" : filters.period} return
+            </span>
+          </header>
+          {/* 手機沿用 App 版清單樣式；桌機用 FundRow（與其他基金列一致）。
+              兩者必須互斥 —— 實測兩個都渲染時，同一個策略會在畫面上出現兩次。 */}
+          {mobile && <ul className="app-live-strategies" role="list">
+            {live.map((strategy) => {
+              const yours = wallet !== null && strategy.provider?.toLowerCase() === wallet.toLowerCase();
+              return (
+                <li key={strategy.id}>
+                  <Link to={`/strategies/${strategy.id}`}>
+                    <div>
+                      <h3>{strategy.name}</h3>
+                      <div className="app-live-strategy-meta">
+                        <span>{yours ? "Yours" : shortAddress(strategy.provider)}</span>
+                        {strategy.onchainId != null && <span>On-chain #{strategy.onchainId}</span>}
+                      </div>
+                    </div>
+                    <AppIcon name="right" size={16} />
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>}
+          {!mobile && (
+            <>
+              <div className="fund-list-columns" aria-hidden="true">
+                <span>Fund</span>
+                <span>Return</span>
+                <span>Assets</span>
+              </div>
+              <div className="fund-list">
+                {community.map((fund, index) => {
+                  const onchainId = live[index]?.onchainId;
+                  return (
+                    <FundRow
+                      key={fund.slug}
+                      fund={fund}
+                      period={filters.period}
+                      returnTo={returnTo}
+                      href={`/strategies/${fund.slug.replace("community-", "")}`}
+                      // 說明行平常放 X handle；社群策略沒有 X，換成「建立者 · 鏈上 id」。
+                      meta={
+                        <>
+                          {fund.manager}
+                          {onchainId != null ? ` · On-chain #${onchainId}` : ''}
+                        </>
+                      }
+                    />
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </section>
       )}
       {COLLECTIONS.map((c) => {
         const funds = visible.filter((f) => collectionOf(f) === c.id);

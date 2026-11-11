@@ -64,6 +64,8 @@ function isActive({ paths, exact }: Destination, pathname: string): boolean {
  * 捲過大標題後頂部列才出現小標題，跟原生 App 的導覽列一樣。
  */
 const tabRootTitles: Record<string, string> = {
+  // 首頁就是 Funds（main 的 6565628 讓 Pages 首頁直接開 Explore）。
+  '/': 'Funds',
   '/vaults': 'Funds',
   '/leaderboard': 'Creators',
   '/portfolio': 'Portfolio',
@@ -150,7 +152,7 @@ export function TopBar(): ReactNode {
             <nav className="nav" aria-label="Main navigation">
               {destinations[mode].map((destination) => (
                 <NavLink key={destination.to} to={destination.to} end={destination.exact}
-                  className={() => (isActive(destination, path) ? 'active' : '')}>
+                  className={() => (isActive(destination, path) || (destination.to === '/vaults' && path === '/') ? 'active' : '')}>
                   {destination.label}
                 </NavLink>
               ))}

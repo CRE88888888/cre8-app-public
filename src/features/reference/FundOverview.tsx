@@ -27,7 +27,8 @@ export function FundOverview({
 }) {
   const [params, setParams] = useSearchParams(),
     period = performancePeriod(params.get("period")),
-    meta = REFERENCE_METADATA[fund.slug],
+    // Community 策略（`/funds/strategy/:id`）沒有參考目錄的封面與人物資料，meta 會是 undefined。
+    meta = REFERENCE_METADATA[fund.slug] as (typeof REFERENCE_METADATA)[string] | undefined,
     copy = editorial(fund);
   const fromPortfolio = /^\/portfolios?(?:[?#]|$)/.test(backTo);
   const [shareLink, setShareLink] = useState<string | null>(null);
@@ -56,12 +57,29 @@ export function FundOverview({
           </Link>
           <div className="vault-heading">
             <div className="atp-fund-cover" id="atp-fund-cover" data-fund-cover>
-              <img
-                src={meta.cover.src}
-                alt=""
-                fetchPriority="high"
-                style={{ objectPosition: `50% ${meta.cover.position}%` }}
-              />
+              {meta === undefined ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'grid',
+                    placeItems: 'center',
+                    fontSize: 72,
+                    fontWeight: 700,
+                    letterSpacing: '0.04em',
+                    color: 'rgba(255,255,255,0.85)',
+                  }}
+                >
+                  {fund.name.replace(/[^A-Za-z\u4e00-\u9fff]/g, '').slice(0, 2).toUpperCase() || 'C8'}
+                </div>
+              ) : (
+                <img
+                  src={meta.cover.src}
+                  alt=""
+                  fetchPriority="high"
+                  style={{ objectPosition: `50% ${meta.cover.position}%` }}
+                />
+              )}
               <div className="atp-fund-cover-shade" />
               <nav className="app-fund-toolbar" aria-label="Fund navigation">
                 <Link to={backTo} aria-label={fromPortfolio ? "Back to portfolio" : "Back to funds"}>
