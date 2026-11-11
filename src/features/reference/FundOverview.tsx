@@ -1,4 +1,7 @@
-import type { Ref } from "react";
+import { useState, type Ref } from "react";
+import { ChevronLeft } from "lucide-react";
+import { toast } from "../../components/Toast";
+import { ReferenceSheet } from "./ReferenceSheet";
 import { Link, useSearchParams } from "react-router-dom";
 import { REFERENCE_METADATA, editorial } from "../../lib/public-funds";
 import type { ReferenceFund } from "../../lib/public-funds";
@@ -26,6 +29,23 @@ export function FundOverview({
     period = performancePeriod(params.get("period")),
     meta = REFERENCE_METADATA[fund.slug],
     copy = editorial(fund);
+  const [shareLink, setShareLink] = useState<string | null>(null);
+  async function shareFund() {
+    const url = new URL(`/funds/${fund.slug}`, window.location.origin);
+    if (params.has("period")) url.searchParams.set("period", period);
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: fund.name, url: url.href });
+        return;
+      }
+      await navigator.clipboard.writeText(url.href);
+      toast.ok("Fund link copied");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setShareLink(url.href);
+    }
+  }
+
   return (
     <>
       <div className="vault-top">
@@ -42,6 +62,14 @@ export function FundOverview({
                 style={{ objectPosition: `50% ${meta.cover.position}%` }}
               />
               <div className="atp-fund-cover-shade" />
+              <nav className="fund-cover-nav" aria-label="Fund navigation">
+                <Link to={backTo} aria-label="Back to funds">
+                  <ChevronLeft aria-hidden="true" size={21} />
+                </Link>
+                <button type="button" onClick={() => void shareFund()}>
+                  Share
+                </button>
+              </nav>
               <h1>
                 <FundName fund={fund} />
               </h1>
@@ -52,7 +80,12 @@ export function FundOverview({
                 <FundByline fund={fund} />
               </span>
               <div className="vault-head-actions">
-                <button ref={factsTrigger} type="button" className="atp-facts-trigger" onClick={onFacts}>
+                <button
+                  ref={factsTrigger}
+                  type="button"
+                  className="atp-facts-trigger"
+                  onClick={onFacts}
+                >
                   Fund facts ›
                 </button>
                 {held && (
@@ -65,6 +98,23 @@ export function FundOverview({
           </div>
         </header>
       </div>
+      <ReferenceSheet
+        open={shareLink !== null}
+        onOpenChange={(open) => {
+          if (!open) setShareLink(null);
+        }}
+        title="Share fund"
+      >
+        <label className="field">
+          Fund link
+          <input
+            type="url"
+            value={shareLink ?? ""}
+            readOnly
+            onFocus={(event) => event.currentTarget.select()}
+          />
+        </label>
+      </ReferenceSheet>
       <Performance
         fund={fund}
         period={period}

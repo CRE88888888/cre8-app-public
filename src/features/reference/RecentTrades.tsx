@@ -4,7 +4,6 @@ import {
   modelPositionGroups,
   positionWeightLabels,
   recentUpdateSources,
-  recentFundSources,
   tradeUpdateDate,
 } from "../../reference/lib/recent-trades";
 import type { ModelTradeUpdate } from "../../reference/lib/recent-trades";
@@ -15,22 +14,26 @@ import {
 } from "../../lib/public-funds";
 import type { ReferenceFund } from "../../lib/public-funds";
 import { ReferenceSheet } from "./ReferenceSheet";
+import { FUND_DISCLOSURES } from "./fund-disclosures";
+import { collectionOf } from "../../reference/lib/fund-explore";
 export function RecentTrades({ fund }: { fund: ReferenceFund }) {
   const [params, setParams] = useSearchParams();
-  const updates = [...REFERENCE_METADATA[fund.slug].updates].sort((a, b) =>
-      b.date.localeCompare(a.date),
-    ),
-    [open, setOpenState] = useState(
-      params.get("trades") === "1" || params.has("update"),
-    ),
-    [selected, setSelectedState] = useState<ModelTradeUpdate | null>(
-      () => updates.find((u) => u.id === params.get("update")) || null,
-    ),
-    [page, setPage] = useState(0),
-    [filter, setFilter] = useState("all");
+  const isTheme = collectionOf(fund) === "themes";
+  const isReplay = fund.sourceModel?.historyKind === "post-replay";
+  const updates = REFERENCE_METADATA[fund.slug].updates
+    .filter(
+      (update) =>
+        isTheme ||
+        (fund.sourceModel &&
+          recentUpdateSources(update, fund.group).length > 0),
+    )
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const selected = updates.find((update) => update.id === params.get("update"));
+  const open = params.get("trades") === "1" || !!selected;
+  const [page, setPage] = useState(0);
+  const [filter, setFilter] = useState("all");
   const setOpen = (value: boolean) => {
-    setOpenState(value);
-    const next = new URLSearchParams(window.location.search);
+    const next = new URLSearchParams(params);
     if (value) next.set("trades", "1");
     else {
       next.delete("trades");
@@ -39,34 +42,38 @@ export function RecentTrades({ fund }: { fund: ReferenceFund }) {
     setParams(next, { replace: true });
   };
   const setSelected = (value: ModelTradeUpdate | null) => {
-    setSelectedState(value);
-    const next = new URLSearchParams(window.location.search);
+    const next = new URLSearchParams(params);
+    next.set("trades", "1");
     if (value) next.set("update", value.id);
     else next.delete("update");
+    setFilter("all");
     setParams(next, { replace: true });
   };
   const sources = (update: ModelTradeUpdate) =>
-    fund.group === "stocks" || fund.group === "rwa" || fund.group === "crypto"
-      ? []
-      : recentUpdateSources(update, fund.group).length
-        ? recentUpdateSources(update, fund.group)
-        : recentFundSources(fund);
-  const sourceLinks = (u: ModelTradeUpdate) => (
-    <span className="trade-source-links">
-      {sources(u).map((s) => (
-        <a key={s.url} href={s.url} target="_blank" rel="noopener noreferrer">
-          {s.label} ↗
-        </a>
-      ))}
-    </span>
-  );
+    isTheme ? [] : recentUpdateSources(update, fund.group);
+  const sourceLinks = (update: ModelTradeUpdate) => {
+    const links = sources(update);
+    if (!links.length) return null;
+    return (
+      <span className="trade-source-links">
+        {links.map((s, index) => (
+          <a key={s.url} href={s.url} target="_blank" rel="noopener noreferrer">
+            {s.label}
+            {links.length > 1 ? ` ${index + 1}` : ""} ↗
+          </a>
+        ))}
+      </span>
+    );
+  };
+  const displaySymbol = (symbol: string) =>
+    symbol.toLowerCase() === "cash" ? "USDT" : symbol;
   const icons = (symbols: string[]) =>
     symbols.slice(0, 3).map((symbol) => {
-      const asset = assetBySymbol(symbol);
+      const asset = assetBySymbol(displaySymbol(symbol));
       return asset?.logo ? (
         <img src={asset.logo} alt={asset.symbol} key={symbol} />
       ) : (
-        <span key={symbol}>{symbol}</span>
+        <span key={symbol}>{displaySymbol(symbol)}</span>
       );
     });
   const timeline = (items: ModelTradeUpdate[]) => (
@@ -78,8 +85,6 @@ export function RecentTrades({ fund }: { fund: ReferenceFund }) {
             className="trade-update-link"
             onClick={() => {
               setSelected(u);
-              setFilter("all");
-              setOpen(true);
             }}
           >
             <time>{tradeUpdateDate(u.date).label}</time>
@@ -99,31 +104,74 @@ export function RecentTrades({ fund }: { fund: ReferenceFund }) {
       ))}
     </ol>
   );
-  if (!updates.length) return null;
+  if (!updates.length) {
+    if (isTheme) return null;
+    const disclosures = FUND_DISCLOSURES[fund.slug] ?? [];
+    return (
+      <section className="recent-trades">
+        <h2>
+          {disclosures.length
+            ? "Public disclosures"
+            : "Recent holdings changes"}
+        </h2>
+        <p className="recent-trades-note">
+          {disclosures.length
+            ? "Official filings provide context for this reference fund. Its allocations and performance follow the CRE8 model."
+            : "No verified holdings history is available for this fund."}
+        </p>
+        {disclosures.length > 0 && (
+          <ul className="fund-disclosures">
+            {disclosures.map((disclosure) => (
+              <li key={disclosure.url}>
+                <time dateTime={disclosure.date}>{date(disclosure.date)}</time>
+                <h3>
+                  <a
+                    href={disclosure.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {disclosure.title} ↗
+                  </a>
+                </h3>
+                <p>{disclosure.detail}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    );
+  }
+  const heading = isTheme
+    ? "Recent trades"
+    : isReplay
+      ? "Recent trades"
+      : "Recent holdings changes";
   const groups = selected ? modelPositionGroups(selected.positions) : null;
   const renderGroup = (key: keyof NonNullable<typeof groups>, title: string) =>
     !groups?.[key].length ? null : (
       <section className="trade-position-group" key={key}>
         <h3>{title}</h3>
         {groups[key].map((p) => {
-          const asset = assetBySymbol(p.asset),
-            labels = positionWeightLabels(p.beforePct, p.afterPct);
+          const symbol = displaySymbol(p.asset);
+          const asset = assetBySymbol(symbol);
+          const labels = positionWeightLabels(p.beforePct, p.afterPct);
+          const identity = (
+            <>
+              {asset?.logo && <img src={asset.logo} alt="" />}
+              <strong>{asset?.symbol || symbol}</strong>
+            </>
+          );
           return (
             <div className="trade-position-row" key={p.asset}>
-              <Link
-                to={
-                  asset
-                    ? `/asset/${asset.slug}?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}`
-                    : "#"
-                }
-                aria-disabled={!asset}
-                onClick={(event) => {
-                  if (!asset) event.preventDefault();
-                }}
-              >
-                {asset?.logo && <img src={asset.logo} alt="" />}
-                <strong>{asset?.symbol || p.asset}</strong>
-              </Link>
+              {asset ? (
+                <Link
+                  to={`/asset/${asset.slug}?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}`}
+                >
+                  {identity}
+                </Link>
+              ) : (
+                <span className="trade-position-identity">{identity}</span>
+              )}
               <span>
                 {key === "unchanged" ? (
                   labels.after
@@ -142,7 +190,7 @@ export function RecentTrades({ fund }: { fund: ReferenceFund }) {
   return (
     <section className="recent-trades">
       <header className="recent-trades-heading">
-        <h2>Recent trades</h2>
+        <h2>{heading}</h2>
       </header>
       <p className="recent-trades-note">
         {fund.sourceModel?.historyKind === "post-replay"
@@ -155,9 +203,8 @@ export function RecentTrades({ fund }: { fund: ReferenceFund }) {
       <button
         className="trade-updates-more"
         onClick={() => {
-          setSelected(null);
           setPage(0);
-          setOpen(true);
+          setSelected(null);
         }}
       >
         See more <span>›</span>
@@ -166,7 +213,15 @@ export function RecentTrades({ fund }: { fund: ReferenceFund }) {
       <ReferenceSheet
         open={open}
         onOpenChange={setOpen}
-        title={selected ? "Trade update" : "Trade updates"}
+        title={
+          heading === "Recent holdings changes"
+            ? selected
+              ? "Holdings change"
+              : "Holdings changes"
+            : selected
+              ? "Trade update"
+              : "Trade updates"
+        }
       >
         {selected ? (
           <>
@@ -224,7 +279,8 @@ export function RecentTrades({ fund }: { fund: ReferenceFund }) {
                   .filter((t) => filter === "all" || t.side === filter)
                   .map((t) => (
                     <p key={t.id}>
-                      {t.side === "buy" ? "Buy" : "Sell"} · {t.asset} ·{" "}
+                      {t.side === "buy" ? "Buy" : "Sell"} ·{" "}
+                      {displaySymbol(t.asset)} ·{" "}
                       {t.navSharePct?.toFixed(2) ?? "—"}% of model NAV
                     </p>
                   ))}
@@ -234,23 +290,25 @@ export function RecentTrades({ fund }: { fund: ReferenceFund }) {
         ) : (
           <>
             {timeline(updates.slice(page * 12, page * 12 + 12))}
-            <nav className="trade-pagination">
-              <button
-                disabled={page === 0}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                ← Previous
-              </button>
-              <span>
-                {page + 1} / {Math.ceil(updates.length / 12)}
-              </span>
-              <button
-                disabled={(page + 1) * 12 >= updates.length}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next →
-              </button>
-            </nav>
+            {updates.length > 12 && (
+              <nav className="trade-pagination" aria-label="Trade update pages">
+                <button
+                  disabled={page === 0}
+                  onClick={() => setPage((p) => p - 1)}
+                >
+                  ← Previous
+                </button>
+                <span>
+                  {page + 1} / {Math.ceil(updates.length / 12)}
+                </span>
+                <button
+                  disabled={(page + 1) * 12 >= updates.length}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next →
+                </button>
+              </nav>
+            )}
           </>
         )}
       </ReferenceSheet>

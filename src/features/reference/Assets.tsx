@@ -43,12 +43,13 @@ export function Assets({ fund }: { fund: ReferenceFund }) {
         : Number(av) - Number(bv)) * (asc ? 1 : -1)
     );
   });
-  const header = (key: HoldingSort, label: string) => (
+  const header = (key: HoldingSort, label: string, shortLabel?: string) => (
     <th
       key={key}
       aria-sort={sort === key ? (asc ? "ascending" : "descending") : "none"}
     >
       <button
+        aria-label={label}
         onClick={() => {
           if (sort === key) setAsc(!asc);
           else {
@@ -57,7 +58,17 @@ export function Assets({ fund }: { fund: ReferenceFund }) {
           }
         }}
       >
-        {label} {sort === key ? (asc ? "↑" : "↓") : "↕"}
+        {shortLabel ? (
+          <>
+            <span className="holding-label-full">{label}</span>
+            <span className="holding-label-short" aria-hidden="true">
+              {shortLabel}
+            </span>
+          </>
+        ) : (
+          label
+        )}{" "}
+        {sort === key ? (asc ? "↑" : "↓") : "↕"}
       </button>
     </th>
   );
@@ -75,7 +86,7 @@ export function Assets({ fund }: { fund: ReferenceFund }) {
             <tr>
               {header("asset", "Assets")}
               {header("weight", "Weight")}
-              {header("size", "Cap / AUM")}
+              {header("size", "Market cap / AUM", "Cap / AUM")}
               {header("change24h", "24H")}
             </tr>
           </thead>

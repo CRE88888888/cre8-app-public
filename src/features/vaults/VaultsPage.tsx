@@ -1,4 +1,6 @@
-import { useLocation, useSearchParams } from "react-router-dom";
+import { ListFilter, Search } from "lucide-react";
+import type { FocusEvent, KeyboardEvent } from "react";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useBodyClass } from "../../lib/use-body-class";
 import { REFERENCE_FUNDS } from "../../lib/public-funds";
 import {
@@ -19,11 +21,25 @@ export function VaultsPage() {
   const [params, setParams] = useSearchParams(),
     location = useLocation(),
     filters = exploreFilters(window.location.href);
-  const change = (key: string, value: string) => {
-    const next = new URLSearchParams(params);
+  const filterUrl = (key: string, value: string, current = params) => {
+    const next = new URLSearchParams(current);
+    if (key === "assets") next.delete("asset");
     if (!value || value === "all") next.delete(key);
     else next.set(key, value);
-    setParams(next, { replace: true });
+    return next;
+  };
+  const change = (key: string, value: string) =>
+    setParams(filterUrl(key, value, new URLSearchParams(window.location.search)), {
+      replace: true,
+    });
+  const closeOnBlur = (event: FocusEvent<HTMLDetailsElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget))
+      event.currentTarget.open = false;
+  };
+  const closeOnEscape = (event: KeyboardEvent<HTMLDetailsElement>) => {
+    if (event.key !== "Escape") return;
+    event.currentTarget.open = false;
+    event.currentTarget.querySelector("summary")?.focus();
   };
   if (
     !params.has("assets") &&
@@ -49,26 +65,37 @@ export function VaultsPage() {
           Explore funds<span>.</span>
         </h1>
       </header>
+      <p className="explore-disclosure">
+        Example funds · Reconstructed or simulated performance · Before fees
+      </p>
+      <nav className="collection-tabs" aria-label="Fund categories">
+        {[{ id: "all", name: "All" }, ...COLLECTIONS].map((category) => {
+          const query = filterUrl("category", category.id).toString();
+          return (
+            <Link
+              key={category.id}
+              to={{ pathname: location.pathname, search: query }}
+              aria-current={
+                filters.category === category.id ? "page" : undefined
+              }
+            >
+              {category.name}
+            </Link>
+          );
+        })}
+      </nav>
       <div className="explore-toolbar">
         <div className="explore-filter-list">
-          <details className="explore-filter">
-            <summary>Category</summary>
-            <div className="explore-filter-panel">
-              {[{ id: "all", name: "All funds" }, ...COLLECTIONS].map((c) => (
-                <label className="explore-filter-option" key={c.id}>
-                  <input
-                    type="radio"
-                    name="category"
-                    checked={filters.category === c.id}
-                    onChange={() => change("category", c.id)}
-                  />
-                  {c.name}
-                </label>
-              ))}
-            </div>
-          </details>
-          <details className="explore-filter">
-            <summary>Assets</summary>
+          <details
+            className="explore-filter"
+            name="fund-filter"
+            onBlur={closeOnBlur}
+            onKeyDown={closeOnEscape}
+          >
+            <summary>
+              <ListFilter aria-hidden="true" />
+              Assets
+            </summary>
             <div className="explore-filter-panel">
               {ASSET_CLASSES.map((c) => (
                 <label className="explore-filter-option" key={c.id}>
@@ -89,8 +116,16 @@ export function VaultsPage() {
               ))}
             </div>
           </details>
-          <details className="explore-filter">
-            <summary>Advanced</summary>
+          <details
+            className="explore-filter"
+            name="fund-filter"
+            onBlur={closeOnBlur}
+            onKeyDown={closeOnEscape}
+          >
+            <summary>
+              <ListFilter aria-hidden="true" />
+              Advanced
+            </summary>
             <div className="explore-filter-panel">
               <label className="explore-filter-field">
                 Period
@@ -119,6 +154,7 @@ export function VaultsPage() {
           </details>
         </div>
         <label className="explore-search">
+          <Search aria-hidden="true" />
           <input
             type="search"
             aria-label="Filter funds"
@@ -150,12 +186,13 @@ export function VaultsPage() {
                 </h2>
                 <p>{c.description}</p>
               </div>
+              <span className="explore-current-period">
+                {filters.period === "ALL" ? "All time" : filters.period} return
+              </span>
             </header>
             <div className="fund-list-columns" aria-hidden="true">
               <span>Fund</span>
-              <span>
-                {filters.period === "ALL" ? "All time" : filters.period} return
-              </span>
+              <span>Return</span>
               <span>Assets</span>
             </div>
             <div className="fund-list">
@@ -171,10 +208,6 @@ export function VaultsPage() {
           </section>
         ) : null;
       })}
-      <p className="public-history-note">
-        Historical reference models · Before fees · Source dates and methodology
-        in each fund.
-      </p>
     </main>
   );
 }

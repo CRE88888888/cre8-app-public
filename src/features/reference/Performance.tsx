@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   periodSeries,
@@ -46,6 +46,7 @@ export function Performance({
   period: Period;
   onChange: (p: Period) => void;
 }) {
+  const fillId = useId();
   const [params, setParams] = useSearchParams(),
     open = params.get("performance") === "1";
   const setOpen = (value: boolean) => {
@@ -69,6 +70,7 @@ export function Performance({
     max = hi + pad;
   const x = (index: number) => (index / Math.max(1, points.length - 1)) * 842,
     y = (value: number) => 8 + ((max - value) / (max - min)) * 240;
+  const axisValues = [max, (max + min) / 2, min];
   const graph =
     points.length > 1
       ? {
@@ -108,9 +110,7 @@ export function Performance({
           </p>
           <div className="performance-meta">
             <p className="performance-dates">{range}</p>
-            <p className="performance-description">
-              {label} · {basis} · Before fees
-            </p>
+            <p className="performance-description">{basis} · Before fees</p>
           </div>
         </div>
         <div
@@ -119,7 +119,10 @@ export function Performance({
           role="group"
           aria-label="Share price history. Use arrow keys to explore."
           onPointerMove={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
+            const rect = e.currentTarget
+              .querySelector("svg")
+              ?.getBoundingClientRect();
+            if (!rect?.width) return;
             setHover(
               Math.round(
                 Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) *
@@ -156,61 +159,58 @@ export function Performance({
           }}
         >
           {graph ? (
-            <svg
-              viewBox="0 0 900 280"
-              role="img"
-              aria-label={`${fund.name} cumulative return, ${range}`}
-            >
-              <defs>
-                <linearGradient
-                  id="public-fund-fill"
-                  x1="0"
-                  y1="0"
-                  x2="0"
-                  y2="1"
-                >
-                  <stop offset="0" stopColor="currentColor" stopOpacity=".14" />
-                  <stop offset="1" stopColor="currentColor" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              {[max, (max + min) / 2, min].map((v) => (
-                <g key={v}>
+            <>
+              <svg
+                viewBox="0 0 842 256"
+                preserveAspectRatio="none"
+                role="img"
+                aria-label={`${fund.name} cumulative return, ${range}`}
+              >
+                <defs>
+                  <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+                    <stop
+                      offset="0"
+                      stopColor="currentColor"
+                      stopOpacity=".14"
+                    />
+                    <stop offset="1" stopColor="currentColor" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                {axisValues.map((value) => (
                   <line
+                    key={value}
+                    className="public-chart-grid"
                     x1="0"
                     x2="842"
-                    y1={y(v)}
-                    y2={y(v)}
+                    y1={y(value)}
+                    y2={y(value)}
                     stroke="var(--hair)"
+                    vectorEffect="non-scaling-stroke"
                   />
-                  <text x="852" y={y(v) + 4} fill="var(--steel)" fontSize="12">
-                    {v.toFixed(1)}%
-                  </text>
-                </g>
-              ))}
-              <path
-                d={`${graph.path} L842,248 L0,248 Z`}
-                fill="url(#public-fund-fill)"
-              />
-              <path
-                d={graph.path}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                vectorEffect="non-scaling-stroke"
-              />
-              <text x="0" y="274" fill="var(--steel)" fontSize="12">
-                {first ? date(first.t) : ""}
-              </text>
-              <text
-                x="842"
-                y="274"
-                textAnchor="end"
-                fill="var(--steel)"
-                fontSize="12"
-              >
-                {last ? date(last.t) : ""}
-              </text>
-            </svg>
+                ))}
+                <path
+                  d={`${graph.path} L842,248 L0,248 Z`}
+                  fill={`url(#${fillId})`}
+                />
+                <path
+                  d={graph.path}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  vectorEffect="non-scaling-stroke"
+                />
+              </svg>
+              <div className="public-chart-axis" aria-hidden="true">
+                {axisValues.map((value) => (
+                  <span
+                    key={value}
+                    style={{ top: `${(y(value) / 256) * 100}%` }}
+                  >
+                    {value.toFixed(1)}%
+                  </span>
+                ))}
+              </div>
+            </>
           ) : (
             <div className="vault-chart-empty">
               Insufficient history for this period.

@@ -119,6 +119,7 @@ export function PortfoliosPage(): ReactNode {
                 </p>
               </div>
             ) : (
+              <div className="portfolio-table-scroll" role="region" aria-label="Fund holdings" tabIndex={0}>
               <table className="table">
                 <thead>
                   <tr>
@@ -182,6 +183,7 @@ export function PortfoliosPage(): ReactNode {
                   })}
                 </tbody>
               </table>
+              </div>
             )}
           </section>
 
@@ -201,9 +203,10 @@ export function PortfoliosPage(): ReactNode {
             {merged.length === 0 ? (
               <div className="directory-empty">
                 <strong>No activity yet</strong>
-                <p>Nothing has been executed for these funds. Open one and press Re-analyse to see what a round would do.</p>
+                <p>Executed rounds will appear here.</p>
               </div>
             ) : (
+              <div className="portfolio-table-scroll" role="region" aria-label="Activity history" tabIndex={0}>
               <table className="table">
                 <thead>
                   <tr>
@@ -246,6 +249,7 @@ export function PortfoliosPage(): ReactNode {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </section>
         </>
