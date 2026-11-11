@@ -255,3 +255,23 @@ body.atp-complete-create #root button[data-fund-cover] img { border-radius: 8px 
   html #root .btn:is(.primary, .btn--primary):not(:disabled) { border-color: var(--ink); background: var(--ink); color: var(--snow); }
   html #root .btn:is(.primary, .btn--primary):not(:disabled):is(:hover, :active) { border-color: var(--deep); background: var(--deep); }
 }
+
+/*
+ * 桌面的空狀態（未連錢包、還沒有基金）置中：原本整塊靠左，右邊留一大片空白，看起來像版面壞掉。
+ * 同一個畫面只留一個 Connect wallet：頁面本身已有連線按鈕時，頁首那顆隱藏（手機版本來就這樣）。
+ */
+@media (min-width: 720px) {
+  #root .app-portfolio-summary.app-portfolio-guest {
+    justify-items: center;
+    max-width: 520px;
+    margin: 72px auto 0;
+    padding: 0;
+    text-align: center;
+  }
+  #root .app-portfolio-guest .wallet-menu--inline { width: 100%; max-width: 320px; margin-top: 10px; }
+  #root .app-portfolio-guest > a:not(.btn) { justify-self: center; }
+  #root .app-portfolio-guest > .btn { margin-top: 10px; }
+  #root:has(main .wallet-menu--inline) .masthead .header-wallet[data-wallet-state="disconnected"] { display: none; }
+  /* 空狀態本身已經有「建立基金」的連結，標題旁那顆就不重複。 */
+  #root .app-studio:has(.app-portfolio-guest) .app-portfolio-create { display: none; }
+}
