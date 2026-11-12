@@ -2,6 +2,8 @@
 
 給 AI agent 與新工程師的工作規則。只寫從程式碼與文件查證過的事實；細節以 `README.md`、`docs/` 為準。
 
+**Claude 與 Codex 分工**：規則見 [docs/AGENT_COLLABORATION](https://github.com/CRE8Finance/docs/blob/main/docs/AGENT_COLLABORATION.zh-TW.md)。本 repo 由 Claude 寫；Codex 只接指派給它的 issue（依賴升級、機械式改動、測試排查）。開工前先看本 repo 有沒有標 `agent:claude` 或 `agent:codex` 的進行中 issue，有就排隊；分支前綴 Claude 用 `claude/*`、Codex 用 `codex/*`。
+
 ## 這個 repo 是什麼
 
 CRE8 ATP 的前端：Vite 7 + React 19 + TypeScript（strict），Bun 管理套件。使用者在這裡瀏覽基金、SIWE 登入、建立策略、deposit / withdraw、續期 session key、觸發再平衡。
