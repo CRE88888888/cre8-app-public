@@ -19,6 +19,12 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { getStrategy, listStrategies } from "../../lib/api";
 import { shortAddress } from "../../lib/format";
 import { useWallet } from "../../store/wallet";
+
+const hiddenCommunityStrategies = new Map<number, string>([
+  [1, "Elon Universe"],
+  [2, "BNB 生態平衡"],
+]);
+
 export function VaultsPage() {
   useBodyClass(
     "vault-directory",
@@ -86,7 +92,11 @@ export function VaultsPage() {
   const wallet = useWallet((state) => state.address);
   const strategySearch = filters.q.trim().toLowerCase();
   const live = filters.category === "all"
-    ? (strategies.data ?? []).filter((strategy) => strategy.name.toLowerCase().includes(strategySearch))
+    ? (strategies.data ?? []).filter(
+        (strategy) =>
+          hiddenCommunityStrategies.get(strategy.id) !== strategy.name &&
+          strategy.name.toLowerCase().includes(strategySearch),
+      )
     : [];
   // 每個策略的版本與目標配置要另外問一次（`GET /strategies/:id` 也是公開端點）。
   const details = useQueries({
