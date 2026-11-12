@@ -495,9 +495,6 @@ body.atp-complete-fund #ticket .swap .btn.block {
     box-shadow: none;
     margin-bottom: 6px;
   }
-  body.atp-complete-fund:has(#atp-fund-cover) .masthead {
-    display: none;
-  }
   body.atp-complete-fund .vault-content {
     padding: 0 16px 110px;
   }

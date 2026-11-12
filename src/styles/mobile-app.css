@@ -748,8 +748,6 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
   }
   #root .app-masthead { border-bottom: 0; }
   #root .app-masthead .wrap { min-height: 52px; }
-  /* 頁面本身已有大的連線按鈕時，右上角不再重複一個。 */
-  #root:has(.app-portfolio-guest) .app-nav-bar .header-wallet[data-wallet-state="disconnected"] { visibility: hidden; }
   #root :is(.masthead, .app-nav-bar) .header-wallet.app-wallet-toolbar {
     position: relative;
     width: 44px;
@@ -1297,8 +1295,6 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
   }
   #root .app-portfolio .explore-heading { padding-right: 0; }
   body.atp-complete-create #root:has(> .app-nav-bar) > main > div:first-child { padding-top: 0; }
-  /* 頁面本身已有大的連線按鈕時，右上角不再重複一個。 */
-  #root:has(.app-portfolio-guest) .app-nav-bar .header-wallet[data-wallet-state="disconnected"] { visibility: hidden; }
 
   /* 底部：浮動玻璃膠囊（分頁列與基金頁的交易列共用同一個造型）。 */
   #root .app-mobile-nav,
