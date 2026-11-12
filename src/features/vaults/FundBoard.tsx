@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { RollingNumber } from "../../components/RollingNumber";
 import { Link } from "react-router-dom";
 import {
   chartGeometry,
@@ -127,9 +128,9 @@ export function FeaturedCard({ fund, period, url, rank, fullDays }: {
   const note = partialNote(fund, period, fullDays);
   return (
     <li className="mkt-feature">
-      <Link to={url} className="mkt-feature-link">
+      <Link to={url} className="mkt-feature-link" viewTransition>
         <span className="mkt-feature-head">
-          <span className="mkt-rank" aria-label={`Rank ${rank}`}>{rank}</span>
+          <span className="mkt-rank" aria-label={`Rank ${rank}`}>{String(rank).padStart(2, "0")}</span>
           <FundAvatar fund={fund} />
           <span className="mkt-id">
             <strong>{nameParts(fund.name).title}</strong>
@@ -137,7 +138,7 @@ export function FeaturedCard({ fund, period, url, rank, fullDays }: {
           </span>
         </span>
         <span className="mkt-feature-figure">
-          <span className={`mkt-feature-return ${tone}`}>{pct(metrics.returnPct)}</span>
+          <RollingNumber key={`${period}:${pct(metrics.returnPct)}`} className={`mkt-feature-return ${tone}`} value={pct(metrics.returnPct)} />
           {note && <small>{note}</small>}
         </span>
         <span className={`mkt-feature-trend ${tone}`}>
@@ -178,7 +179,7 @@ export function BoardRow({ fund, period, url, rank, meta, fullDays }: {
   const { title } = nameParts(fund.name);
   return (
     <li className="mkt-row" data-slug={fund.slug}>
-      <Link to={url} className="mkt-row-link">
+      <Link to={url} className="mkt-row-link" viewTransition>
         <span className="mkt-row-rank">{rank ?? "–"}</span>
         <span className="mkt-row-fund">
           <FundAvatar fund={fund} />

@@ -1,3 +1,4 @@
+import { RollingNumber } from "../../components/RollingNumber";
 import { useId, useState } from "react";
 import { AppIcon } from "../../components/AppIcon";
 import { useMobile } from "../../lib/use-mobile";
@@ -117,7 +118,7 @@ export function Performance({
       <section className="vault-performance">
         <div className="performance-head">
           <p className={`performance-return ${positive ? "pos" : "neg"}`}>
-            {pct(metrics.returnPct)}
+            <RollingNumber key={`${period}:${pct(metrics.returnPct)}`} value={pct(metrics.returnPct)} />
           </p>
           <div className="performance-meta">
             <p className="performance-dates">{range}</p>
@@ -249,6 +250,15 @@ export function Performance({
             {fund.sharePrice.toFixed(4)}
             <small> USDT</small>
           </dd>
+        </div>
+        {/* Sharpe 與波動原本藏在「Performance details」裡，要多點一次才看得到。 */}
+        <div>
+          <dt>Sharpe ratio</dt>
+          <dd>{stats.sharpe == null ? "—" : stats.sharpe.toFixed(2)}</dd>
+        </div>
+        <div>
+          <dt>Volatility</dt>
+          <dd>{stats.volatility == null ? "—" : stats.volatility.toFixed(2) + "%"}</dd>
         </div>
       </dl>
       <button

@@ -1,5 +1,5 @@
 import { AppIcon } from "../../components/AppIcon";
-import { useState, type FocusEvent, type KeyboardEvent } from "react";
+import { useRef, useState, type FocusEvent, type KeyboardEvent } from "react";
 import { AppBottomSheet } from "../../components/AppBottomSheet";
 import { useMobile } from "../../lib/use-mobile";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
@@ -169,11 +169,18 @@ export function VaultsPage() {
   const boardTitle = filters.category === "all"
     ? "All funds"
     : COLLECTIONS.find((collection) => collection.id === filters.category)?.name ?? "Funds";
+  const deck = useRef<HTMLOListElement>(null);
+  /** 往左或往右滑一張牌的距離（牌寬 + 間距）。 */
+  const slideDeck = (direction: 1 | -1) => {
+    const list = deck.current, card = list?.querySelector("li");
+    if (!list || !card) return;
+    list.scrollBy({ left: direction * (card.getBoundingClientRect().width + 16), behavior: "smooth" });
+  };
   const fullDays = longestHistory(REFERENCE_FUNDS, filters.period);
-  // 主打 = 目前分類裡報酬最高的三檔。只有在「沒搜尋、沒篩資產、依報酬排序」時才成立，
-  // 否則上面三檔和下面的榜會講兩件不同的事。榜不到十檔時也不放：七檔裡挑三檔「主打」沒有意義。
+  // 主打 = 目前分類裡報酬最高的六檔（一副可以左右滑的牌）。只有在「沒搜尋、沒篩資產、依報酬排序」時才成立，
+  // 否則上面三檔和下面的榜會講兩件不同的事。榜不到十檔時也不放：七檔裡挑六檔「主打」沒有意義。
   const featured = filters.q.trim() === "" && filters.assets.length === 0 && filters.sort === "perf" && visible.length >= 10
-    ? (visible.slice(0, 3) as ReferenceFund[])
+    ? (visible.slice(0, 6) as ReferenceFund[])
     : [];
   const categories = (
     <nav className="collection-tabs" aria-label="Fund categories">
@@ -315,12 +322,17 @@ export function VaultsPage() {
         </div>
       )}
       {featured.length > 0 && (
-        <section className="mkt-section" aria-label="Top performers">
+        <section className="mkt-section mkt-deck" aria-label="Top performers">
           <header className="mkt-section-head">
             <h2>Top performers</h2>
-            <span className="mkt-period">{periodLabel} model return</span>
+            <div className="mkt-deck-nav">
+              <span className="mkt-period">{periodLabel} model return</span>
+              <button type="button" aria-label="Previous funds" onClick={() => slideDeck(-1)}><AppIcon name="left" size={16} /></button>
+              <button type="button" aria-label="Next funds" onClick={() => slideDeck(1)}><AppIcon name="right" size={16} /></button>
+            </div>
           </header>
-          <ol className="mkt-features" role="list">
+          {/* 一副可以左右滑的牌：觸控直接滑，桌面用箭頭或觸控板。 */}
+          <ol className="mkt-features" role="list" ref={deck}>
             {featured.map((fund, index) => (
               <FeaturedCard key={fund.slug} fund={fund} period={filters.period} url={fundUrl(fund.slug)} rank={index + 1} fullDays={fullDays} />
             ))}
@@ -361,7 +373,16 @@ export function VaultsPage() {
         <section className="mkt-section" aria-label={boardTitle}>
           <header className="mkt-section-head">
             <h2>{boardTitle}<span>{visible.length}</span></h2>
-            <span className="mkt-period">{periodLabel} model return</span>
+            {/* 期間直接在榜上切換：原本要先打開 Filters 才找得到。 */}
+            <div className="seg public-periods mkt-periods" role="group" aria-label="Return period">
+              {(["7D", "30D", "90D", "1Y", "ALL"] as const).map((period) => (
+                <button key={period} type="button" className={period === filters.period ? "on" : ""}
+                  aria-pressed={period === filters.period}
+                  onClick={() => change("period", period === "1Y" ? "" : period)}>
+                  {period === "ALL" ? "All" : period}
+                </button>
+              ))}
+            </div>
           </header>
           <div className="mkt-board-head" aria-hidden="true">
             <span>#</span>
@@ -369,7 +390,7 @@ export function VaultsPage() {
             <span>Holdings</span>
             <span>Trend</span>
             <button type="button" tabIndex={-1} aria-pressed={filters.sort === "perf"} onClick={() => change("sort", "")}>
-              Return
+              Model return
             </button>
             <button type="button" tabIndex={-1} aria-pressed={filters.sort === "dd"} onClick={() => change("sort", "dd")}>
               Max drawdown

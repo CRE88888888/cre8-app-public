@@ -52,7 +52,7 @@ export function TicketReview({
       </dl>
       {note && <p className="app-ticket-note">{note}</p>}
       <div className="app-sheet-actions app-sheet-actions-stacked">
-        <button type="button" className="btn primary" onClick={onConfirm}>Confirm {action === 'deposit' ? 'deposit' : 'withdrawal'}</button>
+        <button type="button" className="btn primary" onClick={onConfirm}>Confirm {action === 'deposit' ? 'purchase' : 'sale'}</button>
         <button type="button" className="btn ghost" onClick={onEdit}>Edit amount</button>
       </div>
     </div>

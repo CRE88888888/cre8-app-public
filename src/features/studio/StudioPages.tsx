@@ -49,7 +49,7 @@ function fundFlags(portfolio: Portfolio | undefined, status: PortfolioStatus | u
   if (!status.complete) {
     flags.push({ label: 'Value unavailable', tone: 'warn', detail: 'Some holdings could not be priced right now.' });
   } else if (status.totalUsdE8 === '0') {
-    flags.push({ label: 'Needs funding', tone: 'warn', detail: 'Deposit USDT so the fund can buy its holdings.' });
+    flags.push({ label: 'Needs funding', tone: 'warn', detail: 'Add USDT so the fund can buy its holdings.' });
   } else if (status.drift.needsRebalance) {
     flags.push({ label: 'Rebalance due', tone: 'bad', detail: `Holdings have drifted ${status.drift.grossDriftBps} bps from target.` });
   }
@@ -131,7 +131,7 @@ function StudioGuest(): ReactNode {
       <h2 id="studio-guest-title">Your studio for the funds you create</h2>
       <p>Connect the wallet you create funds with to see what needs your attention, every fund you run, and what they earn.</p>
       <WalletMenu inline />
-      <Link to="/create">Design a fund first <AppIcon name="right" size={16} /></Link>
+      <Link to="/create/design">Design a fund first <AppIcon name="right" size={16} /></Link>
     </section>
   );
 }

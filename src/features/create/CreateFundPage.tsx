@@ -191,12 +191,22 @@ export function ActivateFundPage(): ReactNode {
 
   if (token === null) {
     return (
-      <main className="page stack">
-        <h1>Activate an allocation</h1>
-        <Note tone="warn">
-          Activation creates a target-weight strategy and a smart account under your wallet.{' '}
-          <SignInButton /> first.
-        </Note>
+      // 沒登入時不再只丟一行「Sign in first」：設計基金不需要錢包，先讓人動手；已經有配置的人再連錢包。
+      <main className="explore-wrap app-portfolio app-studio">
+        <section className="app-portfolio-summary app-portfolio-guest create-guest" aria-labelledby="create-guest-title">
+          <h2 id="create-guest-title">Create a fund</h2>
+          <p>
+            Pick the assets and weights first. You only need a wallet when you activate it:
+            that step creates the strategy and a smart account under your wallet.
+          </p>
+          <ol className="create-steps">
+            <li><b>1</b>Design the allocation</li>
+            <li><b>2</b>Connect and sign in</li>
+            <li><b>3</b>Activate on-chain</li>
+          </ol>
+          <Link className="btn primary" to="/create/design">Design a fund</Link>
+          <span className="create-guest-alt">Already have an allocation? <SignInButton /></span>
+        </section>
       </main>
     );
   }

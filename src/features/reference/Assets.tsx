@@ -34,6 +34,7 @@ export function Assets({ fund }: { fund: ReferenceFund }) {
     );
     return () => binding.abort();
   }, [rows]);
+  const topWeight = rows.reduce((top, row) => Math.max(top, row.weight ?? 0), 0);
   const sorted = [...rows].sort((a, b) => {
     const av = sort === "asset" ? a.preview?.name || a.asset : a[sort],
       bv = sort === "asset" ? b.preview?.name || b.asset : b[sort];
@@ -120,10 +121,14 @@ export function Assets({ fund }: { fund: ReferenceFund }) {
                     </span>
                   </button>
                 </td>
-                <td>
+                <td className="holding-weight">
                   {row.weight == null
                     ? "—"
                     : row.weight.toFixed(row.weight < 0.1 ? 2 : 1) + "%"}
+                  {/* 權重條：相對於最大持倉的長度，一眼看出集中度。純裝飾，數字在上面。 */}
+                  {row.weight != null && topWeight > 0 && (
+                    <i aria-hidden="true" style={{ width: `${Math.max(2, (row.weight / topWeight) * 100)}%` }} />
+                  )}
                 </td>
                 <td title={row.quote?.sizeAsOf || row.quote?.asOf || ""}>
                   {row.asset === "USDT" ? "" : compact(row.size)}

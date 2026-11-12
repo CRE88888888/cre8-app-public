@@ -5,7 +5,8 @@ import { creatorId, rankCreators } from '../../lib/creators';
 import { periodMetrics, selectFunds } from '../../reference/lib/fund-explore';
 import { performancePeriod } from '../../reference/lib/fund-navigation';
 import { safePublicReturn } from '../../lib/public-navigation';
-import { FundRow } from './FundRow';
+import { BoardRow, longestHistory } from '../vaults/FundBoard';
+import type { ReferenceFund } from '../../lib/public-funds';
 import { CreatorControls, creatorFilters, matchesReturn } from './CreatorControls';
 export function CreatorPage() {
   useBodyClass('fund-explore', 'atp-formal-market', 'atp-complete-market');
@@ -21,14 +22,37 @@ export function CreatorPage() {
     filters.asset ? [filters.asset] : [],
   ).filter((fund) => matchesReturn(periodMetrics(fund, period).returnPct, filters.direction));
   if (filters.order === 'name') funds.sort((a, b) => a.name.localeCompare(b.name));
+  const fullDays = longestHistory(REFERENCE_FUNDS, period);
   return (
     <main className="explore-wrap" id="fund-explore">
       <Link className="vault-back" to={backTo}>← Back</Link>
       <header className="explore-heading"><h1>{creator.name}</h1></header>
       <CreatorControls params={params} setParams={setParams} isLeaderboard={false} />
-      <div className="fund-list">{funds.map((fund) => (
-        <FundRow key={fund.slug} fund={fund as (typeof REFERENCE_FUNDS)[number]} period={period} returnTo={location.pathname + location.search} />
-      ))}</div>
+      {/* 跟 Funds 頁同一張榜（原本這裡還是大封面卡片格）。 */}
+      {funds.length > 0 && (
+        <section className="mkt-section" aria-label={`${creator.name} funds`}>
+          <div className="mkt-board-head" aria-hidden="true">
+            <span>#</span>
+            <span>Fund</span>
+            <span>Holdings</span>
+            <span>Trend</span>
+            <span>Model return</span>
+            <span>Max drawdown</span>
+          </div>
+          <ol className="mkt-board" role="list">
+            {funds.map((fund, index) => (
+              <BoardRow
+                key={fund.slug}
+                fund={fund as ReferenceFund}
+                period={period}
+                rank={index + 1}
+                fullDays={fullDays}
+                url={`/funds/${fund.slug}?period=${period}&returnTo=${encodeURIComponent(location.pathname + location.search)}`}
+              />
+            ))}
+          </ol>
+        </section>
+      )}
       {funds.length === 0 && <div className="directory-empty"><strong>No matching funds</strong></div>}
     </main>
   );

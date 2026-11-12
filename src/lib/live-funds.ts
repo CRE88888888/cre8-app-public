@@ -23,6 +23,6 @@ export function isLiveFund(slug: string | undefined): boolean {
 
 export const WHITELIST_COPY = {
   title: 'This fund is for whitelisted wallets only',
-  deposit: 'Deposits are open to whitelisted wallets during the beta. Nothing was sent and your wallet was not charged.',
-  withdraw: 'Withdrawals are open to whitelisted wallets during the beta. Nothing was sent from your wallet.',
+  deposit: 'Buying is open to whitelisted wallets during the beta. Nothing was sent and your wallet was not charged.',
+  withdraw: 'Selling is open to whitelisted wallets during the beta. Nothing was sent from your wallet.',
 } as const;

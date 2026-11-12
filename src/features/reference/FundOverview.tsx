@@ -52,7 +52,7 @@ export function FundOverview({
     <>
       <div className="vault-top">
         <header className="vhead">
-          <Link className="vault-back" to={backTo}>
+          <Link className="vault-back" to={backTo} viewTransition>
             <AppIcon name="left" size={16} /> {fromPortfolio ? "Portfolio" : "All funds"}
           </Link>
           <div className="vault-heading">

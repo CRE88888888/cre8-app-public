@@ -1,0 +1,238 @@
+/*
+ * 基金詳情頁 v2（2026-11-13，規格見 DESIGN.md「基金詳情頁」）。
+ * 只改呈現：每個區塊是紙色底上的一張白色卡片，交易面板與「你會買到什麼」在右側跟著捲動。
+ * 交易、錢包、簽名的程式沒有動。
+ */
+
+@media (min-width: 720px) {
+  body.atp-formal-fund #root .wrap.vault-content { padding-top: 20px; }
+  body.atp-formal-fund #root .vgrid { grid-template-columns: minmax(0, 1fr) 384px; gap: 24px; }
+  body.atp-formal-fund #root .vgrid > .main { gap: 20px; }
+  body.atp-formal-fund #root .vgrid > .side { top: 88px; display: grid; gap: 16px; }
+
+  /* 封面：留著當這一頁的門面，但壓矮，讓報酬與圖表回到第一屏。 */
+  body.atp-formal-fund #root .vault-top { margin: 0; }
+  body.atp-formal-fund #root .vhead { display: grid; gap: 14px; margin: 0; padding: 0; border: 0; }
+  body.atp-formal-fund #root .vault-back { color: var(--steel); font: 500 14px/1 var(--sans); }
+  body.atp-formal-fund #root .vault-back:hover { color: var(--ink); }
+  body.atp-formal-fund #root #atp-fund-cover { height: 248px; aspect-ratio: auto; margin: 0; }
+  body.atp-formal-fund #root #atp-fund-cover h1 { font: 600 40px/1.05 var(--sans); letter-spacing: -1.2px; }
+  body.atp-formal-fund #root .atp-fund-byline { margin: 0; padding: 0; }
+
+  /* 區塊不是卡片：沒有外框與背板，用上方一條細線和留白分段。 */
+  body.atp-formal-fund #root .vgrid > .main { gap: 0; }
+  body.atp-formal-fund #root .vgrid > .main > :is(.app-performance-card, .vault-about, .recent-trades, .vault-allocation) {
+    margin: 0;
+    padding: 36px 0;
+    border: 0;
+    border-top: 1px solid var(--hair);
+    background: transparent;
+  }
+  body.atp-formal-fund #root .vgrid > .main > .app-performance-card { padding-top: 28px; border-top: 0; }
+  body.atp-formal-fund #root .vgrid > .main > :is(.vault-about, .recent-trades, .vault-allocation) :is(h2, .holdings-heading h2, .recent-trades-heading h2) {
+    font: 600 20px/1.25 var(--sans);
+    letter-spacing: -.3px;
+  }
+  body.atp-formal-fund #root .vault-about p { color: var(--deep); font: 400 15px/1.65 var(--sans); }
+  body.atp-formal-fund #root .vault-disclaimer p { color: var(--steel); font-size: 13px; }
+
+  /* 報酬：一個乾淨的大數字 + 期間說明 */
+  body.atp-formal-fund #root .performance-head { display: flex; flex-direction: column-reverse; align-items: flex-start; justify-content: flex-start; gap: 12px; margin: 0 0 12px; text-align: left; }
+  body.atp-formal-fund #root .performance-meta p { margin: 0; }
+  body.atp-formal-fund #root .performance-description { color: var(--ink); font: 600 14px/1 var(--sans); }
+  body.atp-formal-fund #root .performance-dates { color: var(--steel); font: 400 13px/1 var(--mono); }
+  body.atp-formal-fund #root .performance-return { margin: 0; font: 600 56px/1 var(--sans); letter-spacing: -2.2px; }
+
+  /* 四個關鍵數字：一列，用直線分隔，不做成小方塊。 */
+  body.atp-formal-fund #root #keyfig.public-kpis {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+    margin: 24px 0 0;
+    padding: 0;
+    border: 0;
+  }
+  body.atp-formal-fund #root #keyfig.public-kpis > div {
+    position: static;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    height: auto;
+    min-height: 0;
+    margin: 0;
+    padding: 2px 20px !important;
+    border: 0;
+    border-left: 1px solid var(--hair);
+    background: transparent;
+  }
+  body.atp-formal-fund #root #keyfig.public-kpis > div:first-child { padding-left: 0 !important; border-left: 0; }
+  body.atp-formal-fund #root #keyfig.public-kpis :is(dt, dd) { position: static; order: 0; margin: 0; padding: 0; }
+  body.atp-formal-fund #root .app-performance-card > :last-child { margin-bottom: 0; }
+  body.atp-formal-fund #root .vault-performance { margin: 0; padding: 0; border: 0; }
+  /* 「Fund facts」與人物介紹疊在封面右下角，不再另外佔一整列。 */
+  body.atp-formal-fund #root .vault-heading { position: relative; display: block; }
+  body.atp-formal-fund #root .atp-fund-byline {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: auto;
+  }
+  body.atp-formal-fund #root .atp-fund-byline :is(.btn, .fund-introduction-trigger) {
+    min-height: 36px;
+    padding: 0 14px;
+    border: 0;
+    background: rgba(255, 255, 255, .92);
+    color: var(--ink);
+    font: 500 14px/1 var(--sans);
+    text-decoration: none;
+    cursor: pointer;
+  }
+  body.atp-formal-fund #root .atp-fund-byline :is(.btn, .fund-introduction-trigger):hover { background: var(--white); }
+  body.atp-formal-fund #root .atp-fund-byline .vault-head-actions { display: flex; gap: 8px; margin: 0; }
+  body.atp-formal-fund #root .atp-fund-byline .fund-row-creator { display: none; }
+  body.atp-formal-fund #root #keyfig.public-kpis dt { color: var(--steel); font: 400 13px/1.2 var(--sans); }
+  body.atp-formal-fund #root #keyfig.public-kpis dd { margin: 0; color: var(--ink); font: 500 20px/1.1 var(--mono); letter-spacing: -.3px; }
+  body.atp-formal-fund #root #keyfig.public-kpis dd small { color: var(--steel); font-size: 12px; }
+  body.atp-formal-fund #root .performance-details-open { margin-top: 12px; color: var(--steel); font: 500 13px/1 var(--sans); }
+  body.atp-formal-fund #root .performance-details-open:hover { color: var(--ink); }
+}
+
+/* 持倉表的權重條（桌面與手機） */
+#root .holdings-table td.holding-weight { position: relative; }
+#root .holdings-table td.holding-weight > i {
+  display: block;
+  height: 4px;
+  margin-top: 6px;
+  background: var(--fog);
+}
+
+/* ── 交易面板 ─────────────────────────────────────────── */
+@media (min-width: 720px) {
+  body.atp-formal-fund #root #ticket.panel {
+    overflow: hidden;
+    border: 1px solid var(--hair);
+    background: var(--white);
+    box-shadow: 0 1px 2px rgba(12, 23, 34, .04), 0 8px 24px rgba(12, 23, 34, .06);
+  }
+  /* Deposit / Withdraw：分段控制，選中的是白色滑塊。 */
+  body.atp-formal-fund #root #ticket [data-slot="tabs-list"] {
+    width: auto;
+    height: auto;
+    margin: 14px 14px 0;
+    padding: 4px;
+    border: 0;
+    background: var(--snow);
+  }
+  body.atp-formal-fund #root #ticket [data-slot="tabs-trigger"] {
+    height: 40px;
+    border: 0;
+    color: var(--steel);
+    font: 600 15px/1 var(--sans);
+  }
+  body.atp-formal-fund #root #ticket [data-slot="tabs-trigger"]::after { display: none; }
+  body.atp-formal-fund #root #ticket [data-slot="tabs-trigger"][data-state="active"] {
+    background: var(--white);
+    color: var(--ink);
+    box-shadow: 0 1px 2px rgba(12, 23, 34, .14);
+  }
+  body.atp-formal-fund #root #ticket .panel-b { padding: 14px; }
+  body.atp-formal-fund #root #ticket .swap { display: grid; gap: 12px; }
+  body.atp-formal-fund #root #ticket .swap-box {
+    padding: 16px 18px 18px;
+    border: 1px solid transparent;
+    background: var(--paper);
+    transition: border-color .15s var(--ease), background-color .15s var(--ease);
+  }
+  body.atp-formal-fund #root #ticket .swap-box:focus-within { border-color: var(--signal); background: var(--white); box-shadow: 0 0 0 3px var(--signal-soft); }
+  body.atp-formal-fund #root #ticket .swap-label { color: var(--steel); font: 500 13px/1 var(--sans); }
+  body.atp-formal-fund #root #ticket .swap-box input {
+    min-height: 0;
+    padding: 6px 0 4px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--ink);
+    font: 500 40px/1.1 var(--mono);
+    letter-spacing: -1.5px;
+  }
+  body.atp-formal-fund #root #ticket .swap-box input::placeholder { color: var(--slate); }
+  body.atp-formal-fund #root #ticket .swap-sub { color: var(--steel); font: 400 13px/1.4 var(--sans); }
+  body.atp-formal-fund #root #ticket .btn.block { min-height: 54px; font-size: 16px; }
+  body.atp-formal-fund #root #ticket .app-ticket-presets { display: flex; gap: 8px; }
+  body.atp-formal-fund #root #ticket .app-ticket-presets button {
+    flex: 1;
+    min-height: 36px;
+    border: 0;
+    background: var(--snow);
+    color: var(--ink);
+    font: 500 13px/1 var(--mono);
+    cursor: pointer;
+    transition: background-color .15s var(--ease);
+  }
+  body.atp-formal-fund #root #ticket .app-ticket-presets button:hover { background: #e2e5e9; }
+}
+
+/* ── 你會買到什麼 ─────────────────────────────────────── */
+.snap { display: grid; gap: 12px; padding: 20px 4px 0; border: 0; background: transparent; }
+.snap h2 { margin: 0; color: var(--ink); font: 600 16px/1.2 var(--sans); letter-spacing: -.2px; }
+.snap-lead { margin: -4px 0 0; color: var(--steel); font: 400 13px/1.5 var(--sans); }
+.snap-bar { display: flex; gap: 2px; height: 8px; overflow: hidden; }
+.snap-bar i { display: block; flex: 0 0 0; min-width: 2px; background: var(--ink); }
+.snap-bar i:nth-child(2) { background: var(--deep); }
+.snap-bar i:nth-child(3) { background: var(--steel); }
+.snap-bar i:nth-child(4) { background: var(--fog); }
+.snap-bar i:nth-child(5) { background: var(--frost); }
+.snap-bar i.snap-bar-rest { background: #e2e5e9; }
+.snap-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.snap-list li { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 34px; color: var(--ink); font: 500 14px/1 var(--sans); }
+.snap-list li + li { border-top: 1px solid var(--hair); }
+.snap-list img { width: 20px; height: 20px; object-fit: contain; background: var(--white); }
+.snap-list b { color: var(--deep); font: 400 13px/1 var(--mono); }
+.snap-dot { width: 8px; height: 8px; margin: 6px; background: #e2e5e9; }
+.snap-more { color: var(--steel); }
+.snap-more span:nth-child(2) { color: var(--steel); }
+
+@layer app-shapes {
+  body.atp-formal-fund #ticket.panel { border-radius: var(--r-lg) !important; }
+  body.atp-formal-fund #atp-fund-cover { border-radius: var(--r-lg) !important; }
+  body.atp-formal-fund .atp-fund-byline :is(.btn, .fund-introduction-trigger) { border-radius: var(--r-sm) !important; }
+  body.atp-formal-fund #ticket .swap-box,
+  body.atp-formal-fund #ticket [data-slot="tabs-list"] { border-radius: var(--r-ctl) !important; }
+  body.atp-formal-fund #ticket [data-slot="tabs-trigger"] { border-radius: 7px !important; }
+  body.atp-formal-fund #ticket .app-ticket-presets button { border-radius: var(--r-sm) !important; }
+  .snap-bar, .holdings-table td.holding-weight > i { border-radius: 2px !important; }
+  .snap-dot, .snap-list img { border-radius: 50% !important; }
+  @media (max-width: 719px) {
+    body.atp-formal-fund #atp-fund-cover { border-radius: 0 !important; }
+  }
+}
+
+/* 手機：四個關鍵數字排成 2×2。 */
+@media (max-width: 719px) {
+  body.atp-formal-fund #root #keyfig.public-kpis {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 16px;
+  }
+  body.atp-formal-fund #root #keyfig.public-kpis > div {
+    display: grid;
+    grid-column: auto !important;
+    gap: 4px;
+    justify-items: start;
+    width: auto;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: none;
+    box-shadow: none;
+    text-align: left;
+  }
+  body.atp-formal-fund #root #keyfig.public-kpis > div::before,
+  body.atp-formal-fund #root #keyfig.public-kpis > div::after { display: none; }
+  body.atp-formal-fund #root #keyfig.public-kpis :is(dt, dd) { margin: 0; text-align: left; }
+  body.atp-formal-fund #root .performance-return { font: 600 44px/1 var(--sans); letter-spacing: -1.6px; }
+}

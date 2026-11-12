@@ -41,5 +41,8 @@ import "./styles/creators.css";
 
 import './styles/mobile-app.css';
 
-// Funds 頁的主打卡與排行榜（新 class，最後載入）。
+// 設計系統 v2：色票、共用控制項、圓角。之後才是各頁自己的版面。
+import './styles/system.css';
 import './styles/market.css';
+import './styles/fund-page.css';
+import './styles/pages.css';

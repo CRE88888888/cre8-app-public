@@ -1,0 +1,93 @@
+/*
+ * 其餘頁面的 v2 版面（2026-11-13）：資產頁、Creators、Create、Portfolio、Studio。
+ * 目標是跟 Funds／基金頁同一套語言：紙色底、白色卡片、同一條左緣、同一種圖表與控制項。
+ */
+
+/* ── 資產頁（樣式來自同步的 CSS module，class 名帶雜湊，所以用 [class*=] 對位） ── */
+@media (min-width: 720px) {
+  body.atp-asset-page #root main[class*="_page_"] { max-width: 1344px; padding: 20px 40px 80px; }
+  body.atp-asset-page #root [class*="_layout_"] { grid-template-columns: minmax(0, 1fr) 384px; gap: 24px; align-items: start; }
+  body.atp-asset-page #root [class*="_main_"] { display: grid; gap: 0; }
+  body.atp-asset-page #root [class*="_back_"] { margin-bottom: 14px; color: var(--steel); font: 500 14px/1 var(--sans); }
+  /* 區塊不是卡片：細線＋留白。 */
+  body.atp-asset-page #root [class*="_main_"] > :is(header, section, details) {
+    margin: 0;
+    padding: 32px 0;
+    border: 0;
+    border-top: 1px solid var(--hair);
+    background: transparent;
+  }
+  body.atp-asset-page #root [class*="_main_"] > header { padding-top: 12px; border-top: 0; }
+  body.atp-asset-page #root [class*="_side_"] > section { margin: 0; padding: 20px; border: 1px solid var(--hair); background: var(--white); }
+  body.atp-asset-page #root [class*="_identity_"] { margin: 0; }
+  body.atp-asset-page #root [class*="_identity_"] h1 { font: 600 36px/1.1 var(--sans); letter-spacing: -1px; }
+  body.atp-asset-page #root [class*="_main_"] h2 { font: 600 20px/1.25 var(--sans); letter-spacing: -.3px; }
+  body.atp-asset-page #root [class*="_side_"] { position: sticky; top: 88px; display: grid; gap: 16px; }
+  body.atp-asset-page #root [class*="_side_"] > section[class*="_create_"] { display: grid; gap: 14px; background: var(--night); border-color: var(--night); color: var(--night-text); }
+  body.atp-asset-page #root [class*="_side_"] > section[class*="_create_"] h2 { margin: 0; color: var(--white); font: 600 18px/1.25 var(--sans); }
+  html body.atp-asset-page #root [class*="_side_"] > section[class*="_create_"] .btn { width: 100%; border-color: var(--white); background: var(--white); color: var(--ink); }
+  html body.atp-asset-page #root [class*="_side_"] > section[class*="_create_"] .btn:hover { border-color: var(--snow); background: var(--snow); color: var(--ink); }
+  body.atp-asset-page #root [class*="_priceHeader_"] strong { font: 500 40px/1 var(--mono); letter-spacing: -1.4px; }
+  body.atp-asset-page #root [class*="_tags_"] > :is(span, a) { padding: 5px 11px; border: 0; background: var(--snow); color: var(--deep); font: 500 12px/1.2 var(--sans); }
+  body.atp-asset-page #root [class*="_fund_"] { min-height: 52px; }
+}
+body.atp-asset-page #root [class*="_chart_"] svg path { stroke: var(--ink); }
+body.atp-asset-page #root [class*="_positive_"] { color: var(--positive); }
+body.atp-asset-page #root [class*="_negative_"] { color: var(--negative); }
+
+/* ── Creators ─────────────────────────────────────────── */
+@media (min-width: 720px) {
+  #creator-leaderboard .creator-table { border: 0; background: transparent; }
+  #creator-leaderboard .creator-table th { padding: 12px; border-bottom: 1px solid var(--ink); }
+  #creator-leaderboard .creator-table td { padding: 20px 12px; border-bottom: 1px solid var(--hair); }
+  #creator-leaderboard .creator-table :is(th, td):first-child { width: 64px; padding-left: 12px; }
+  #creator-leaderboard .creator-table tbody tr { transition: background-color .12s var(--ease); }
+  #creator-leaderboard .creator-table tbody tr:hover { background: var(--paper); }
+  #creator-leaderboard .creator-return { font: 500 20px/1 var(--mono); letter-spacing: -.3px; }
+}
+
+/* ── Create（未登入）：三步驟說明 + 主要動作是「先設計」 ── */
+#root .create-guest .create-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  margin: 8px 0 4px;
+  padding: 0;
+  list-style: none;
+}
+#root .create-guest .create-steps li {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  padding: 14px;
+  background: var(--paper);
+  color: var(--ink);
+  font: 500 13px/1.3 var(--sans);
+  text-align: left;
+}
+#root .create-guest .create-steps b {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  background: var(--ink);
+  color: var(--white);
+  font: 500 12px/1 var(--mono);
+}
+#root .create-guest > .btn { width: 100%; max-width: 320px; margin-top: 8px; }
+#root .create-guest-alt { color: var(--steel); font: 400 14px/1.5 var(--sans); }
+#root .create-guest-alt :is(a, button) { color: var(--ink); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
+
+/* ── 警示條（Note）：圓角、不再是米色方框 ───────────────── */
+#root .note { border: 1px solid var(--hair); background: var(--white); }
+
+@layer app-shapes {
+  body.atp-asset-page [class*="_side_"] > section { border-radius: var(--r-lg) !important; }
+  body.atp-asset-page [class*="_tags_"] > :is(span, a) { border-radius: var(--r-xs) !important; }
+  .create-guest .create-steps li { border-radius: var(--r-sm) !important; }
+  .create-guest .create-steps b { border-radius: 4px !important; }
+  .note { border-radius: var(--r-sm) !important; }
+  /* 基金設計器（同步來的 CSS module）：面板跟全站卡片同一個圓角。 */
+  body.atp-complete-create main :is(section, aside, div):is([class*="_editor_"], [class*="_panel_"]) { border-radius: var(--r-lg) !important; }
+}

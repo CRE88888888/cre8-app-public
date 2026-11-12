@@ -11,6 +11,7 @@ import { MOCK_FUNDS } from '../../data/mock-funds';
 import {safePublicReturn} from '../../lib/public-navigation';
 import {useMobile} from '../../lib/use-mobile';
 import { AppBottomSheet, AppSheetClose } from '../../components/AppBottomSheet';
+import { FundSnapshot } from './FundSnapshot';
 import { TicketFund, TicketReceipt, TicketReview } from './TicketReview';
 import type { TicketAction, TicketProgress } from './TicketReview';
 import {catalogueTargets} from '../../data/public-fund-adapter';
@@ -487,11 +488,13 @@ export function FundPage(): ReactNode {
               {/* Radix Tabs 取代手寫的 role="tablist" + 兩顆 button：拿到鍵盤左右鍵切換、
                   `aria-selected`、`tabIndex` 管理。內容仍是同一個三元式（不改 TabsContent）——
                   那份內容很長，重排只增加 diff 而不增加正確性。 */}
+              {/* 畫面上叫 Buy／Sell（2026-11-13 使用者決定，比 Deposit／Withdraw 好懂）；
+                  程式內部、網址參數與 API 仍是 deposit／withdraw。 */}
               <Tabs value={tab} onValueChange={(value) => setTab(value as 'deposit' | 'withdraw')}>
                 {!mobile && (
                   <TabsList aria-label="Fund actions" className="w-full bg-[var(--card,#eef3f7)]">
-                    <TabsTrigger value="deposit" className="flex-1">Deposit</TabsTrigger>
-                    <TabsTrigger value="withdraw" className="flex-1">Withdraw</TabsTrigger>
+                    <TabsTrigger value="deposit" className="flex-1">Buy</TabsTrigger>
+                    <TabsTrigger value="withdraw" className="flex-1">Sell</TabsTrigger>
                   </TabsList>
                 )}
               <div className="panel-b">
@@ -542,7 +545,7 @@ export function FundPage(): ReactNode {
                         connectedAddress === null ? <WalletMenu inline /> : (
                           <>
                             <button type="submit" className="btn primary block" disabled={!withdrawValid}>
-                              {mobile ? 'Review withdrawal' : 'Withdraw in USDT'}
+                              {mobile ? 'Review order' : 'Sell for USDT'}
                             </button>
                             {whitelistNotice === 'withdraw' && <WhitelistNote action="withdraw" />}
                           </>
@@ -566,7 +569,7 @@ export function FundPage(): ReactNode {
                             disabled={ticketBusy || wallet === null || live === undefined || totalUsd() === 0 ||
                               (mobile && (!withdrawValid || usdt === undefined || !live.complete))}
                           >
-                            {withdrawBusy ? 'Working…' : mobile ? 'Review withdrawal' : 'Withdraw in USDT'}
+                            {withdrawBusy ? 'Working…' : mobile ? 'Review order' : 'Sell for USDT'}
                           </button>
                           {totalUsd() === 0 ? <p className="fine">This fund account has no balance.</p> : null}
                           {live !== undefined && gasTooLow(live) ? (
@@ -604,7 +607,7 @@ export function FundPage(): ReactNode {
                 ) : !whitelistOnly && token !== null && depositLoadError !== null ? (
                   <ErrorNote error={depositLoadError} />
                 ) : !whitelistOnly && token !== null && (strategies.isPending || assets.isPending) ? (
-                  <div className="row"><Spinner /> <span className="muted">Loading deposit details…</span></div>
+                  <div className="row"><Spinner /> <span className="muted">Loading order details…</span></div>
                 ) : !whitelistOnly && token !== null && strategy === undefined ? (
                   <Note>
                     This fund exists only as an example in the catalogue — nobody has published it on-chain yet, so
@@ -625,11 +628,7 @@ export function FundPage(): ReactNode {
                         <label className="swap-label" htmlFor="deposit-amount">
                           {mobile ? 'Amount' : 'You pay'}
                         </label>
-                        {!mobile && (
-                          <span className="swap-picks">
-                            <button type="button" disabled={walletUsdt === null} onClick={() => setAmount(maxDepositLabel())}>Max</button>
-                          </span>
-                        )}
+
                       </div>
                       <input
                         id="deposit-amount"
@@ -663,10 +662,11 @@ export function FundPage(): ReactNode {
                         </p>
                       ) : null}
                     </div>
-                    {mobile && walletUsdt !== null && (
-                      <div className="app-ticket-presets" aria-label="Deposit amount shortcuts" role="group">
+                    {/* 常用金額一鍵帶入（桌面與手機都有；原本桌面只有一顆 Max）。 */}
+                    {walletUsdt !== null && (
+                      <div className="app-ticket-presets" aria-label="Buy amount shortcuts" role="group">
                         {depositPresets.map((preset) => (
-                          <button type="button" key={preset} aria-label={`Set deposit to ${preset} USDT`} onClick={() => setAmount(preset)}>{preset}</button>
+                          <button type="button" key={preset} aria-label={`Set amount to ${preset} USDT`} onClick={() => setAmount(preset)}>{preset}</button>
                         ))}
                         <button type="button" onClick={() => setAmount(maxDepositLabel())}>Max</button>
                       </div>
@@ -675,14 +675,14 @@ export function FundPage(): ReactNode {
                       connectedAddress === null ? <WalletMenu inline /> : (
                         <>
                           <button type="submit" className="btn primary block" disabled={!gatedDepositValid}>
-                            {mobile ? 'Review deposit' : 'Deposit'}
+                            {mobile ? 'Review order' : 'Buy'}
                           </button>
                           {whitelistNotice === 'deposit' && <WhitelistNote action="deposit" />}
                         </>
                       )
                     ) : token === null ? <WalletMenu inline /> : (
                       <button type="submit" className="btn primary block" disabled={ticketBusy || wallet === null || usdt === undefined || depositTooLarge || (mobile && depositUnits <= 0n)}>
-                        {busy ? 'Sending…' : mobile ? 'Review deposit' : 'Deposit'}
+                        {busy ? 'Sending…' : mobile ? 'Review order' : 'Buy'}
                       </button>
                     )}
                     <ErrorNote error={error} />
@@ -708,7 +708,7 @@ export function FundPage(): ReactNode {
                 if (!open) setReviewKey(null);
                 setTicketOpen(open);
               }}
-              title={reviewMatches ? `Review ${tab === 'deposit' ? 'deposit' : 'withdrawal'}` : tab === 'deposit' ? 'Deposit' : 'Withdraw'}
+              title={reviewMatches ? 'Review order' : tab === 'deposit' ? 'Buy' : 'Sell'}
               hideTitle={progress !== null}
               titleRef={reviewHeading}
               locked={ticketBusy}
@@ -740,7 +740,7 @@ export function FundPage(): ReactNode {
                       ? 'Your wallet may also ask for a BNB top-up or token approval.'
                       : [
                         withdrawRequested > totalUsd() && 'Limited to the current fund value.',
-                        withdrawLimit > cashUsd() && 'The fund may sell holdings to cover the withdrawal. The final amount can change.',
+                        withdrawLimit > cashUsd() && 'The fund may sell holdings to pay you out. The final amount can change.',
                       ].filter(Boolean).join(' ')}
                     onEdit={() => setReviewKey(null)}
                     onConfirm={() => submitTicket(tab)}
@@ -748,10 +748,10 @@ export function FundPage(): ReactNode {
                 </>
               )}
             </AppBottomSheet>
-          ) : <aside className="side">{ticket}</aside>}
+          ) : <aside className="side">{ticket}{reference && <FundSnapshot fund={reference} />}</aside>}
           <div className="public-mobile-cta" aria-label="Fund actions" role="group">
-            <button className="btn" type="button" aria-haspopup="dialog" disabled={ticketBusy} onClick={() => openMobileTicket('deposit')}>Deposit</button>
-            <button className="btn ghost" type="button" aria-haspopup="dialog" disabled={ticketBusy} onClick={() => openMobileTicket('withdraw')}>Withdraw</button>
+            <button className="btn" type="button" aria-haspopup="dialog" disabled={ticketBusy} onClick={() => openMobileTicket('deposit')}>Buy</button>
+            <button className="btn ghost" type="button" aria-haspopup="dialog" disabled={ticketBusy} onClick={() => openMobileTicket('withdraw')}>Sell</button>
           </div>
         </div>
       </main>
@@ -1073,12 +1073,12 @@ export function FundPage(): ReactNode {
     if (wallet === null || token === null || strategy === undefined || usdt === undefined) return;
     setBusy(true);
     setError(null);
-    const toastId = toast.pending('Deposit', 'Preparing…');
+    const toastId = toast.pending('Buy', 'Preparing…');
     if (mobile) ticketToast.current = toastId;
     let transferHash: string | undefined;
     let transferState: 'submitted' | 'confirmed' | 'reverted' = 'submitted';
     let allocation = 'Check Portfolio for the latest allocation.';
-    showProgress({ tone: 'pending', title: 'Preparing deposit', detail: 'Follow the prompts in your wallet.' });
+    showProgress({ tone: 'pending', title: 'Preparing your purchase', detail: 'Follow the prompts in your wallet.' });
     try {
       // 沒有帳戶就先建（enroll）——「存款就是跟隨」，使用者不必先理解 enroll。
       // 位址是 counterfactual 的：同一個 (owner, strategy) 永遠同一個地址，所以建好之後
@@ -1097,7 +1097,7 @@ export function FundPage(): ReactNode {
         portfolioIdAfterEnroll = created.id;
         if (account === undefined) throw new Error('the backend returned no smart account address');
         await queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token) });
-        toast.replace(toastId, { tone: 'pending', title: 'Deposit', body: 'Confirm the transfer in your wallet…' });
+        toast.replace(toastId, { tone: 'pending', title: 'Buy', body: 'Confirm the transfer in your wallet…' });
       }
 
       const value = parseUnits(amount === '' ? '0' : amount, usdt.decimals);
@@ -1131,7 +1131,7 @@ export function FundPage(): ReactNode {
           // 這是 owner 錢包 → 帳戶的普通 BNB 轉帳（會再要一次簽名）。
           showProgress({ tone: 'pending', title: 'Top up network gas', detail: 'Approve the BNB transfer in your wallet.' });
           await sendGasTopUp({ wallet, to: account as Address, valueWei: topUpWei });
-          toast.replace(toastId, { tone: 'pending', title: 'Deposit', body: 'Confirm the USDT transfer in your wallet…' });
+          toast.replace(toastId, { tone: 'pending', title: 'Buy', body: 'Confirm the USDT transfer in your wallet…' });
         }
       }
 
@@ -1176,7 +1176,7 @@ export function FundPage(): ReactNode {
         // 就會永遠留在畫面上轉 —— 實測就是這樣：綠色成功訊息淡出後，白色那則還在。
         const configuringId = toast.replace(toastId, {
           tone: 'pending',
-          title: 'Configuring your deposit',
+          title: 'Allocating your purchase',
           body: 'Buying the target assets…',
         });
         // 先把 executor 授權好，否則第一輪一定被 ALLOWANCE_TOO_LOW 擋下（實測主網首次存款）。
@@ -1230,7 +1230,7 @@ export function FundPage(): ReactNode {
             });
             toast.replace(configuringId, {
               tone: 'pending',
-              title: 'Configuring your deposit',
+              title: 'Allocating your purchase',
               body: 'Buying the target assets…',
             });
           } catch (cause) {
@@ -1256,7 +1256,7 @@ export function FundPage(): ReactNode {
           const tone = round.outcome === 'executed' ? 'ok' : round.outcome === 'blocked' ? 'bad' : 'warn';
           const title =
             round.outcome === 'executed'
-              ? 'Deposit configured'
+              ? 'Purchase allocated'
               : round.outcome === 'blocked'
                 ? 'Initial allocation was blocked'
                 : `No initial allocation (${round.outcome})`;
@@ -1294,7 +1294,7 @@ export function FundPage(): ReactNode {
       ]);
       showProgress({
         tone: transferState === 'confirmed' ? 'confirmed' : 'notice',
-        title: transferState === 'confirmed' ? 'Deposit confirmed' : 'Transfer submitted',
+        title: transferState === 'confirmed' ? 'Purchase confirmed' : 'Transfer submitted',
         amount: sent,
         detail: transferState === 'confirmed' ? allocation : 'Check the block explorer for confirmation.',
         hash,
@@ -1302,14 +1302,14 @@ export function FundPage(): ReactNode {
     } catch (cause) {
       showProgress(transferHash ? {
         tone: 'notice',
-        title: transferState === 'confirmed' ? 'Deposit received' : 'Transfer submitted',
+        title: transferState === 'confirmed' ? 'Purchase received' : 'Transfer submitted',
         detail: transferState === 'confirmed' ? 'Initial allocation did not complete. Check your portfolio.' : 'Check the block explorer for confirmation.',
         hash: transferHash,
-      } : { tone: 'error', title: 'Deposit not sent', detail: String((cause as Error).message ?? cause).split('\n')[0].slice(0, 180) });
+      } : { tone: 'error', title: 'Purchase not sent', detail: String((cause as Error).message ?? cause).split('\n')[0].slice(0, 180) });
       setError(cause);
       toast.replace(toastId, transferHash ? {
-        tone: 'warn', title: transferState === 'confirmed' ? 'Deposit received; check allocation' : 'Check transfer status', body: transferHash,
-      } : { tone: 'bad', title: 'Deposit failed', body: (cause as Error).message.split('\n')[0].slice(0, 140) });
+        tone: 'warn', title: transferState === 'confirmed' ? 'Purchase received; check allocation' : 'Check transfer status', body: transferHash,
+      } : { tone: 'bad', title: 'Purchase failed', body: (cause as Error).message.split('\n')[0].slice(0, 140) });
     } finally {
       setBusy(false);
     }
@@ -1510,9 +1510,9 @@ export function FundPage(): ReactNode {
     setWithdrawError(null);
     setWithdrawTx(null);
     setWithdrawNote(null);
-    const toastId = toast.pending('Withdraw', 'Preparing the round…');
+    const toastId = toast.pending('Sell', 'Preparing…');
     if (mobile) ticketToast.current = toastId;
-    showProgress({ tone: 'pending', title: 'Preparing withdrawal', detail: 'Checking the fund’s available USDT.' });
+    showProgress({ tone: 'pending', title: 'Preparing your sale', detail: 'Checking the fund’s available USDT.' });
     try {
       // 錢包不在本 app 的鏈上時，簽名請求會「看起來沒反應」（其實是被鏈切換擋掉）。
       // 明講要切到哪一條，比讓使用者一直按卻沒有彈窗好。
@@ -1561,7 +1561,7 @@ export function FundPage(): ReactNode {
         const shortfall = effective - available;
         if (shortfall <= 0.01) break;
         const target = Math.ceil((shortfall / (1 - SELL_BUFFER)) * 1e6) / 1e6;
-        showProgress({ tone: 'pending', title: 'Selling positions', detail: 'Raising USDT for your withdrawal.' });
+        showProgress({ tone: 'pending', title: 'Selling positions', detail: 'Raising USDT for your sale.' });
         const redeemed = await redeemPortfolio(token, holding.id, target);
         if (redeemed.outcome !== 'executed' && redeemed.outcome !== 'noop') {
           throw new Error(`selling the shortfall failed: ${redeemed.reason}`);
@@ -1576,7 +1576,7 @@ export function FundPage(): ReactNode {
       if (sendable <= 0.000001) throw new Error('there is nothing to send after selling');
       const decimals = usdtRow?.decimals ?? 18;
       const value = parseUnits(sendable.toFixed(Math.min(decimals, 6)), decimals);
-      showProgress({ tone: 'pending', title: 'Approve the withdrawal in your wallet' });
+      showProgress({ tone: 'pending', title: 'Approve the sale in your wallet' });
       const receipt = await sendWithdraw({
         wallet,
         token,
@@ -1594,7 +1594,7 @@ export function FundPage(): ReactNode {
       );
       setWithdrawTx(receipt.txHash);
       showProgress({
-        tone: 'confirmed', title: 'Withdrawal confirmed', hash: receipt.txHash,
+        tone: 'confirmed', title: 'Sale confirmed', hash: receipt.txHash,
         amount: `${formatUnits(value, decimals)} USDT`,
         detail: sendable < effective - 0.01 ? 'Less USDT was available than requested.' : undefined,
       });
@@ -1619,8 +1619,8 @@ export function FundPage(): ReactNode {
     } catch (cause) {
       const detail = String((cause as Error).message ?? cause).split('\n')[0].slice(0, 180);
       setWithdrawError(cause);
-      showProgress({ tone: 'error', title: 'Withdrawal not completed', detail });
-      toast.replace(toastId, { tone: 'bad', title: 'Withdrawal not completed', body: detail });
+      showProgress({ tone: 'error', title: 'Sale not completed', detail });
+      toast.replace(toastId, { tone: 'bad', title: 'Sale not completed', body: detail });
     } finally {
       setWithdrawBusy(false);
     }
