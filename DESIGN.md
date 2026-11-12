@@ -56,7 +56,7 @@
 ## 2026-11-11 版面與 App 殼層調整
 
 - 桌面（≥720px）頁首、Funds、Creators、Portfolio、Manage、Create、基金詳情共用同一條左緣：1344px／40px gutter（720–1023px 為 24px）。規則集中在 `design-controls.css` 末段。
-- 基金列表桌面版是封面卡片格（720–1023px 兩欄、1024px 起三欄、1680px 起四欄）：16:10 封面為主角，下方名稱＋機構、報酬＋走勢、資產圖示；整張卡片是連結，人物介紹由滑過名字觸發。分類標籤與 Assets／Advanced／搜尋壓成同一列。手機維持列表。
+- 基金列表原為封面卡片格（720–1023px 兩欄、1024px 起三欄）；2026-11-13 改為主打卡 + 排行榜，見下方「2026-11-13 Funds 頁改版」。分類標籤與搜尋、Filters 仍在同一列。
 - 頁標題一律使用 fog 句點（Explore funds. / Creators. / Portfolio. / Manage.），手機隱藏句點。桌面主導覽「Leaderboard」改稱 Creators，與頁標題及手機分頁一致。
 - 手機分頁根目錄（Funds、Creators、Create、Portfolio、Manage）不顯示網站 logo 列：頁面 h1 作大標題，右上為玻璃圓鈕錢包。捲過約 56px 後出現 scroll edge 霧化與置中小標題。頁面已有大型連線按鈕時，右上錢包隱藏。
 - 手機控制層採 Liquid Glass 語言：分頁列與基金頁 Deposit／Withdraw 為浮動玻璃膠囊（半透明白、模糊＋飽和＋提亮、內緣高光、柔和陰影），選中分頁為膠囊內的淡色膠囊。玻璃只用於浮在內容上的控制層，內容本身不用。瀏覽器無法在 iOS Safari 做真正折射，故不使用 SVG displacement；`prefers-reduced-transparency` 或不支援 `backdrop-filter` 時退回實心白。
@@ -73,3 +73,20 @@
 - 少讓使用者做決定：同一畫面只放一個 Connect wallet／Create fund；項目少時不顯示搜尋與篩選（Creators 9 位以上才顯示，網址已帶篩選時仍顯示以便清除）；Funds 桌面的篩選收成一顆 Filters（與手機一致），有套用時顯示數量。空狀態在桌面置中。
 - 模式切換按鈕寫出動作：投資模式為「＋ Creator Studio」（品牌藍灰淡色底），Studio 內為「← Exit Studio」（中性文字按鈕），並附 title 說明。
 - 首頁 `/` 在所有網域都是 landing（`public/landing/`）；帶查詢參數的 `/?…` 仍交給 App，保留 Funds 篩選深連結。App 內左上 logo 回到 landing。
+
+## 2026-11-13 Funds 頁改版
+
+使用者決定：前一版「大封面卡片格」像人物相簿，可以大改。參考 Reserve、Ondo、Robinhood 後，Funds 頁（`/vaults`）改成**主打卡 + 一張排行榜**。規則集中在 `src/styles/market.css`（`mkt-` 前綴），元件在 `src/features/vaults/FundBoard.tsx`。
+
+- **主角是數字與持倉，不是照片。** 封面在列表頁縮成 40px 頭像：人物與 X voices 為圓形，主題為 10px 圓角方形，社群策略用名稱縮寫。大封面只留在基金詳情頁。
+- **主打卡（Top performers）**：目前分類裡報酬最高的三檔，各有排名方塊、報酬（34px Geist Mono）、面積走勢圖、持倉比例條與前三大持倉。只在「沒搜尋、沒篩資產、依報酬排序、且榜上至少十檔」時出現。手機為橫向滑動。
+- **排行榜**：一個白色面板、16px 圓角、列間細線。欄位為排名、頭像＋名稱＋類型、持倉（比例條＋前三大代號與比例）、走勢、報酬、最大回撤。整列是一個連結。720–1099px 收掉回撤、720–899px 再收掉走勢；手機只留排名、名稱、走勢、報酬，沒有面板外框。
+- **排序**：桌面可按「Return」「Max drawdown」欄名排序（等同 Filters 裡的 Sort by），目前排序的欄名加粗並帶 ↓。
+- **持倉比例條**：前四大各一段、其餘合成一段，顏色由深到淺為 ink → steel → fog → frost → `#dce5ec`。比例條是裝飾，數字另以文字寫出。顯示的代號是底層 ticker（`NVDAB` 顯示成 `NVDA`）。
+- **排名方塊**只用在主打卡：取自 logo 的翻牌 8（藍灰底、Anton 白字、兩側鉸鏈缺口）。其他地方的排名用一般等寬數字。
+- **數字一律 Geist Mono**（報酬、回撤、比例、期間標示），正負用 positive／negative，並保留正負號。
+- **歷史長度**：歷史比榜上最長者短一個月以上的基金，在報酬下方標「157d history」，避免半年的數字被當成一年來比。
+- **Community**（鏈上策略）獨立一區、不排名：它的走勢是依權重生成的示意，不和參考基金混在同一張榜。
+- 此頁桌面底色為 paper、面板為白（與 landing 一致）；手機維持白底。
+- 設計稿有全站 `border-radius: 0 !important`，新元件的圓角必須寫在 `@layer app-shapes` 並加 `!important`。
+

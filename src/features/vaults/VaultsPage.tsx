@@ -5,15 +5,15 @@ import { useMobile } from "../../lib/use-mobile";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useBodyClass } from "../../lib/use-body-class";
 import { REFERENCE_FUNDS } from "../../lib/public-funds";
+import type { ReferenceFund } from "../../lib/public-funds";
 import { symbolOf, synthesizeCommunityFund } from "../../lib/community-fund";
 import {
   COLLECTIONS,
   ASSET_CLASSES,
   selectFunds,
-  collectionOf,
 } from "../../reference/lib/fund-explore";
 import { exploreFilters, type ExploreFilters } from "../../reference/lib/fund-navigation";
-import { FundRow } from "../reference/FundRow";
+import { BoardRow, FeaturedCard, longestHistory } from "./FundBoard";
 import { useMemo } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { getStrategy, listStrategies } from "../../lib/api";
@@ -108,9 +108,9 @@ export function VaultsPage() {
   });
 
   /**
-   * 把 ATP 策略偽裝成 `ReferenceFund`，好讓它們用**同一份** `FundRow` 呈現。
+   * 把 ATP 策略偽裝成 `ReferenceFund`，好讓它們用**同一份** `BoardRow` 呈現。
    *
-   * 為什麼要借用 `FundRow`：使用者要求 Community 區塊「跟其他基金一樣的樣式」。
+   * 為什麼要借用 `BoardRow`：使用者要求 Community 區塊「跟其他基金一樣的樣式」。
    * 自己複製一份 markup 的話，參考基金那邊改一次樣式就得同步改這裡 —— 遲早不同步。
    *
    * 哪些是真的、哪些是編的（刻意寫清楚，免得下一個人以為這些報酬是實績）：
@@ -163,6 +163,18 @@ export function VaultsPage() {
     setParams(next, { replace: true });
     setDraft(null);
   };
+  const periodLabel = filters.period === "ALL" ? "All time" : filters.period;
+  const fundUrl = (slug: string) =>
+    `/funds/${slug}?period=${filters.period}&returnTo=${encodeURIComponent(returnTo)}`;
+  const boardTitle = filters.category === "all"
+    ? "All funds"
+    : COLLECTIONS.find((collection) => collection.id === filters.category)?.name ?? "Funds";
+  const fullDays = longestHistory(REFERENCE_FUNDS, filters.period);
+  // 主打 = 目前分類裡報酬最高的三檔。只有在「沒搜尋、沒篩資產、依報酬排序」時才成立，
+  // 否則上面三檔和下面的榜會講兩件不同的事。榜不到十檔時也不放：七檔裡挑三檔「主打」沒有意義。
+  const featured = filters.q.trim() === "" && filters.assets.length === 0 && filters.sort === "perf" && visible.length >= 10
+    ? (visible.slice(0, 3) as ReferenceFund[])
+    : [];
   const categories = (
     <nav className="collection-tabs" aria-label="Fund categories">
       {[{ id: "all", name: "All" }, ...COLLECTIONS].map((category) => (
@@ -302,111 +314,81 @@ export function VaultsPage() {
           <h2>No matches</h2>
         </div>
       )}
-      {community.length > 0 && (
-        <section className="explore-collection" aria-label="Community">
-          <header>
-            <div>
-              <h2>Community{!mobile && <span>{community.length}</span>}</h2>
-              <p>
-                Strategies created on CRE8. Each one has an on-chain id and a published target
-                allocation. Performance shown is modelled until a fund has live history.
-              </p>
-            </div>
-            <span className="explore-current-period">
-              {filters.period === "ALL" ? "All time" : filters.period} return
-            </span>
+      {featured.length > 0 && (
+        <section className="mkt-section" aria-label="Top performers">
+          <header className="mkt-section-head">
+            <h2>Top performers</h2>
+            <span className="mkt-period">{periodLabel} model return</span>
           </header>
-          {/* 手機沿用 App 版清單樣式；桌機用 FundRow（與其他基金列一致）。
-              兩者必須互斥 —— 實測兩個都渲染時，同一個策略會在畫面上出現兩次。 */}
-          {mobile && <ul className="app-live-strategies" role="list">
-            {live.map((strategy) => {
-              const yours = wallet !== null && strategy.provider?.toLowerCase() === wallet.toLowerCase();
-              return (
-                <li key={strategy.id}>
-                  <Link to={`/strategies/${strategy.id}`}>
-                    <div>
-                      <h3>{strategy.name}</h3>
-                      <div className="app-live-strategy-meta">
-                        <span>{yours ? "Yours" : shortAddress(strategy.provider)}</span>
-                        {strategy.onchainId != null && <span>On-chain #{strategy.onchainId}</span>}
-                      </div>
-                    </div>
-                    <AppIcon name="right" size={16} />
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>}
-          {!mobile && (
-            <>
-              <div className="fund-list-columns" aria-hidden="true">
-                <span>Fund</span>
-                <span>Return</span>
-                <span>Assets</span>
-              </div>
-              <div className="fund-list">
-                {community.map((fund, index) => {
-                  const onchainId = live[index]?.onchainId;
-                  return (
-                    <FundRow
-                      key={fund.slug}
-                      fund={fund}
-                      period={filters.period}
-                      returnTo={returnTo}
-                      href={`/strategies/${fund.slug.replace("community-", "")}`}
-                      // 說明行平常放 X handle；社群策略沒有 X，換成「建立者 · 鏈上 id」。
-                      meta={
-                        <>
-                          {fund.manager}
-                          {onchainId != null ? ` · On-chain #${onchainId}` : ''}
-                        </>
-                      }
-                    />
-                  );
-                })}
-              </div>
-            </>
-          )}
+          <ol className="mkt-features" role="list">
+            {featured.map((fund, index) => (
+              <FeaturedCard key={fund.slug} fund={fund} period={filters.period} url={fundUrl(fund.slug)} rank={index + 1} fullDays={fullDays} />
+            ))}
+          </ol>
         </section>
       )}
-      {COLLECTIONS.map((c) => {
-        const funds = visible.filter((f) => collectionOf(f) === c.id);
-        return funds.length ? (
-          <section
-            className="explore-collection"
-            key={c.id}
-            aria-label={c.name}
-          >
-            <header>
-              <div>
-                <h2>
-                  {c.name}
-                  {!mobile && <span>{funds.length}</span>}
-                </h2>
-              </div>
-              <span className="explore-current-period">
-                {filters.period === "ALL" ? "All time" : filters.period} model return
-              </span>
-            </header>
-            <div className="fund-list-columns" aria-hidden="true">
-              <span>Fund</span>
-              <span>Return</span>
-              <span>Assets</span>
-            </div>
-            <div className="fund-list">
-              {funds.map((f) => (
-                <FundRow
-                  key={f.slug}
-                  fund={f as (typeof REFERENCE_FUNDS)[number]}
+      {community.length > 0 && (
+        <section className="mkt-section" aria-label="Community">
+          <header className="mkt-section-head">
+            <h2>Community<span>{community.length}</span></h2>
+            <span className="mkt-period mkt-period--long">Created on CRE8 · modelled until live history</span>
+          </header>
+          {/* 社群策略的走勢是依權重生成的示意（見上方 community 的註解），所以不排名、不和參考基金混在同一張榜。 */}
+          <ol className="mkt-board" role="list">
+            {community.map((fund, index) => {
+              const strategy = live[index];
+              const yours = wallet !== null && strategy?.provider?.toLowerCase() === wallet.toLowerCase();
+              return (
+                <BoardRow
+                  key={fund.slug}
+                  fund={fund}
                   period={filters.period}
-                  returnTo={returnTo}
-                  showSource={c.id !== "public-figures"}
+                  url={`/strategies/${fund.slug.replace("community-", "")}`}
+                  rank={null}
+                  meta={
+                    <>
+                      {yours ? "Yours" : shortAddress(strategy?.provider ?? fund.manager)}
+                      {strategy?.onchainId != null ? ` · On-chain #${strategy.onchainId}` : ""}
+                    </>
+                  }
                 />
-              ))}
-            </div>
-          </section>
-        ) : null;
-      })}
+              );
+            })}
+          </ol>
+        </section>
+      )}
+      {visible.length > 0 && (
+        <section className="mkt-section" aria-label={boardTitle}>
+          <header className="mkt-section-head">
+            <h2>{boardTitle}<span>{visible.length}</span></h2>
+            <span className="mkt-period">{periodLabel} model return</span>
+          </header>
+          <div className="mkt-board-head" aria-hidden="true">
+            <span>#</span>
+            <span>Fund</span>
+            <span>Holdings</span>
+            <span>Trend</span>
+            <button type="button" tabIndex={-1} aria-pressed={filters.sort === "perf"} onClick={() => change("sort", "")}>
+              Return
+            </button>
+            <button type="button" tabIndex={-1} aria-pressed={filters.sort === "dd"} onClick={() => change("sort", "dd")}>
+              Max drawdown
+            </button>
+          </div>
+          <ol className="mkt-board" role="list">
+            {visible.map((fund, index) => (
+              <BoardRow
+                key={fund.slug}
+                fund={fund as ReferenceFund}
+                period={filters.period}
+                url={fundUrl(fund.slug)}
+                rank={index + 1}
+                fullDays={fullDays}
+              />
+            ))}
+          </ol>
+        </section>
+      )}
     </main>
   );
 }

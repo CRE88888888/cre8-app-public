@@ -40,3 +40,6 @@ import "./styles/design-controls.css";
 import "./styles/creators.css";
 
 import './styles/mobile-app.css';
+
+// Funds 頁的主打卡與排行榜（新 class，最後載入）。
+import './styles/market.css';

@@ -1,0 +1,293 @@
+/*
+ * Funds 頁：主打卡 + 排行榜（2026-11-13 改版，規格見 DESIGN.md「Funds 頁」）。
+ *
+ * 全部用 `mkt-` 前綴的新 class，不碰舊的 `.fund-row`／`.fund-list` 規則（Creator 頁還在用）。
+ * 這支檔案最後載入；選擇器都掛在 `#fund-explore` 下，權重足以蓋過 `#root a`、`#root button` 這類全域規則。
+ */
+
+body.atp-formal-market:has(#fund-explore) { background: var(--paper); }
+
+#fund-explore {
+  --mkt-line: rgba(22, 34, 45, .1);
+  --mkt-radius: 16px;
+  /* 比例條五段：由深到淺，最後一段是「其餘」。 */
+  --mkt-b1: var(--ink);
+  --mkt-b2: var(--steel);
+  --mkt-b3: var(--fog);
+  --mkt-b4: var(--frost);
+  --mkt-b5: #dce5ec;
+}
+#fund-explore :is(ol, li) { list-style: none; margin: 0; padding: 0; }
+
+/* ── 區塊標題 ─────────────────────────────────────────── */
+#fund-explore .mkt-section { margin: 0 0 44px; }
+#fund-explore .mkt-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 14px;
+}
+#fund-explore .mkt-section-head h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  color: var(--ink);
+  font: 600 20px/1.25 var(--sans);
+  letter-spacing: -.3px;
+}
+#fund-explore .mkt-section-head h2 > span { color: var(--steel); font: 400 13px/1 var(--mono); letter-spacing: 0; }
+#fund-explore .mkt-period { color: var(--steel); font: 400 12px/1.4 var(--mono); text-align: right; }
+
+/* ── 共用：頭像、名稱、比例條、走勢 ───────────────────── */
+#fund-explore .mkt-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--snow);
+  color: var(--deep);
+  font: 600 13px/1 var(--sans);
+}
+#fund-explore .mkt-avatar--person { border-radius: 50%; }
+#fund-explore .mkt-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
+#fund-explore .mkt-id { display: grid; gap: 2px; min-width: 0; }
+#fund-explore .mkt-id strong {
+  overflow: hidden;
+  color: var(--ink);
+  font: 600 15px/1.3 var(--sans);
+  letter-spacing: -.1px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#fund-explore .mkt-id small {
+  overflow: hidden;
+  color: var(--steel);
+  font: 400 12px/1.35 var(--sans);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#fund-explore .mkt-bar { display: flex; gap: 2px; height: 6px; overflow: hidden; border-radius: 3px; }
+#fund-explore .mkt-bar i { display: block; flex: 0 0 0; min-width: 2px; background: var(--mkt-b1); }
+#fund-explore .mkt-bar i:nth-child(2) { background: var(--mkt-b2); }
+#fund-explore .mkt-bar i:nth-child(3) { background: var(--mkt-b3); }
+#fund-explore .mkt-bar i:nth-child(4) { background: var(--mkt-b4); }
+#fund-explore .mkt-bar i.mkt-bar-rest { background: var(--mkt-b5); }
+#fund-explore .mkt-trend { display: block; width: 100%; height: 100%; overflow: visible; }
+#fund-explore .mkt-trend-line { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+#fund-explore .mkt-trend-area { fill: currentColor; opacity: .08; stroke: none; }
+#fund-explore .pos { color: var(--positive); }
+#fund-explore .neg { color: var(--negative); }
+
+/* 排名小方塊：取自 logo 的翻牌 8（藍灰底、白字、中間一道鉸鏈線），只用在主打卡。 */
+#fund-explore .mkt-rank {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 32px;
+  border-radius: 3px;
+  background: linear-gradient(to bottom, #7397b2 0 50%, #6588a4 50% 100%);
+  color: var(--snow);
+  font: 400 19px/1 "Anton", Impact, "Arial Narrow", sans-serif;
+}
+#fund-explore .mkt-rank::before,
+#fund-explore .mkt-rank::after {
+  content: "";
+  position: absolute;
+  top: calc(50% - 1px);
+  width: 3px;
+  height: 2px;
+  background: var(--deep);
+}
+#fund-explore .mkt-rank::before { left: -1px; }
+#fund-explore .mkt-rank::after { right: -1px; }
+
+/* ── 主打卡 ───────────────────────────────────────────── */
+#fund-explore .mkt-features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+#fund-explore .mkt-feature-link {
+  display: grid;
+  gap: 14px;
+  height: 100%;
+  padding: 18px 20px 18px;
+  border: 1px solid var(--mkt-line);
+  border-radius: var(--mkt-radius);
+  background: var(--white);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color .15s ease, transform .15s ease;
+}
+#fund-explore .mkt-feature-link:hover { border-color: var(--hair-2); }
+#fund-explore .mkt-feature-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+#fund-explore .mkt-feature-figure { display: flex; align-items: baseline; gap: 10px; }
+#fund-explore .mkt-feature-return {
+  font: 500 34px/1 var(--mono);
+  letter-spacing: -1.2px;
+  font-variant-numeric: tabular-nums;
+}
+#fund-explore .mkt-feature-figure small { color: var(--steel); font: 400 12px/1 var(--mono); }
+#fund-explore .mkt-feature-trend { display: block; height: 84px; margin-inline: -4px; }
+#fund-explore .mkt-feature-holdings { display: grid; gap: 10px; color: var(--ink); }
+#fund-explore .mkt-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+#fund-explore .mkt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 9px 0 5px;
+  border-radius: 13px;
+  background: var(--snow);
+  color: var(--deep);
+  font: 500 12px/1 var(--mono);
+}
+#fund-explore .mkt-chip img { width: 16px; height: 16px; border-radius: 50%; background: var(--white); object-fit: contain; }
+#fund-explore .mkt-chip b { color: var(--steel); font-weight: 400; }
+#fund-explore .mkt-chip--more { padding-inline: 9px; color: var(--steel); }
+
+/* ── 排行榜 ───────────────────────────────────────────── */
+#fund-explore .mkt-board {
+  overflow: hidden;
+  border: 1px solid var(--mkt-line);
+  border-radius: var(--mkt-radius);
+  background: var(--white);
+}
+#fund-explore .mkt-board-head,
+#fund-explore .mkt-row-link {
+  display: grid;
+  grid-template-columns: 28px minmax(220px, 1.25fr) minmax(200px, 1fr) 120px 112px 112px;
+  column-gap: 24px;
+  align-items: center;
+  padding-inline: 20px;
+}
+#fund-explore .mkt-board-head { padding-bottom: 10px; color: var(--steel); font: 400 12px/1.4 var(--sans); }
+#fund-explore .mkt-board-head > :nth-child(n + 5) { justify-self: end; }
+#fund-explore .mkt-board-head button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+#fund-explore .mkt-board-head button:hover { color: var(--ink); }
+#fund-explore .mkt-board-head button[aria-pressed="true"] { color: var(--ink); font-weight: 500; }
+#fund-explore .mkt-board-head button[aria-pressed="true"]::after { content: "↓"; font: 400 11px/1 var(--mono); }
+#fund-explore .mkt-row + .mkt-row { border-top: 1px solid var(--mkt-line); }
+#fund-explore .mkt-row-link {
+  min-height: 68px;
+  padding-block: 12px;
+  color: inherit;
+  text-decoration: none;
+  transition: background-color .12s ease;
+}
+#fund-explore .mkt-row-link:hover { background: var(--paper); }
+#fund-explore .mkt-row-link:focus-visible,
+#fund-explore .mkt-feature-link:focus-visible { outline: 2px solid var(--fog); outline-offset: -2px; }
+#fund-explore .mkt-row-rank { color: var(--steel); font: 400 13px/1 var(--mono); font-variant-numeric: tabular-nums; }
+#fund-explore .mkt-row-fund { display: flex; align-items: center; gap: 12px; min-width: 0; }
+#fund-explore .mkt-row-holdings { display: grid; gap: 7px; min-width: 0; }
+#fund-explore .mkt-row-holdings small {
+  overflow: hidden;
+  color: var(--steel);
+  font: 400 12px/1.2 var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#fund-explore .mkt-row-trend { display: block; height: 36px; }
+#fund-explore .mkt-row-return { display: grid; justify-items: end; gap: 3px; }
+#fund-explore .mkt-row-return strong { font: 500 16px/1 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.2px; }
+#fund-explore .mkt-row-return small { color: var(--steel); font: 400 11px/1 var(--mono); }
+#fund-explore .mkt-row-dd { justify-self: end; color: var(--steel); font: 400 14px/1 var(--mono); font-variant-numeric: tabular-nums; }
+
+/* 中等寬度：先收掉回撤，再收掉走勢。 */
+@media (min-width: 720px) and (max-width: 1099px) {
+  #fund-explore .mkt-board-head,
+  #fund-explore .mkt-row-link { grid-template-columns: 28px minmax(200px, 1.2fr) minmax(160px, 1fr) 96px 104px; column-gap: 20px; }
+  #fund-explore :is(.mkt-row-dd, .mkt-board-head > :nth-child(6)) { display: none; }
+  #fund-explore .mkt-features { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #fund-explore .mkt-feature:nth-child(3) { display: none; }
+}
+@media (min-width: 720px) and (max-width: 899px) {
+  #fund-explore .mkt-board-head,
+  #fund-explore .mkt-row-link { grid-template-columns: 24px minmax(0, 1.3fr) minmax(0, 1fr) 100px; }
+  #fund-explore :is(.mkt-row-trend, .mkt-board-head > :nth-child(4)) { display: none; }
+}
+
+/* ── 手機：同一張榜，只留排名、名稱、走勢、報酬；主打卡橫向滑動 ── */
+@media (max-width: 719px) {
+  body.atp-formal-market:has(#fund-explore) { background: var(--white); }
+  #fund-explore .mkt-section { margin-bottom: 26px; }
+  #fund-explore .mkt-section-head { margin-bottom: 8px; align-items: center; }
+  #fund-explore .mkt-section-head h2 { font-size: 20px; }
+  #fund-explore .mkt-period { font-size: 12px; }
+  #fund-explore .mkt-period--long { display: none; }
+  #fund-explore .mkt-features {
+    display: flex;
+    gap: 10px;
+    margin-inline: -16px;
+    padding: 2px 16px 4px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+  #fund-explore .mkt-features::-webkit-scrollbar { display: none; }
+  #fund-explore .mkt-feature { flex: 0 0 min(82vw, 320px); scroll-snap-align: start; scroll-margin-left: 16px; }
+  #fund-explore .mkt-feature-link { gap: 12px; padding: 14px 16px 16px; background: var(--app-grouped, #f6f7f8); border-color: transparent; }
+  #fund-explore .mkt-feature-return { font-size: 28px; letter-spacing: -.8px; }
+  #fund-explore .mkt-feature-trend { height: 60px; }
+  #fund-explore .mkt-chips { gap: 4px; }
+  #fund-explore .mkt-chip { gap: 5px; padding: 0 7px 0 4px; background: var(--white); font-size: 11px; }
+  #fund-explore .mkt-chip--more { padding-inline: 7px; }
+  #fund-explore .mkt-board-head { display: none; }
+  #fund-explore .mkt-board { border: 0; border-radius: 0; background: transparent; }
+  #fund-explore .mkt-row-link {
+    grid-template-columns: 18px minmax(0, 1fr) 56px auto;
+    column-gap: 10px;
+    min-height: 64px;
+    padding: 10px 0;
+  }
+  #fund-explore .mkt-row-link:hover { background: transparent; }
+  #fund-explore .mkt-row-link:active { background: var(--app-segment, #f1f2f4); }
+  #fund-explore :is(.mkt-row-holdings, .mkt-row-dd) { display: none; }
+  #fund-explore .mkt-row-trend { height: 28px; }
+  #fund-explore .mkt-row-rank { font-size: 12px; }
+  /* 手機欄位窄：名稱可以折兩行，不要被截成「Leopold Asche…」。 */
+  #fund-explore .mkt-row .mkt-id strong {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 16px;
+    line-height: 1.25;
+    white-space: normal;
+  }
+  #fund-explore .mkt-row-return { min-width: 4.6rem; }
+  #fund-explore .mkt-row-return strong { font-size: 15px; }
+}
+
+/* 設計稿有一條全站 `border-radius: 0 !important`；圓角要放進 app-shapes layer 並加 !important 才蓋得過。 */
+@layer app-shapes {
+  #fund-explore :is(.mkt-feature-link, .mkt-board) { border-radius: var(--mkt-radius) !important; }
+  #fund-explore .mkt-avatar { border-radius: 10px !important; }
+  #fund-explore .mkt-avatar--person { border-radius: 50% !important; }
+  #fund-explore .mkt-bar { border-radius: 3px !important; }
+  #fund-explore .mkt-chip { border-radius: 13px !important; }
+  #fund-explore .mkt-chip img { border-radius: 50% !important; }
+  #fund-explore .mkt-rank { border-radius: 3px !important; }
+  @media (max-width: 719px) {
+    #fund-explore .mkt-board { border-radius: 0 !important; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #fund-explore :is(.mkt-row-link, .mkt-feature-link) { transition: none; }
+}
