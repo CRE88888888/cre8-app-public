@@ -136,6 +136,8 @@
 - **Funds**：主打是一副可以左右滑的深色牌（六張；桌面露出第四張的邊並有左右箭頭）。排行榜是一張表：欄名下一條 ink 線、列間細線、沒有外框。期間（7D／30D／90D／1Y／All）直接在榜的標題列切換；欄名可點擊排序。
 - **基金頁**：封面壓矮（248px），Fund facts 與人物介紹疊在封面右下角；Sharpe 與波動直接列在圖表下方（原本要多點一次）；交易面板下方多一段「What you get」（買入前就看到會買到哪些資產）；買入金額有常用金額一鍵帶入（桌面與手機）；持倉表每列有權重條。
 - **Creator 頁**：用跟 Funds 同一張榜，不再是大封面卡片格。
-- **Create（未登入）**：不再只有一行「Sign in first」。說明三個步驟，主要動作是「Design a fund」（設計不需要錢包），次要才是登入。Studio 空狀態的「Design a fund first」連到 `/create/design`。
+- **頁首的入口叫「Create a fund」**（原本是帶圖示的「Creator Studio」按鈕）：寫使用者想做的事，不是內部的區域名稱；不放圖示、沒有底色，頁首只有 Connect wallet 一顆實心按鈕。Studio 內仍是「← Exit Studio」。
+- **`/create` 就是基金設計器**（封面、命名、加資產、每個資產的策略、整檔規則），不需要錢包就能開始。`/create/design` 是舊網址，保留。設計器是同步來的元件，外觀由 `src/styles/builder.css` 套上 v2（圓角、輸入框、Off／On 開關改成淡色軌道、選資產對話框的分頁、策略抽屜）。
+- **`/create/activate` 是啟用表單**（真的建立：createStrategy → publishVersion → enroll → approve）。左邊三個步驟（命名、選資產與權重、再平衡頻率），右邊跟著捲動的「Your fund」摘要。資產是可點的列，勾了才出現權重框；有「Split evenly」；合計用進度條顯示還差多少；按鈕下方一次只說一件還缺的事。未登入時顯示三步驟說明，主要動作是「Design a fund」。
 - **資產頁**：跟基金頁同一條左緣（1344px／40px）與右側欄；Create 卡為深色。
 - 未動：錢包、SIWE、API、交易與簽名流程的邏輯。

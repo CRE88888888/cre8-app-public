@@ -1,0 +1,93 @@
+/*
+ * 基金設計器（/create，元件是同步來的 `src/reference/components/fund-builder.tsx`，不能手改）。
+ * 它的樣式是 CSS module，class 名帶雜湊，所以這裡用 `[class*="_name_"]` 對位，只做外觀：
+ * 圓角、控制項、開關、選資產的對話框、策略抽屜，全部換成設計系統 v2 的語言。
+ * 行為、欄位、計算都沒有動。
+ */
+
+body.atp-complete-create #root [class*="_head_"] h1 { font: 600 44px/1.05 var(--sans); letter-spacing: -1.6px; }
+body.atp-complete-create #root [class*="_head_"] p { color: var(--steel); font: 400 16px/1.5 var(--sans); }
+body.atp-complete-create #root [class*="_headAction_"] a { color: var(--steel); font: 500 14px/1 var(--sans); text-decoration: none; }
+body.atp-complete-create #root [class*="_headAction_"] a:hover { color: var(--ink); }
+
+body.atp-complete-create #root :is([class*="_editor_"], [class*="_panel_"]) { border: 1px solid var(--hair); background: var(--white); }
+body.atp-complete-create #root aside[class*="_side_"] { box-shadow: 0 1px 2px rgba(12, 23, 34, .04), 0 8px 24px rgba(12, 23, 34, .06); }
+body.atp-complete-create :is([class*="_label_"], [class*="_field_"] > span, [class*="_nameField_"] > span) { color: var(--steel); font: 500 13px/1.2 var(--sans); letter-spacing: 0; text-transform: none; }
+
+/* 輸入框、下拉、搜尋 */
+body.atp-complete-create :is([class*="_nameField_"] input, [class*="_field_"] :is(input, select), input[class*="_search_"]) {
+  min-height: 48px;
+  border: 1px solid var(--hair-2);
+  background: var(--white);
+  color: var(--ink);
+  font: 400 16px/1 var(--sans);
+  transition: border-color .15s var(--ease), box-shadow .15s var(--ease);
+}
+body.atp-complete-create :is([class*="_nameField_"] input, [class*="_field_"] :is(input, select), input[class*="_search_"]):focus {
+  border-color: var(--signal);
+  outline: 0;
+  box-shadow: 0 0 0 3px var(--signal-soft);
+}
+/* 比例輸入框（100 %） */
+body.atp-complete-create :is([class*="_share_"], [class*="_dShare_"], [class*="_shareAuto_"]) { border: 1px solid var(--hair-2); background: var(--white); }
+body.atp-complete-create :is([class*="_share_"], [class*="_dShare_"], [class*="_shareAuto_"]):focus-within { border-color: var(--signal); box-shadow: 0 0 0 3px var(--signal-soft); }
+
+/* 持倉列 */
+body.atp-complete-create #root [class*="_thead_"] { color: var(--steel); font: 400 13px/1.2 var(--sans); }
+body.atp-complete-create #root button[class*="_strat_"] { border: 1px solid var(--hair); background: var(--white); transition: border-color .15s var(--ease), background-color .15s var(--ease); }
+body.atp-complete-create #root button[class*="_strat_"]:hover { border-color: var(--hair-2); background: var(--paper); }
+body.atp-complete-create [class*="_cashRow_"] { background: var(--paper); color: var(--deep); }
+body.atp-complete-create [class*="_beta_"] { padding: 2px 6px; border: 0; background: var(--snow); color: var(--steel); font: 500 10px/1.4 var(--mono); letter-spacing: .06em; }
+body.atp-complete-create :is([class*="_chart_"], [class*="_chartMini_"]) { border-color: var(--hair); background: var(--paper); }
+
+/* Off／On 開關：淡色軌道、白色滑塊（原本是黑色方塊） */
+body.atp-complete-create [class*="_seg_"] { display: inline-flex; gap: 2px; padding: 3px; border: 0; background: var(--snow); }
+body.atp-complete-create [class*="_seg_"] button {
+  min-width: 48px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--steel);
+  font: 500 13px/1 var(--sans);
+  cursor: pointer;
+  transition: background-color .15s var(--ease), color .15s var(--ease);
+}
+body.atp-complete-create [class*="_seg_"] button[aria-pressed="true"] { background: var(--white); color: var(--ink); box-shadow: 0 1px 2px rgba(12, 23, 34, .14); }
+/* 開著的規則要看得出來：On 被選中時用墨色。 */
+body.atp-complete-create [class*="_seg_"] button[aria-pressed="true"]:last-child { background: var(--ink); color: var(--white); box-shadow: none; }
+
+/* 選資產的對話框 */
+body.atp-complete-create dialog[class*="_picker_"] { border: 0; box-shadow: var(--shadow-pop); }
+body.atp-complete-create dialog[class*="_picker_"]::backdrop { background: rgba(12, 23, 34, .45); }
+body.atp-complete-create [class*="_pickerTabs_"] { display: flex; gap: 2px; padding: 3px; border: 0; background: var(--snow); }
+body.atp-complete-create [class*="_pickerTabs_"] button { flex: 1; min-height: 38px; border: 0; background: transparent; color: var(--steel); font: 500 14px/1 var(--sans); cursor: pointer; }
+body.atp-complete-create [class*="_pickerTabs_"] button:is([aria-selected="true"], [aria-pressed="true"], [aria-current], [class*="_on_"], [class*="_active_"]) { background: var(--white); color: var(--ink); box-shadow: 0 1px 2px rgba(12, 23, 34, .14); }
+body.atp-complete-create [class*="_groupHead_"] { border: 0; background: transparent; color: var(--steel); font: 500 13px/1.2 var(--sans); }
+body.atp-complete-create [class*="_assets_"] { border-color: var(--hair); }
+body.atp-complete-create [class*="_assetChoice_"] { transition: background-color .12s var(--ease); }
+body.atp-complete-create [class*="_assetChoice_"]:hover { background: var(--paper); }
+
+/* 策略抽屜 */
+body.atp-complete-create button[class*="_play_"] { border: 1px solid var(--hair); background: var(--white); transition: border-color .15s var(--ease); }
+body.atp-complete-create button[class*="_play_"]:hover { border-color: var(--hair-2); }
+body.atp-complete-create button[class*="_play_"][aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+body.atp-complete-create [class*="_settings_"] { border: 1px solid var(--hair); background: var(--white); }
+body.atp-complete-create [class*="_venues_"] { border-color: var(--hair); }
+body.atp-complete-create [class*="_explain_"] { border: 0; background: var(--paper); color: var(--deep); }
+body.atp-complete-create [class*="_dFoot_"] { border-top: 1px solid var(--hair); }
+
+@layer app-shapes {
+  /* `:not(#_):not(#__)` 只為了加權重，蓋過舊的膠囊與 12px 規則（同一個 layer）。 */
+  body.atp-complete-create:not(#_):not(#__) :is([class*="_editor_"], [class*="_panel_"], dialog[class*="_picker_"]) { border-radius: var(--r-lg) !important; }
+  body.atp-complete-create:not(#_):not(#__) :is([class*="_preview_"], [class*="_settings_"], button[class*="_play_"]) { border-radius: var(--r-md) !important; }
+  body.atp-complete-create:not(#_):not(#__) :is([class*="_nameField_"] input, [class*="_field_"] :is(input, select), input[class*="_search_"],
+      [class*="_share_"], [class*="_dShare_"], [class*="_shareAuto_"], button[class*="_strat_"], [class*="_seg_"], [class*="_pickerTabs_"],
+      [class*="_venues_"], [class*="_explain_"], [class*="_assets_"], [class*="_lineBtn_"], [class*="_wide_"]) { border-radius: var(--r-ctl) !important; }
+  body.atp-complete-create:not(#_):not(#__) :is([class*="_seg_"] button, [class*="_pickerTabs_"] button) { border-radius: 7px !important; }
+  body.atp-complete-create:not(#_):not(#__) :is([class*="_chart_"], [class*="_chartMini_"], [class*="_cashRow_"]) { border-radius: var(--r-xs) !important; }
+  body.atp-complete-create:not(#_):not(#__) :is([class*="_share_"], [class*="_dShare_"], [class*="_shareAuto_"]) input { border-radius: 0 !important; }
+  body.atp-complete-create:not(#_):not(#__) [class*="_beta_"] { border-radius: 4px !important; }
+  body.atp-complete-create:not(#_):not(#__) [class*="_bar_"] { border-radius: 3px !important; }
+  body.atp-complete-create:not(#_):not(#__) :is([class*="_logo18_"], [class*="_logo22_"], [class*="_logo24_"], [class*="_logo28_"], [class*="_logo32_"], [class*="_logo40_"]) { border-radius: 50% !important; }
+}

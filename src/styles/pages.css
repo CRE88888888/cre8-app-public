@@ -91,3 +91,92 @@ body.atp-asset-page #root [class*="_negative_"] { color: var(--negative); }
   /* 基金設計器（同步來的 CSS module）：面板跟全站卡片同一個圓角。 */
   body.atp-complete-create main :is(section, aside, div):is([class*="_editor_"], [class*="_panel_"]) { border-radius: var(--r-lg) !important; }
 }
+
+/* ── Create（已登入）：左邊三個步驟，右邊跟著捲動的「Your fund」摘要 ──
+   原本是四張疊起來的框、全大寫標籤、合約地址放最顯眼。現在一個區塊一條線，
+   資產是可點的列（勾了才出現權重），右邊隨時看得到配置、合計與還差什麼。 */
+#root .cf { padding-top: 40px; }
+#root .cf-head { align-items: flex-end; margin-bottom: 28px; }
+#root .cf-head p { max-width: 56ch; margin: 10px 0 0; color: var(--steel); font: 400 16px/1.5 var(--sans); }
+#root .cf-design-link { color: var(--steel); font: 500 14px/1 var(--sans); text-decoration: none; white-space: nowrap; }
+#root .cf-design-link:hover { color: var(--ink); }
+#root .cf-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 56px; align-items: start; }
+#root .cf-form { display: grid; gap: 0; min-width: 0; max-width: 760px; }
+#root .cf-block { display: grid; gap: 16px; padding: 32px 0; border-top: 1px solid var(--hair); }
+#root .cf-block:first-child { padding-top: 0; border-top: 0; }
+#root .cf-block h2 { display: flex; align-items: center; gap: 12px; margin: 0; color: var(--ink); font: 600 20px/1.25 var(--sans); letter-spacing: -.3px; }
+#root .cf-block h2 b { display: grid; place-items: center; width: 26px; height: 26px; background: var(--ink); color: var(--white); font: 500 13px/1 var(--mono); }
+#root .cf-block-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+html body #root .cf-field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; align-items: start; margin: 0; padding: 0; border: 0; }
+html body #root .cf-cadence button { min-width: 0; padding: 0 16px; font: 500 14px/1 var(--sans); letter-spacing: 0; text-transform: none; }
+#root .cf-field > span { color: var(--ink); font: 500 14px/1.2 var(--sans); letter-spacing: 0; text-transform: none; }
+#root .cf-field > span em { margin-left: 6px; color: var(--slate); font-style: normal; font-weight: 400; }
+#root .cf-field input { width: 100%; padding: 0 14px; font: 400 16px/1 var(--sans); }
+#root .cf-help { max-width: 62ch; margin: 0; color: var(--steel); font: 400 14px/1.55 var(--sans); }
+#root .cf-draft p { margin: 0; color: var(--steel); font: 400 14px/1.55 var(--sans); }
+#root .cf-confirm { display: flex; align-items: center; gap: 10px; color: var(--ink); font: 500 14px/1.4 var(--sans); cursor: pointer; }
+#root .cf-confirm input, #root .cf-asset-pick input { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--ink); }
+
+#root .cf-assets { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--hair); }
+#root .cf-asset { display: flex; align-items: center; gap: 16px; min-height: 60px; padding: 0 12px; margin-inline: -12px; border-bottom: 1px solid var(--hair); transition: background-color .12s var(--ease); }
+#root .cf-asset:hover { background: var(--paper); }
+#root .cf-asset.is-on { background: var(--paper); }
+#root .cf-asset.is-blocked { opacity: .55; }
+#root .cf-asset-pick { flex: 1; display: flex; align-items: center; gap: 14px; min-width: 0; min-height: 60px; cursor: pointer; }
+#root .cf-asset.is-blocked .cf-asset-pick { cursor: not-allowed; }
+#root .cf-asset-logo { flex: none; display: grid; place-items: center; width: 32px; height: 32px; overflow: hidden; background: var(--snow); }
+#root .cf-asset-logo img { width: 100%; height: 100%; object-fit: contain; background: var(--white); }
+#root .cf-asset-name { display: grid; gap: 2px; min-width: 0; }
+#root .cf-asset-name strong { color: var(--ink); font: 600 15px/1.2 var(--sans); }
+#root .cf-asset-name small { overflow: hidden; color: var(--steel); font: 400 13px/1.3 var(--sans); text-overflow: ellipsis; white-space: nowrap; }
+#root .cf-weight { flex: none; display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px; border: 1px solid var(--hair-2); background: var(--white); transition: border-color .15s var(--ease), box-shadow .15s var(--ease); }
+#root .cf-weight:focus-within { border-color: var(--signal); box-shadow: 0 0 0 3px var(--signal-soft); }
+#root .cf-weight input { width: 64px; min-height: 0; height: 38px; padding: 0; border: 0; outline: 0; background: transparent; box-shadow: none; color: var(--ink); font: 500 16px/1 var(--mono); text-align: right; -moz-appearance: textfield; appearance: textfield; }
+#root .cf-weight input::-webkit-outer-spin-button, #root .cf-weight input::-webkit-inner-spin-button { margin: 0; -webkit-appearance: none; }
+#root .cf-weight i { color: var(--steel); font: 400 14px/1 var(--mono); font-style: normal; }
+
+#root .cf-total { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; color: var(--steel); font: 400 14px/1 var(--sans); }
+#root .cf-total-bar { display: block; height: 6px; overflow: hidden; background: var(--snow); }
+#root .cf-total-bar i { display: block; height: 100%; background: var(--ink); transition: width .2s var(--ease); }
+#root .cf-total strong { color: var(--ink); font: 500 16px/1 var(--mono); }
+#root .cf-total[data-state="ok"] :is(strong, span) { color: var(--positive); }
+#root .cf-total[data-state="ok"] .cf-total-bar i { background: var(--positive); }
+#root .cf-total[data-state="over"] :is(strong, span) { color: var(--negative); }
+#root .cf-total[data-state="over"] .cf-total-bar i { background: var(--negative); }
+
+#root .cf-side { position: sticky; top: 88px; min-width: 0; }
+#root .cf-summary { display: grid; gap: 14px; padding: 22px; border: 1px solid var(--hair); background: var(--white); box-shadow: 0 1px 2px rgba(12, 23, 34, .04), 0 8px 24px rgba(12, 23, 34, .06); }
+#root .cf-summary-label { color: var(--steel); font: 500 13px/1 var(--sans); }
+#root .cf-summary-name { margin-top: -6px; overflow-wrap: anywhere; color: var(--ink); font: 600 22px/1.2 var(--sans); letter-spacing: -.4px; }
+#root .cf-summary-name.is-empty { color: var(--slate); }
+#root .cf-summary-empty { margin: 0; color: var(--steel); font: 400 14px/1.5 var(--sans); }
+#root .cf-summary-list { display: grid; margin: 0; padding: 0; list-style: none; }
+#root .cf-summary-list li { display: flex; justify-content: space-between; gap: 12px; min-height: 32px; align-items: center; color: var(--ink); font: 500 14px/1 var(--sans); }
+#root .cf-summary-list li + li { border-top: 1px solid var(--hair); }
+#root .cf-summary-list b { color: var(--deep); font: 400 13px/1 var(--mono); }
+#root .cf-summary-facts { display: flex; justify-content: space-between; margin: 0; padding-top: 12px; border-top: 1px solid var(--hair); color: var(--steel); font: 400 14px/1 var(--sans); }
+#root .cf-summary-facts dd { margin: 0; color: var(--ink); font-weight: 500; }
+html body #root .cf-submit { width: 100%; min-height: 54px; font-size: 16px; }
+#root .cf-missing { margin: -4px 0 0; color: var(--steel); font: 400 13px/1.45 var(--sans); text-align: center; }
+
+@media (max-width: 899px) {
+  #root .cf-grid { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  #root .cf-side { position: static; }
+  #root .cf-head { display: grid; gap: 12px; }
+}
+@media (max-width: 719px) {
+  #root .cf { padding-top: 16px; }
+  #root .cf-block { padding: 24px 0; }
+  #root .cf-asset { margin-inline: 0; padding-inline: 0; }
+  #root .cf-asset.is-on, #root .cf-asset:hover { background: transparent; }
+  #root .cf-summary { padding: 18px; box-shadow: none; }
+}
+@layer app-shapes {
+  .cf-block h2 b { border-radius: 6px !important; }
+  .cf-asset { border-radius: 0 !important; }
+  .cf-asset-logo, .cf-asset-logo img { border-radius: 50% !important; }
+  .cf-weight { border-radius: var(--r-ctl) !important; }
+  .cf-weight input { border-radius: 0 !important; }
+  .cf-total-bar, .cf-total-bar i { border-radius: 3px !important; }
+  .cf-summary { border-radius: var(--r-lg) !important; }
+}

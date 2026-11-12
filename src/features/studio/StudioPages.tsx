@@ -131,7 +131,7 @@ function StudioGuest(): ReactNode {
       <h2 id="studio-guest-title">Your studio for the funds you create</h2>
       <p>Connect the wallet you create funds with to see what needs your attention, every fund you run, and what they earn.</p>
       <WalletMenu inline />
-      <Link to="/create/design">Design a fund first <AppIcon name="right" size={16} /></Link>
+      <Link to="/create">Design a fund first <AppIcon name="right" size={16} /></Link>
     </section>
   );
 }

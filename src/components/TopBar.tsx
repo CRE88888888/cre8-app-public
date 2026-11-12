@@ -96,25 +96,27 @@ function useScrolledPast(threshold: number, enabled: boolean): boolean {
 function ModeSwitch({ mode }: { mode: AppMode }): ReactNode {
   const navigate = useNavigate();
   const target: AppMode = mode === 'studio' ? 'invest' : 'studio';
-  const to = MODE_HOME[target];
+  // 往 Studio 的入口直接進設計器：設計基金不需要錢包，這是「建立基金」真正的第一步。
+  const to = target === 'studio' ? '/create' : MODE_HOME[target];
   const onClick = (event: MouseEvent<HTMLAnchorElement>) => {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reduced || typeof document.startViewTransition !== 'function' || event.metaKey || event.ctrlKey) return;
     event.preventDefault();
     document.startViewTransition(() => flushSync(() => navigate(to)));
   };
-  // 文字直接說出按了會發生什麼：「Creator Studio」= 建立與管理自己的基金；「Exit Studio」= 回到投資。
-  // 只寫「Studio」「Investing」時，沒用過的人看不出這是什麼、按了去哪。
+  // 投資模式下這顆寫「Create a fund」：說的是使用者想做的事，不是我們內部的區域名稱（原本叫 Creator Studio）。
+  // 不放圖示 —— 原本的「方框加號」看起來像另一顆要按的按鈕，跟旁邊的 Connect wallet 搶。
+  // 離開 Studio 的那顆保留左箭頭，因為它是「返回」。
   return (
     <Link
       className="app-mode-switch"
       to={to}
       onClick={onClick}
-      title={target === 'studio' ? 'Create and manage your own funds' : 'Back to browsing and investing'}
+      title={target === 'studio' ? 'Design your own fund. No wallet needed to start.' : 'Back to browsing and investing'}
       data-target={target}
     >
-      <AppIcon name={target === 'studio' ? 'create' : 'left'} size={16} />
-      {target === 'studio' ? 'Creator Studio' : 'Exit Studio'}
+      {target === 'invest' && <AppIcon name="left" size={16} />}
+      {target === 'studio' ? 'Create a fund' : 'Exit Studio'}
     </Link>
   );
 }

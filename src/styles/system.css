@@ -149,6 +149,15 @@ html body .btn:disabled { border-color: transparent; background: var(--snow); co
 /* 頁首：錢包與模式切換同高。 */
 html body #root .masthead .header-wallet,
 html body #root .app-mode-switch { min-height: var(--h-md); height: var(--h-md); padding: 0 16px; font: 600 14px/1 var(--sans); }
+/* 「Create a fund」是安靜的文字連結：頁首只有 Connect wallet 一顆實心按鈕。 */
+html body #root .masthead .app-mode-switch[data-target="studio"] {
+  padding: 0 12px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 500;
+}
+html body #root .masthead .app-mode-switch[data-target="studio"]:hover { background: var(--snow); }
 html body #root .masthead .header-wallet[data-wallet-state="disconnected"] { border-color: var(--ink); background: var(--ink); color: var(--white); }
 html body #root .masthead .header-wallet[data-wallet-state="disconnected"]:hover { border-color: var(--deep); background: var(--deep); }
 

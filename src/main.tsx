@@ -46,3 +46,4 @@ import './styles/system.css';
 import './styles/market.css';
 import './styles/fund-page.css';
 import './styles/pages.css';
+import './styles/builder.css';
