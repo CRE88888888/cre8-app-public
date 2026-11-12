@@ -6,7 +6,7 @@
 
 ## 這個 repo 是什麼
 
-CRE8 ATP 的前端：Vite 7 + React 19 + TypeScript（strict），Bun 管理套件。使用者在這裡瀏覽基金、SIWE 登入、建立策略、deposit / withdraw、續期 session key、觸發再平衡。
+CRE8 ATP 的前端：Vite 8 + React 19 + TypeScript（strict），Bun 管理套件。使用者在這裡瀏覽基金、SIWE 登入、建立策略、deposit / withdraw、續期 session key、觸發再平衡。
 
 與其他 repo 的介面（只列已確認的）：
 - **backend**：前端一律打相對路徑 `/api/*`（`src/lib/api.ts`，`VITE_API_BASE` 預設 `/api`）。dev 由 `vite.config.ts` proxy 到 `127.0.0.1:8081` 並剝掉 `/api`；部署的 Worker 在 A 段**不接任何後端**，`public/_worker.js` 對 `/api/*` 一律回 `503 PREVIEW_ONLY`。B 段接後端時，SIWE 要求後端 `AUTH_DOMAIN` 等於前端網域（見 `docs/deploy-cloudflare.md`）。

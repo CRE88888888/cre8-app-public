@@ -22,7 +22,7 @@
 | 項目 | 版本 | 備註 |
 |---|---|---|
 | React | 19 | |
-| Vite | 7 | |
+| Vite | 8 | |
 | TypeScript | strict + `noUnusedLocals` + `verbatimModuleSyntax` | 未使用的 import 會讓 build 失敗 |
 | **shadcn/ui** | CLI 4.157 / style `new-york` | 元件是「複製進 repo」的原始碼，不是 npm 依賴 |
 | Tailwind CSS | **v4** | ⚠ 沒有 preflight（見 §3） |

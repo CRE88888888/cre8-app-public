@@ -6,7 +6,7 @@ CRE8 ATP 的前端。Vite + React 19 + TypeScript，公開頁保留設計稿 CSS
 
 | 層 | 選擇 | 為什麼 |
 |---|---|---|
-| 建置 | Vite 7 | dev server 啟動 <200ms，HMR 對「改一個表格欄位」這種工作差很多 |
+| 建置 | Vite 8 | dev server 啟動 <200ms，HMR 對「改一個表格欄位」這種工作差很多 |
 | server state | `@tanstack/react-query` | 快取、重試、`isPending`/`error` 的狀態機。手寫這些每次都會漏一個分支 |
 | client state | `zustand` | 只有錢包連線與 token 兩塊，Context 也能做但 zustand 的 selector 不會讓整個樹重繪 |
 | 樣式 | 設計稿 CSS + shadcn / Tailwind v4 | 公開頁保留來源 class；工具頁沿用可存取元件，token 使用 sx- 前綴 |
