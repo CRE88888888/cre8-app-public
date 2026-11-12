@@ -79,29 +79,42 @@ test("public history proxy is fixed, read-only and strips wallet credentials", a
     globalThis.fetch = original;
   }
 });
-test("existing authenticated Railway API path and static routing keep their behavior", async () => {
+test("preview-only /api never reaches any backend, while static routing keeps its behavior", async () => {
   const original = globalThis.fetch;
-  let seen: { url: string; init?: RequestInit } | null = null;
-  globalThis.fetch = async (input, init) => {
-    seen = { url: String(input), init };
+  const outbound: string[] = [];
+  globalThis.fetch = async (input) => {
+    outbound.push(String(input));
     return new Response("{}");
   };
   try {
-    await worker.fetch(
-      new Request("https://cre8-atp.pages.dev/api/portfolios?limit=1", {
-        headers: { Authorization: "Bearer fixture-only" },
-      }),
-      {},
-    );
-    expect(seen!.url).toBe(
-      "https://api-production-7f13.up.railway.app/portfolios?limit=1",
-    );
-    const headers = new Headers(seen!.init?.headers);
-    expect(headers.get("authorization")).toBe("Bearer fixture-only");
-    expect(headers.get("x-forwarded-host")).toBe("cre8-atp.pages.dev");
+    for (const [path, method] of [
+      ["/api", "GET"],
+      ["/api/health", "GET"],
+      ["/api/portfolios?limit=1", "GET"],
+      ["/api/auth/nonce", "POST"],
+    ] as const) {
+      const response = await worker.fetch(
+        new Request("https://cre8-app-migration-preview.example.workers.dev" + path, {
+          method,
+          headers: { Authorization: "Bearer fixture-only" },
+        }),
+        {
+          ASSETS: {
+            fetch: () => {
+              throw new Error("Unexpected static fetch");
+            },
+          },
+        },
+      );
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({
+        error: { code: "PREVIEW_ONLY", message: "App preview" },
+      });
+    }
+    expect(outbound).toHaveLength(0);
     let assets = 0;
     const response = await worker.fetch(
-      new Request("https://cre8-atp.pages.dev/funds/mag7"),
+      new Request("https://cre8-app-migration-preview.example.workers.dev/funds/mag7"),
       {
         ASSETS: {
           fetch: () => {
@@ -113,6 +126,13 @@ test("existing authenticated Railway API path and static routing keep their beha
     );
     expect(await response.text()).toBe("SPA");
     expect(assets).toBe(1);
+    // `/apis` is not an API path and still goes to static assets.
+    await worker.fetch(
+      new Request("https://cre8-app-migration-preview.example.workers.dev/apis"),
+      { ASSETS: { fetch: () => (assets++, new Response("SPA")) } },
+    );
+    expect(assets).toBe(2);
+    expect(outbound).toHaveLength(0);
   } finally {
     globalThis.fetch = original;
   }

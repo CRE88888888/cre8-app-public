@@ -9,7 +9,7 @@
 CRE8 ATP 的前端：Vite 7 + React 19 + TypeScript（strict），Bun 管理套件。使用者在這裡瀏覽基金、SIWE 登入、建立策略、deposit / withdraw、續期 session key、觸發再平衡。
 
 與其他 repo 的介面（只列已確認的）：
-- **backend**：前端一律打相對路徑 `/api/*`（`src/lib/api.ts`，`VITE_API_BASE` 預設 `/api`）。dev 由 `vite.config.ts` proxy 到 `127.0.0.1:8081` 並剝掉 `/api`；正式環境由 `public/_worker.js` 轉到 Railway 的 `API_ORIGIN`。SIWE 要求後端 `AUTH_DOMAIN` 等於前端網域（見 `docs/deploy-cloudflare.md`）。
+- **backend**：前端一律打相對路徑 `/api/*`（`src/lib/api.ts`，`VITE_API_BASE` 預設 `/api`）。dev 由 `vite.config.ts` proxy 到 `127.0.0.1:8081` 並剝掉 `/api`；部署的 Worker 在 A 段**不接任何後端**，`public/_worker.js` 對 `/api/*` 一律回 `503 PREVIEW_ONLY`。B 段接後端時，SIWE 要求後端 `AUTH_DOMAIN` 等於前端網域（見 `docs/deploy-cloudflare.md`）。
 - **cre8-contracts**：前端沒有自己的位址表。smart account、executor、EntryPoint 位址由後端回應帶來（例如 `RenewalParams`），`src/lib/kernel.ts` 只接受 EntryPoint v0.7。後端位址來源是 `backend/src/addresses.ts`（見 `docs/architecture.md`）。
 - **db**：前端不直接接觸，一律經過 backend。
 - **cre8-landing**：本 repo 的 `public/landing/` 是首頁靜態檔，由 `_worker.js` 在 `/` 提供；與 cre8-landing repo 的同步方式未在程式碼中確認。
@@ -23,7 +23,7 @@ src/components/   共用元件；ui/ 是 shadcn 複製進來的原始碼
 src/store/        zustand：session（sessionStorage）、wallet
 src/styles/       本專案樣式；vendor/ 是從 bnb-agent-vaults 複製的設計稿 CSS
 src/reference/    由 scripts/sync-public-ui.mjs 從釘住的來源 commit 同步的公開 UI 與資料
-public/_worker.js Cloudflare Pages 進階模式入口（/api 代理、首頁 landing）
+public/_worker.js Cloudflare Worker 入口（首頁 landing、/api 回 PREVIEW_ONLY）；設定在根目錄 wrangler.jsonc
 tests/            bun test 單元測試
 docs/             架構、使用者流程、部署、UI 接手規範（改 UI 前讀 docs/uiux-handoff.md）
 ```
@@ -40,7 +40,7 @@ bun run build                   # tsc + vite build，讀 .env.production（已�
 bun run dev                     # http://localhost:5173；需要 backend 跑在 127.0.0.1:8081
 ```
 
-沒有 lint script。dev 私鑰模式（只在 `import.meta.env.DEV` 出現）另需本機 anvil `127.0.0.1:8545`（走 `/rpc` proxy）。`demo.ts` 需要本機 backend。部署：merge 到 `main` 後由 Cloudflare Pages Git 整合（專案 `cre8-atp`）自動建置，**不用** GitHub Actions 或手動 `wrangler` 部署。
+沒有 lint script。dev 私鑰模式（只在 `import.meta.env.DEV` 出現）另需本機 anvil `127.0.0.1:8545`（走 `/rpc` proxy）。`demo.ts` 需要本機 backend。部署：merge 到 `main` 後由 Cloudflare Workers Builds 依 `wrangler.jsonc` 建置並部署到 Worker `cre8-app-migration-preview`（`https://cre8-app-migration-preview.example.workers.dev/`），**不用** GitHub Actions 或手動 `wrangler deploy`。A 段不綁 `cre8.finance` 底下任何網域；舊的 Pages 專案 `cre8-atp` 停止自動部署。本機確認用 `bunx wrangler dev`（見 `docs/deploy-cloudflare.md`）。
 
 ## 開 PR 前必跑（= `.github/workflows/ci.yml`）
 
@@ -61,7 +61,7 @@ bun run dev                     # http://localhost:5173；需要 backend 跑在 
 - session token 存 sessionStorage，provider 與私鑰不寫進任何儲存。
 - `/api/bundler` 是認證端點，要帶 `Authorization: Bearer <token>`。
 - `src/styles/vendor/` 與 `src/reference/` 是同步來源，不要手改；覆蓋寫在本專案自己的樣式。Tailwind 沒有 preflight，shadcn token 用 `sx-` 前綴。
-- 換後端改 `public/_worker.js` 的 `API_ORIGIN`；換前端網域要同步改後端 `AUTH_DOMAIN` / `AUTH_URI`。
+- A 段 `/api/*` 只回 `PREVIEW_ONLY`，不要把它轉到任何後端（包括 Railway）。B 段接後端時改 `public/_worker.js`；換前端網域要同步改後端 `AUTH_DOMAIN` / `AUTH_URI`。
 - `demo.ts` 內的私鑰是 Anvil 預設測試帳號，只能用於本機 fork，不要換成真私鑰。
 
 ## Commit / PR 慣例

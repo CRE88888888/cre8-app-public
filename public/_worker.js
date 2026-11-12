@@ -1,30 +1,34 @@
 /**
- * Cloudflare Pages 進階模式（advanced mode）的入口。
+ * Cloudflare Worker 入口（Worker `cre8-app-migration-preview`，設定在 `wrangler.jsonc`）。
  *
- * ## 為什麼需要一個 Worker，而不是直接讓前端打 Railway 的網址
+ * ## A 段（臨時網址）的規則
  *
- * 後端有兩道「網域必須一致」的檢查：
- *
- *   1. `auth.ts` 的 SIWE —— `message.domain` 必須逐字等於 `AUTH_DOMAIN`，
- *      否則登入直接被拒；而且錢包彈窗會顯示一個跟瀏覽器不同的網域（那正是釣魚的特徵）。
- *   2. CORS —— 後端只白名單 `CORS_ALLOWED_ORIGINS`（預設是 vite dev 的 localhost）。
- *
- * 讓兩者共用同一個 origin（`app.cre8.xyz`）之後，這兩件事都不需要處理：
- * 同源請求不會觸發 CORS，`AUTH_DOMAIN` 也自然等於使用者看到的網址。
+ * 部署到 `https://cre8-app-migration-preview.example.workers.dev/`，**不接任何後端**：
+ * `/api/*` 一律回 `503 {"error":{"code":"PREVIEW_ONLY",...}}`，不轉發到任何地方。
+ * 前端 `src/lib/api.ts` 會把它讀成 `ApiError`，所以頁面照常顯示，需要後端的動作會顯示錯誤。
+ * B 段接後端時再改這裡（見 `docs/deploy-cloudflare.md`）。
  *
  * ## 為什麼放在 `public/`
  *
- * Vite 會把 `public/` 的內容原樣複製到 `dist/`，而 Pages 的進階模式讀的就是
- * `dist/_worker.js`。放在這裡不必額外設定 build 步驟或 framework preset。
+ * 這支檔案以前是 Cloudflare Pages 進階模式的 `dist/_worker.js`。現在 Worker 的入口由
+ * `wrangler.jsonc` 的 `main` 直接指向這裡；Vite 仍會把它複製進 `dist/`，所以
+ * `public/.assetsignore` 把它排除在靜態資源之外，避免原始碼被當成公開檔案上傳。
  *
- * ## 路由規則
+ * ## 路由規則（`run_worker_first`：每個請求都先進這裡）
  *
- *   /api/*  → Railway 的 api（**去掉 `/api` 前綴** —— 後端路由是 `/portfolios`、`/health` 等）
- *   其他     → 靜態資源（`env.ASSETS`）
+ *   /                          → landing（`/landing/`）
+ *   /reference-data/demo-funds → 固定來源的公開資料，只讀
+ *   /api、/api/*               → 503 PREVIEW_ONLY
+ *   其他                        → 靜態資源（`env.ASSETS`，找不到時回 SPA 的 index.html）
  */
 
-/** 後端來源。要換環境（例如 staging）時改這一行就好。 */
-const API_ORIGIN = 'https://api-production-7f13.up.railway.app';
+/** A 段 `/api/*` 的固定回應。格式與後端錯誤一致：`{ error: { code, message } }`。 */
+function previewOnly() {
+  return Response.json(
+    {error:{code:'PREVIEW_ONLY',message:'App preview'}},
+    {status:503,headers:{'cache-control':'no-store'}},
+  );
+}
 
 export default {
   async fetch(request, env) {
@@ -54,26 +58,8 @@ export default {
     }
 
     const isApi = url.pathname === '/api' || url.pathname.startsWith('/api/');
-    if (!isApi) return env.ASSETS.fetch(request);
+    if (isApi) return previewOnly();
 
-    // 把 `/api/portfolios` 變成 `/portfolios`（後端不會有 `/api` 這一段）。
-    const stripped = url.pathname.replace(/^\/api/, '') || '/';
-    const target = new URL(stripped + url.search, API_ORIGIN);
-
-    // 逐項複製 request，而不是 `new Request(target, request)` —— 後者在某些
-    // method/body 組合下會拋錯（例如 GET 帶 body），也比較難看出到底轉發了什麼。
-    const headers = new Headers(request.headers);
-    // Host 要換成目標，否則 Railway 會用 app.cre8.xyz 去找服務。
-    headers.set('host', new URL(API_ORIGIN).host);
-    // 讓後端知道原始的對外網址（除錯用；後端目前不依賴它）。
-    headers.set('x-forwarded-host', url.host);
-    headers.set('x-forwarded-proto', url.protocol.replace(':', ''));
-
-    return fetch(target.toString(), {
-      method: request.method,
-      headers,
-      body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
-      redirect: 'manual',
-    });
+    return env.ASSETS.fetch(request);
   },
 };
