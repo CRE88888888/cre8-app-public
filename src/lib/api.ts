@@ -494,10 +494,32 @@ export type RedeemResult = {
   txHash: string | null;
   steps: { tokenIn: string; tokenOut: string; amountIn: string; amountOutMin: string }[];
   redeemedUsdE8: string;
+  /**
+   * 還沒賣的非現金名義額（美元，E8 整數字串），可以直接帶回 `sellUsdE8` 續做（backend#40）。
+   * `"0"` = 這一筆賣完了；`null` = 在規劃前就被擋下，不知道還剩多少（不是 0）；
+   * 欄位不存在 = 後端還沒有分批（當成一批賣完）。
+   */
+  remainingUsdE8?: string | null;
+  /** true = 這一批因為單筆上限只賣了一部分。 */
+  batched?: boolean;
 };
 
 export function redeemPortfolio(token: string, id: number, usd: number): Promise<RedeemResult> {
   return request<RedeemResult>(`/portfolios/${id}/redeem`, { token, method: 'POST', body: { usd } });
+}
+
+/**
+ * 分批提領的續做：把上一批回報的 `remainingUsdE8` 原樣帶回去（backend#40 的續作契約）。
+ *
+ * 首批用 `redeemPortfolio`（送 `usd`，後端按比例換算要賣多少）；之後每一批都用這一支。
+ * **不可以**再送一次原本的 `usd`：那會被當成一筆新的提領，重新按比例計算。
+ */
+export function continueRedeem(token: string, id: number, sellUsdE8: bigint): Promise<RedeemResult> {
+  return request<RedeemResult>(`/portfolios/${id}/redeem`, {
+    token,
+    method: 'POST',
+    body: { sellUsdE8: sellUsdE8.toString() },
+  });
 }
 
 /**

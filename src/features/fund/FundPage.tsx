@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { encodeFunctionData, formatEther, formatUnits, parseEther, parseUnits } from 'viem';
 import type { Address } from 'viem';
-import { closePosition, enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, getRenewalParams, getStrategy, listStrategies, postRebalance, postRenewalResult, redeemPortfolio } from '../../lib/api';
+import { closePosition, continueRedeem, enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, getRenewalParams, getStrategy, listStrategies, postRebalance, postRenewalResult, redeemPortfolio } from '../../lib/api';
 import { CHAIN_ID, approveCalldata, bsc as appChain, publicClientFor, readOnlyClient, sendGasTopUp, sendRenewalUserOp, sendSudoCalls, sendSweep, sendWithdraw } from '../../lib/kernel';
 import type { PortfolioStatus } from '../../lib/api';
 import { MOCK_FUNDS } from '../../data/mock-funds';
@@ -29,6 +29,7 @@ import { WHITELIST_COPY } from '../../lib/live-funds';
 import { hasSellablePositions, lowerOf, sweepNativeWei } from '../../lib/close-position';
 import { isPermissionFailure, renewedMessage, tradingPermissionHealth } from '../../lib/trading-permission';
 import { buyAllowanceState, buyLimitMessage, checkEnrollment, describePause, explainA10Failure, pauseSourcesFromFlags, sameAllocation, PLATFORM_PAUSED_MESSAGE } from '../../lib/a10';
+import { MAX_SELL_BATCHES, SellBatchError, SellUnfinished, formatRemainingUsd, runSellBatches } from '../../lib/sell-batches';
 import { AccountControls } from './AccountControls';
 import { accountOnchainKey, loadAccountOnchain, useAccountOnchain } from './use-account-onchain';
 import { useWallet } from '../../store/wallet';
@@ -1718,11 +1719,39 @@ function FundPageBody(): ReactNode {
       let soldSteps = 0;
       if (options.skipSell !== true && hasSellablePositions(before.holdings ?? [], cashSymbol)) {
         toast.replace(toastId, { tone: 'pending', title: 'Closing position', body: 'Selling every position to USDT…' });
-        const sold = await closePosition(token, holding.id);
-        if (sold.outcome !== 'executed' && sold.outcome !== 'noop') {
-          throw new Error(`closing the position failed: ${sold.reason}`);
+        // 大部位會被後端切成好幾批（每個資產有單筆上限，cre8-app#39）：一直叫 `/close` 到賣完為止。
+        // 每一次呼叫都等那一批確認才回來。清倉的續做不用帶剩餘量 —— `/close` 永遠是「賣掉剩下的全部」。
+        const close = () => closePosition(token, holding.id);
+        let run;
+        try {
+          run = await runSellBatches({
+            first: close,
+            next: close,
+            onContinue: ({ batch, remainingUsdE8 }) =>
+              toast.replace(toastId, {
+                tone: 'pending',
+                title: 'Selling in batches',
+                body: `Batch ${batch} — about ${formatRemainingUsd(remainingUsdE8)} left to sell…`,
+              }),
+          });
+        } catch (cause) {
+          if (!(cause instanceof SellBatchError)) throw cause;
+          throw new Error(
+            cause.completedBatches === 0
+              ? `closing the position failed: ${cause.message}`
+              : `closing the position stopped after ${cause.completedBatches} batch${cause.completedBatches === 1 ? '' : 'es'}: ${cause.message}. ` +
+                  'What was sold is safe in the fund account as USDT — press Close position again to continue.',
+          );
         }
-        soldSteps = sold.steps.length;
+        // 到批數上限還沒賣完：不掃。現在掃會把還沒賣的部位當成代幣原樣送回錢包，不是使用者要的「清倉」。
+        if (run.status === 'limit' && run.remainingUsdE8 !== null) {
+          throw new SellUnfinished(
+            `Sold in ${run.batches} batches so far; about ${formatRemainingUsd(run.remainingUsdE8)} is still to be sold. ` +
+              'Press Close position again to continue.',
+          );
+        }
+        // `stalled`：剩下的再賣也賣不動（單筆上限為 0、流動性不足、渣）→ 照舊往下，當代幣掃回錢包。
+        soldSteps = run.steps;
       }
       // 賣完重讀：USDT + 所有非零餘額（含賣不掉的塵埃）一起掃回去。
       // 清單（有哪些代幣）問後端；每一個的數量**再直接問鏈一次，取兩邊較小的那個**。
@@ -1798,6 +1827,13 @@ function FundPageBody(): ReactNode {
       ]);
       toast.replace(toastId, { tone: 'ok', title: 'Position closed', body: 'Every asset is back in your wallet.' });
     } catch (cause) {
+      // 到批數上限、還沒賣完：這不是錯誤，是「再按一次繼續」。顯示成提示，並重讀狀態讓數字跟上。
+      if (cause instanceof SellUnfinished) {
+        setWithdrawNote(cause.message);
+        toast.replace(toastId, { tone: 'warn', title: 'More to sell', body: cause.message });
+        await queryClient.invalidateQueries({ queryKey: ['fund-status'], refetchType: 'all' });
+        return;
+      }
       const raw = String((cause as Error).message ?? cause);
       const friendly = explainA10Failure(raw, { pauseSources, nextBuyAt: buyLimit?.nextBuyAt ?? null });
       setWithdrawError(friendly === null ? cause : new Error(friendly));
@@ -1891,20 +1927,50 @@ function FundPageBody(): ReactNode {
         return row === undefined ? 0 : Number(row.usdValueE8) / 1e8;
       };
 
+      // 分批（cre8-app#39）：每個資產有單筆交易上限，後端一次只賣一批並回報還剩多少（`remainingUsdE8`）。
+      // 所以「一輪」不再是一次呼叫，而是「首批送 usd，之後把剩餘量帶回去續做，直到 0」。
+      // 整次點擊最多 `MAX_SELL_BATCHES` 批；到了還沒賣完就停下來，**不轉出**，請使用者再按一次 ——
+      // 已經賣到的 USDT 留在帳戶裡當現金，下一次按的時候缺口自然變小，就是從剩下的部分接續。
       let available = cash;
+      let batchesLeft = MAX_SELL_BATCHES;
       for (let round = 1; round <= MAX_SELL_ROUNDS; round += 1) {
         const shortfall = effective - available;
-        if (shortfall <= 0.01) break;
+        if (shortfall <= 0.01 || batchesLeft <= 0) break;
         const target = Math.ceil((shortfall / (1 - SELL_BUFFER)) * 1e6) / 1e6;
         showProgress({ tone: 'pending', title: 'Selling positions', detail: 'Raising USDT for your sale.' });
-        const redeemed = await redeemPortfolio(token, holding.id, target);
-        if (redeemed.outcome !== 'executed' && redeemed.outcome !== 'noop') {
-          throw new Error(`selling the shortfall failed: ${redeemed.reason}`);
-        }
         toast.replace(toastId, { tone: 'pending', title: 'Selling positions', body: `Round ${round}: raising ${formatUsd(target)}…` });
+        let run;
+        try {
+          run = await runSellBatches({
+            first: () => redeemPortfolio(token, holding.id, target),
+            next: (remainingUsdE8) => continueRedeem(token, holding.id, remainingUsdE8),
+            maxBatches: batchesLeft,
+            onContinue: ({ batch, remainingUsdE8 }) => {
+              const detail = `Batch ${batch} — about ${formatRemainingUsd(remainingUsdE8)} left to sell.`;
+              showProgress({ tone: 'pending', title: 'Selling in batches', detail });
+              toast.replace(toastId, { tone: 'pending', title: 'Selling in batches', body: detail });
+            },
+          });
+        } catch (cause) {
+          if (!(cause instanceof SellBatchError)) throw cause;
+          throw new Error(
+            cause.completedBatches === 0
+              ? `selling the shortfall failed: ${cause.message}`
+              : `selling stopped after ${cause.completedBatches} batch${cause.completedBatches === 1 ? '' : 'es'}: ${cause.message}. ` +
+                  'What was sold is in the fund account as USDT — press Sell again to continue.',
+          );
+        }
+        batchesLeft -= run.batches;
+        if (run.status === 'limit' && run.remainingUsdE8 !== null) {
+          throw new SellUnfinished(
+            `Sold in ${MAX_SELL_BATCHES - batchesLeft} batches so far; about ${formatRemainingUsd(run.remainingUsdE8)} is still to be sold. ` +
+              'The USDT raised so far is waiting in the fund account — press Sell again to continue.',
+          );
+        }
         available = await readCash();
-        // `noop` 代表連一步都排不出來（沒有可賣的部位）→ 再試也是一樣，直接停。
-        if (redeemed.outcome === 'noop') break;
+        // 再賣也賣不動（沒有可賣的部位、單筆上限擋住、不知道還剩多少）→ 再試也是一樣，直接停，
+        // 往下把已經有的 USDT 轉出並說明少了多少。
+        if (run.status === 'stalled' || run.steps === 0) break;
       }
 
       // 轉出的金額全程走 BigInt，並以帳戶**鏈上的 USDT 餘額（wei）**為上限（cre8-app#18）。
@@ -1963,6 +2029,13 @@ function FundPageBody(): ReactNode {
         queryClient.invalidateQueries({ queryKey: ['fund-status'], refetchType: 'all' }),
       ]);
     } catch (cause) {
+      if (cause instanceof SellUnfinished) {
+        setWithdrawNote(cause.message);
+        showProgress({ tone: 'notice', title: 'More to sell', detail: cause.message });
+        toast.replace(toastId, { tone: 'warn', title: 'More to sell', body: cause.message });
+        await queryClient.invalidateQueries({ queryKey: ['fund-status'], refetchType: 'all' });
+        return;
+      }
       const rawDetail = String((cause as Error).message ?? cause);
       const friendlyDetail = explainA10Failure(rawDetail, { pauseSources, nextBuyAt: buyLimit?.nextBuyAt ?? null });
       const detail = (friendlyDetail ?? rawDetail).split('\n')[0].slice(0, 200);
