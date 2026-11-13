@@ -126,6 +126,12 @@ export type PortfolioStatus = {
   };
   blocked: unknown[];
   sessionKey?: SessionKeyReport | null;
+  /**
+   * registry 上這個帳戶的暫停旗標（1 = Safe、2 = 平台 operator、4 = 帳戶自己），與解好的來源。
+   * `null` = 讀不到；欄位不存在 = 後端還沒有這個功能（A10 之前）。
+   */
+  pauseFlags?: number | null;
+  pauseSources?: ('safe' | 'operator' | 'account')[] | null;
 };
 
 /** 續期：後端用 master seed 派生好的那把新 key（含要在鏈上執行的 install calldata）。 */

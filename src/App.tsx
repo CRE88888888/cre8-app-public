@@ -10,6 +10,7 @@ function StrategyRedirect(): ReactNode {
 }
 import { Toaster } from './components/Toast';
 import { TopBar } from './components/TopBar';
+import { PlatformPauseBanner } from './components/PlatformPauseBanner';
 import { useAutoConnect } from './lib/use-auto-connect';
 import { useAccountWatch } from './lib/use-account-watch';
 import { FundPage } from './features/fund/FundPage';
@@ -34,6 +35,7 @@ export function App(): ReactNode {
     <>
       <Toaster />
       <TopBar />
+      <PlatformPauseBanner />
       <Suspense fallback={<main className="page"><p role="status">Loading page…</p></main>}>
       <Routes>
         {/* 登入改由標頭的錢包選單處理；舊連結仍然可用，只是把使用者帶回目錄。 */}

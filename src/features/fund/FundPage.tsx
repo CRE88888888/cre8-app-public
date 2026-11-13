@@ -28,6 +28,9 @@ import { WalletMenu } from '../../components/WalletMenu';
 import { WHITELIST_COPY } from '../../lib/live-funds';
 import { hasSellablePositions, lowerOf, sweepNativeWei } from '../../lib/close-position';
 import { isPermissionFailure, renewedMessage, tradingPermissionHealth } from '../../lib/trading-permission';
+import { buyAllowanceState, buyLimitMessage, checkEnrollment, describePause, explainA10Failure, pauseSourcesFromFlags, sameAllocation, PLATFORM_PAUSED_MESSAGE } from '../../lib/a10';
+import { AccountControls } from './AccountControls';
+import { accountOnchainKey, loadAccountOnchain, useAccountOnchain } from './use-account-onchain';
 import { useWallet } from '../../store/wallet';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -343,6 +346,29 @@ function FundPageBody(): ReactNode {
   const live = status.data;
   // 交易權限（session key）現在的狀態；My position 抽屜用。
   const permission = tradingPermissionHealth(live?.sessionKey);
+  // A10（cre8-app#29）：這個帳戶在鏈上的 enroll／暫停／買入額度，以及 executor 的全域暫停。
+  // 每一項讀不到都是 null（舊合約沒有這些函式），那一項就不顯示。
+  const accountAddress = holding?.smartAccounts[0]?.address;
+  const onchain = useAccountOnchain(wallet, live?.executorAddress, accountAddress);
+  const onchainAccount = onchain.data?.account ?? null;
+  const platformPaused = onchain.data?.globalPaused === true;
+  const accountPaused = onchainAccount?.paused === true;
+  const pauseSources =
+    onchainAccount !== null && onchainAccount.pauseFlags !== null
+      ? pauseSourcesFromFlags(onchainAccount.pauseFlags)
+      : (live?.pauseSources ?? null);
+  const buyWindow = onchain.data?.allowance ?? null;
+  const buyLimit = buyWindow === null ? null : buyAllowanceState(buyWindow, Math.floor(Date.now() / 1000));
+  const upgradeAvailable =
+    onchainAccount !== null && onchainAccount.version > 0 && onchainAccount.latestVersion > onchainAccount.version;
+  /** 資產位址 → 代號（鏈上讀回來的配置只有位址）。 */
+  const symbolForAsset = (asset: string): string =>
+    (assets.data ?? []).find((row) => row.address.toLowerCase() === asset.toLowerCase())?.symbol ??
+    (live?.targets ?? []).find((row) => row.asset.toLowerCase() === asset.toLowerCase())?.symbol ??
+    shortAddress(asset);
+  /** 把 A10 的合約錯誤換成看得懂的話；認不出來就原樣回傳。 */
+  const friendlyFailure = (message: string): string =>
+    explainA10Failure(message, { pauseSources, nextBuyAt: buyLimit?.nextBuyAt ?? null }) ?? message;
 
   /**
    * 讀「哪些資產還沒授權給 executor」。
@@ -597,6 +623,23 @@ function FundPageBody(): ReactNode {
                               Add BNB in My position for network fees.
                             </p>
                           ) : null}
+                          {(platformPaused || accountPaused) && (
+                            <>
+                              <p className="fine warn" role="status">
+                                {platformPaused ? PLATFORM_PAUSED_MESSAGE : `${describePause(pauseSources)} The fund cannot sell for you while it is paused.`}
+                              </p>
+                              {/* 暫停時賣不了，但錢還是使用者的：不經過賣出，直接把帳戶裡的代幣原樣送回錢包。 */}
+                              <button
+                                type="button"
+                                className="btn ghost block"
+                                disabled={ticketBusy || wallet === null || totalUsd() === 0}
+                                onClick={() => void closeAll({ skipSell: true })}
+                                title="Send every token in this account to your wallet as it is, without selling"
+                              >
+                                {closing ? 'Sending…' : 'Withdraw assets without selling'}
+                              </button>
+                            </>
+                          )}
                           {withdrawNote === null ? null : <p className="fine warn">{withdrawNote}</p>}
                           {withdrawTx === null ? null : (
                             <p className="fine">
@@ -704,6 +747,24 @@ function FundPageBody(): ReactNode {
                       <button type="submit" className="btn primary block" disabled={ticketBusy || wallet === null || usdt === undefined || depositTooLarge || (mobile && depositUnits <= 0n)}>
                         {busy ? 'Sending…' : mobile ? 'Review order' : 'Buy'}
                       </button>
+                    )}
+                    {token !== null && platformPaused && <p className="fine warn" role="status">{PLATFORM_PAUSED_MESSAGE}</p>}
+                    {token !== null && !platformPaused && accountPaused && (
+                      <p className="fine warn" role="status">
+                        {describePause(pauseSources)} New money stays in USDT until trading is resumed.{' '}
+                        <button type="button" className="link-button" onClick={() => setMyPosition(true)}>Open My position</button>
+                      </p>
+                    )}
+                    {token !== null && !platformPaused && !accountPaused && buyLimit?.exhausted === true && (
+                      <p className="fine warn" role="status">
+                        {buyLimitMessage(buyLimit.nextBuyAt)} New money stays in USDT until then.
+                      </p>
+                    )}
+                    {token !== null && upgradeAvailable && onchainAccount !== null && (
+                      <p className="fine" role="status">
+                        Version {onchainAccount.latestVersion} of this fund is available; your account is on version {onchainAccount.version}.{' '}
+                        <button type="button" className="link-button" onClick={() => setMyPosition(true)}>Review the update</button>
+                      </p>
                     )}
                     <ErrorNote error={error} />
                   </form>
@@ -882,6 +943,26 @@ function FundPageBody(): ReactNode {
                 <ErrorNote error={error} />
               </div>
             </section>
+
+            <AccountControls
+              wallet={wallet}
+              token={token}
+              account={live.account}
+              dbStrategyId={holding?.strategyId ?? strategy?.id ?? 0}
+              onchain={onchain.data}
+              loading={onchain.isPending}
+              backendPauseSources={live.pauseSources ?? null}
+              symbolOf={symbolForAsset}
+              usdtDecimals={usdtDecimals}
+              usdtSymbol={usdt?.symbol ?? 'USDT'}
+              onChanged={async () => {
+                await Promise.all([
+                  queryClient.invalidateQueries({ queryKey: accountOnchainKey(live.executorAddress, live.account) }),
+                  queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token), refetchType: 'all' }),
+                  queryClient.invalidateQueries({ queryKey: ['fund-status'], refetchType: 'all' }),
+                ]);
+              }}
+            />
 
             <section className="panel pros-sec">
               <div className="panel-h">
@@ -1113,6 +1194,56 @@ function FundPageBody(): ReactNode {
     </>
   );
 
+  /**
+   * 讀鏈上的 enrollment 並與畫面上這檔基金比對（給 `deposit` 的首次存入前檢查用）。
+   *
+   * 回傳 `blocked`（不該轉錢的理由）或 `line`（要顯示給使用者的一句話）；兩個都是 null 代表「讀不到，不擋」。
+   */
+  async function verifyEnrollment(
+    account: Address,
+    portfolioId: number | null,
+  ): Promise<{ blocked: string | null; line: string | null }> {
+    const unknown = { blocked: null, line: null };
+    if (wallet === null || token === null || strategy === undefined) return unknown;
+    try {
+      const executor =
+        live?.executorAddress ??
+        (portfolioId === null ? null : (await getPortfolioStatus(token, portfolioId)).executorAddress);
+      if (executor === null || executor === undefined) return unknown;
+      // operator 的 enroll 剛上鏈時，錢包的 RPC 可能還沒看到：多問兩次再放棄。
+      let state = (await loadAccountOnchain(wallet, executor as Address, account)).account;
+      for (let attempt = 0; attempt < 2 && state !== null && state.version === 0; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1_500));
+        state = (await loadAccountOnchain(wallet, executor as Address, account)).account;
+      }
+      if (state === null || state.version === 0 || state.current === null) return unknown;
+
+      // 這一檔在後端發布過的每一版配置。鏈上釘的那一版必須是其中之一
+      // （不比版本號：後端與鏈上的編號是各自遞增的，沒有保證逐一相等）。
+      const published = (await getStrategy(token, strategy.id).catch(() => null))?.versions ?? [];
+      const known = published.map((version) =>
+        version.allocation.assets.map((asset) => ({ asset: asset.address, weightBps: asset.weightBps })),
+      );
+      const onchainAllocation = state.current;
+      const matching = known.find((allocation) => sameAllocation(onchainAllocation, allocation)) ?? null;
+      const check = checkEnrollment({
+        expectedStrategyId: strategy.onchainId === null ? state.strategyId : BigInt(strategy.onchainId),
+        onchainStrategyId: state.strategyId,
+        onchainVersion: state.version,
+        onchainAllocation,
+        expectedAllocation: known.length === 0 ? null : (matching ?? known[0] ?? null),
+      });
+      if (!check.ok) return { blocked: check.reason, line: null };
+      const assetsLine = [...onchainAllocation]
+        .sort((a, b) => b.weightBps - a.weightBps)
+        .map((row) => `${symbolForAsset(row.asset)} ${(row.weightBps / 100).toFixed(row.weightBps % 100 === 0 ? 0 : 2)}%`)
+        .join(' · ');
+      return { blocked: null, line: `On-chain: fund #${state.strategyId} version ${state.version} — ${assetsLine}` };
+    } catch {
+      return unknown;
+    }
+  }
+
   async function deposit(): Promise<void> {
     if (wallet === null || token === null || strategy === undefined || usdt === undefined) return;
     setBusy(true);
@@ -1147,6 +1278,25 @@ function FundPageBody(): ReactNode {
       const value = parseUnits(amount === '' ? '0' : amount, usdt.decimals);
       if (value === 0n) throw new Error('amount must be greater than zero');
 
+      // 首次存入前：核對鏈上實際 enroll 的策略、版本、資產，並顯示給使用者（cre8-app#29 第 3 點）。
+      //
+      // 為什麼：第一次 enroll 仍然是平台的 operator 送的（之後的升版才由使用者自己簽）。
+      // 在使用者把 USDT 轉進去之前，直接問 registry 這個帳戶被釘在哪個策略、哪一版、哪些資產：
+      //   - 釘的不是這一檔（策略 id 不同，或配置不是這檔發布過的任何一版）→ **不轉錢**，講清楚。
+      //   - 讀不到（舊合約、RPC 慢、enroll 那筆還沒被這個 RPC 看到）→ 不擋，照舊進行，只是沒有這段顯示。
+      // 只在帳戶裡還沒有錢時做：之後每次存入都擋一次沒有意義，帳戶狀態在 My position 隨時看得到。
+      let enrollmentLine: string | undefined;
+      if (holding === undefined || totalUsd() === 0) {
+        const verified = await verifyEnrollment(account as Address, portfolioIdAfterEnroll);
+        if (verified.blocked !== null) {
+          throw new Error(`${verified.blocked} Nothing was transferred. Contact support before you add money to this account.`);
+        }
+        enrollmentLine = verified.line ?? undefined;
+        if (enrollmentLine !== undefined) {
+          showProgress({ tone: 'pending', title: 'Checked your account on-chain', detail: enrollmentLine });
+        }
+      }
+
       // 動錢之前先確認這個帳戶的 gas 夠不夠；不夠就**自動補**。
       //
       // 為什麼：清倉時會把 BNB 掃回錢包（只留 0.003），下一次 deposit 之後再平衡就會碰到
@@ -1179,7 +1329,7 @@ function FundPageBody(): ReactNode {
         }
       }
 
-      showProgress({ tone: 'pending', title: 'Approve the USDT transfer in your wallet' });
+      showProgress({ tone: 'pending', title: 'Approve the USDT transfer in your wallet', detail: enrollmentLine });
       const hash = await sendUsdt(wallet, usdt.address as Address, account as Address, value);
       transferHash = hash;
       const sent = `${formatUnits(value, usdt.decimals)} ${usdt.symbol}`;
@@ -1294,7 +1444,11 @@ function FundPageBody(): ReactNode {
           //   executed → 配置完成
           //   blocked  → 被前置檢查擋下（最常見是 allowance），要**再按一次**或先 approve
           //   noop     → 規劃器認為沒事可做（錢沒被看到/已經對齊）
+          // A10：被平台全域暫停、帳戶暫停或買入額度擋下時，直接說是哪一種（錢已經在帳戶裡，仍是 USDT）。
+          const a10Reason = round.outcome === 'executed' ? null
+            : explainA10Failure(round.reason ?? '', { pauseSources, nextBuyAt: buyLimit?.nextBuyAt ?? null });
           allocation = round.outcome === 'executed' ? 'Initial allocation executed.' :
+            a10Reason !== null ? `Your USDT arrived and is waiting in your account. ${a10Reason}` :
             round.outcome === 'blocked' ? 'Initial allocation was blocked. Check Portfolio for the latest status.' :
               'No initial allocation was executed. Check Portfolio for the latest status.';
           const tone = round.outcome === 'executed' ? 'ok' : round.outcome === 'blocked' ? 'bad' : 'warn';
@@ -1307,7 +1461,7 @@ function FundPageBody(): ReactNode {
           toast.replace(configuringId, {
             tone,
             title,
-            body: round.txHash ?? round.reason ?? undefined,
+            body: round.txHash ?? a10Reason ?? round.reason ?? undefined,
           });
         } catch (cause) {
           // 配置失敗不影響入金；收據獨立顯示這兩個狀態。
@@ -1349,11 +1503,11 @@ function FundPageBody(): ReactNode {
         title: transferState === 'confirmed' ? 'Purchase received' : 'Transfer submitted',
         detail: transferState === 'confirmed' ? 'Initial allocation did not complete. Check your portfolio.' : 'Check the block explorer for confirmation.',
         hash: transferHash,
-      } : { tone: 'error', title: 'Purchase not sent', detail: String((cause as Error).message ?? cause).split('\n')[0].slice(0, 180) });
+      } : { tone: 'error', title: 'Purchase not sent', detail: friendlyFailure(String((cause as Error).message ?? cause)).split('\n')[0].slice(0, 200) });
       setError(cause);
       toast.replace(toastId, transferHash ? {
         tone: 'warn', title: transferState === 'confirmed' ? 'Purchase received; check allocation' : 'Check transfer status', body: transferHash,
-      } : { tone: 'bad', title: 'Purchase failed', body: (cause as Error).message.split('\n')[0].slice(0, 140) });
+      } : { tone: 'bad', title: 'Purchase failed', body: friendlyFailure((cause as Error).message).split('\n')[0].slice(0, 180) });
     } finally {
       setBusy(false);
     }
@@ -1542,7 +1696,11 @@ function FundPageBody(): ReactNode {
     }
   }
 
-  async function closeAll(): Promise<void> {
+  /**
+   * `skipSell`：不賣，直接把帳戶裡的代幣原樣掃回錢包（owner 簽，不經過 executor）。
+   * 平台全域暫停或帳戶被暫停時，賣出一定被合約擋下；這是那時候把資產領出來的路（cre8-app#29）。
+   */
+  async function closeAll(options: { skipSell?: boolean } = {}): Promise<void> {
     if (wallet === null || token === null || holding === undefined) return;
     const account = holding.smartAccounts[0]?.address;
     if (account === undefined) throw new Error('找不到帳戶');
@@ -1558,7 +1716,7 @@ function FundPageBody(): ReactNode {
       const cashSymbol = usdt?.symbol ?? 'USDT';
       const before = await getPortfolioStatus(token, holding.id);
       let soldSteps = 0;
-      if (hasSellablePositions(before.holdings ?? [], cashSymbol)) {
+      if (options.skipSell !== true && hasSellablePositions(before.holdings ?? [], cashSymbol)) {
         toast.replace(toastId, { tone: 'pending', title: 'Closing position', body: 'Selling every position to USDT…' });
         const sold = await closePosition(token, holding.id);
         if (sold.outcome !== 'executed' && sold.outcome !== 'noop') {
@@ -1617,7 +1775,7 @@ function FundPageBody(): ReactNode {
         setWithdrawTx(receipt.txHash);
         setWithdrawNote(
           soldSteps === 0
-            ? `Nothing left to sell — ${balances.filter((row) => row.amountWei > 0n).length} token(s) sent back to your wallet.`
+            ? `${options.skipSell === true ? 'Sent without selling' : 'Nothing left to sell'} — ${balances.filter((row) => row.amountWei > 0n).length} token(s) sent back to your wallet.`
             : `Closed: ${soldSteps} sell step(s), then ${balances.filter((row) => row.amountWei > 0n).length} token(s) sent back to your wallet.`,
         );
       }
@@ -1640,9 +1798,11 @@ function FundPageBody(): ReactNode {
       ]);
       toast.replace(toastId, { tone: 'ok', title: 'Position closed', body: 'Every asset is back in your wallet.' });
     } catch (cause) {
-      setWithdrawError(cause);
-      if (isPermissionFailure(String((cause as Error).message ?? cause))) setWithdrawNote(PERMISSION_HINT);
-      toast.replace(toastId, { tone: 'bad', title: 'Close failed', body: (cause as Error).message.split('\n')[0].slice(0, 140) });
+      const raw = String((cause as Error).message ?? cause);
+      const friendly = explainA10Failure(raw, { pauseSources, nextBuyAt: buyLimit?.nextBuyAt ?? null });
+      setWithdrawError(friendly === null ? cause : new Error(friendly));
+      if (isPermissionFailure(raw)) setWithdrawNote(PERMISSION_HINT);
+      toast.replace(toastId, { tone: 'bad', title: 'Close failed', body: (friendly ?? raw).split('\n')[0].slice(0, 180) });
     } finally {
       setClosing(false);
     }
@@ -1803,8 +1963,10 @@ function FundPageBody(): ReactNode {
         queryClient.invalidateQueries({ queryKey: ['fund-status'], refetchType: 'all' }),
       ]);
     } catch (cause) {
-      const detail = String((cause as Error).message ?? cause).split('\n')[0].slice(0, 180);
-      setWithdrawError(cause);
+      const rawDetail = String((cause as Error).message ?? cause);
+      const friendlyDetail = explainA10Failure(rawDetail, { pauseSources, nextBuyAt: buyLimit?.nextBuyAt ?? null });
+      const detail = (friendlyDetail ?? rawDetail).split('\n')[0].slice(0, 200);
+      setWithdrawError(friendlyDetail === null ? cause : new Error(friendlyDetail));
       if (isPermissionFailure(String((cause as Error).message ?? cause))) setWithdrawNote(PERMISSION_HINT);
       showProgress({ tone: 'error', title: 'Sale not completed', detail });
       toast.replace(toastId, { tone: 'bad', title: 'Sale not completed', body: detail });
