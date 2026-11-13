@@ -137,7 +137,13 @@
 - **基金頁**：封面壓矮（248px），Fund facts 與人物介紹疊在封面右下角；Sharpe 與波動直接列在圖表下方（原本要多點一次）；交易面板下方多一段「What you get」（買入前就看到會買到哪些資產）；買入金額有常用金額一鍵帶入（桌面與手機）；持倉表每列有權重條。
 - **Creator 頁**：用跟 Funds 同一張榜，不再是大封面卡片格。
 - **頁首的入口叫「Create a fund」**（原本是帶圖示的「Creator Studio」按鈕）：寫使用者想做的事，不是內部的區域名稱；不放圖示、沒有底色，頁首只有 Connect wallet 一顆實心按鈕。Studio 內仍是「← Exit Studio」。
-- **`/create` 就是基金設計器**（封面、命名、加資產、每個資產的策略、整檔規則），不需要錢包就能開始。`/create/design` 是舊網址，保留。設計器是同步來的元件，外觀由 `src/styles/builder.css` 套上 v2（圓角、輸入框、Off／On 開關改成淡色軌道、選資產對話框的分頁、策略抽屜）。
+- **`/create` 就是基金設計器**，不需要錢包就能開始。`/create/design` 是舊網址，保留。元件是 `src/features/create/FundDesigner.tsx`：2026-11-13 從 `src/reference/components/fund-builder.tsx` 複製出來，讓 app 可以自己安排畫面；邏輯仍然全部來自 `src/reference/lib/fund-builder.ts`，草稿的儲存位置與格式不變（啟用表單讀同一份）。原本的 reference 元件沒有動，也不再被使用。外觀在 `src/styles/builder.css`。
+  - **順序是「先做正事」**：① Holdings → ② 名稱與封面 → ③ More options。原本第一屏是一張大封面圖，加資產在兩屏之後。
+  - **Holdings**：上方有 Popular 常用資產，一鍵加入；旁邊是 Browse all assets。加入後預設是 Buy & hold，**不會自動彈出策略抽屜**；想調策略的人點該列的策略按鈕。
+  - **名稱與封面**：名稱是大輸入框，封面是右邊的縮圖（248px），按 Change cover 才展開選項。
+  - **More options** 預設收合：分類、X 帳號、整檔規則都是選填。裡面有設定時標題旁顯示「In use」；裡面的欄位有錯時自動展開。
+  - **摘要**跟著捲動；Review 不能按時下方直接說還缺什麼。「Room used」改叫「Capacity used」。
+  - 手機：區塊不加外框，用細線分段。
 - **`/create/activate` 是啟用表單**（真的建立：createStrategy → publishVersion → enroll → approve）。左邊三個步驟（命名、選資產與權重、再平衡頻率），右邊跟著捲動的「Your fund」摘要。資產是可點的列，勾了才出現權重框；有「Split evenly」；合計用進度條顯示還差多少；按鈕下方一次只說一件還缺的事。未登入時顯示三步驟說明，主要動作是「Design a fund」。
 - **資產頁**：跟基金頁同一條左緣（1344px／40px）與右側欄；Create 卡為深色。
 - 未動：錢包、SIWE、API、交易與簽名流程的邏輯。

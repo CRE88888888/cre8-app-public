@@ -91,3 +91,221 @@ body.atp-complete-create [class*="_dFoot_"] { border-top: 1px solid var(--hair);
   body.atp-complete-create:not(#_):not(#__) [class*="_bar_"] { border-radius: 3px !important; }
   body.atp-complete-create:not(#_):not(#__) :is([class*="_logo18_"], [class*="_logo22_"], [class*="_logo24_"], [class*="_logo28_"], [class*="_logo32_"], [class*="_logo40_"]) { border-radius: 50% !important; }
 }
+
+/* ══ 版面整理（2026-11-13）：第一屏就能命名、加資產 ══════════════════════════
+   原本封面是一張佔滿第一屏的大圖，真正要做的事（加資產）在兩屏之後。
+   DOM 順序不動（鍵盤焦點順序要跟畫面一致），只把前兩個區塊收緊：
+   封面變成名稱旁的縮圖，分類與 X 帳號並成一列。區塊用編號標出先後。 */
+body.atp-complete-create #root [class*="_main_"] { counter-reset: builder-step; }
+body.atp-complete-create #root [class*="_main_"] > section > :first-child h2 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  color: var(--ink);
+  font: 600 18px/1.25 var(--sans);
+  letter-spacing: -.2px;
+}
+body.atp-complete-create #root [class*="_main_"] > section > :first-child h2::before {
+  counter-increment: builder-step;
+  content: counter(builder-step);
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--white);
+  font: 500 12px/1 var(--mono);
+  letter-spacing: 0;
+}
+
+@media (min-width: 720px) {
+  body.atp-complete-create #root [class*="_main_"] { gap: 16px; }
+  body.atp-complete-create #root section[aria-label="Fund cover"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 248px;
+    grid-template-areas: "heading preview" "name preview" "controls controls" "error error";
+    gap: 14px 24px;
+    align-items: start;
+    padding: 22px 24px;
+  }
+  body.atp-complete-create #root section[aria-label="Fund cover"] > [class*="_heading_"] { grid-area: heading; margin: 0; }
+  body.atp-complete-create #root section[aria-label="Fund cover"] > [class*="_nameField_"] { grid-area: name; margin: 0; }
+  body.atp-complete-create #root section[aria-label="Fund cover"] > [class*="_nameField_"] input { min-height: 52px; font: 600 20px/1 var(--sans); letter-spacing: -.3px; }
+  body.atp-complete-create #root section[aria-label="Fund cover"] > [class*="_preview_"] {
+    grid-area: preview;
+    align-self: stretch;
+    width: 248px;
+    min-height: 124px;
+    aspect-ratio: auto;
+  }
+  body.atp-complete-create #root section[aria-label="Fund cover"] > [class*="_controls_"] { grid-area: controls; padding-top: 6px; }
+  body.atp-complete-create #root section[aria-label="Fund cover"] > [class*="_error_"] { grid-area: error; margin: 0; }
+  body.atp-complete-create #root section[aria-label="Fund cover"] [class*="_preview_"] > strong {
+    left: 14px;
+    right: 14px;
+    bottom: 12px;
+    font: 600 16px/1.15 var(--sans);
+    letter-spacing: -.3px;
+  }
+
+  body.atp-complete-create #root section[aria-label="Fund collection and X profile"] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 20px;
+    align-items: start;
+    padding: 22px 24px;
+  }
+  body.atp-complete-create #root section[aria-label="Fund collection and X profile"] > :is(:first-child, :nth-child(n + 4)) { grid-column: 1 / -1; margin: 0; }
+  body.atp-complete-create #root section[aria-label="Fund collection and X profile"] > label { margin: 0; }
+  body.atp-complete-create #root aside[class*="_side_"] { position: sticky; top: 88px; }
+}
+
+/* 手機：區塊不加外框，用上方細線分段；封面收成一條矮橫幅。 */
+@media (max-width: 719px) {
+  body.atp-complete-create #root :is([class*="_editor_"], [class*="_panel_"]) {
+    padding: 20px 0 4px;
+    border: 0;
+    border-top: 1px solid var(--hair);
+    background: transparent;
+    box-shadow: none;
+  }
+  body.atp-complete-create #root aside[class*="_side_"] { padding-top: 20px; box-shadow: none; }
+  body.atp-complete-create #root section[aria-label="Fund cover"] [class*="_preview_"] { min-height: 0; aspect-ratio: 3.2; }
+  body.atp-complete-create #root section[aria-label="Fund cover"] [class*="_preview_"] > strong { left: 14px; right: 14px; bottom: 12px; font: 600 18px/1.15 var(--sans); letter-spacing: -.3px; }
+  body.atp-complete-create #root [class*="_head_"] h1 { font: 700 34px/1.1 var(--sans); letter-spacing: -1px; }
+}
+
+/* Review 對話框 */
+body.atp-complete-create dialog[class*="_modal_"] { border: 0; box-shadow: var(--shadow-pop); }
+body.atp-complete-create dialog[class*="_modal_"]::backdrop { background: rgba(12, 23, 34, .45); }
+body.atp-complete-create dialog[class*="_modal_"] h2 { font: 600 24px/1.2 var(--sans); letter-spacing: -.5px; }
+body.atp-complete-create dialog[class*="_modal_"] [class*="_tag_"] { color: var(--steel); font: 500 12px/1.2 var(--sans); letter-spacing: 0; text-transform: none; }
+body.atp-complete-create dialog[class*="_modal_"] input[class*="_bigInput_"] {
+  min-height: 48px;
+  border: 1px solid var(--hair-2);
+  background: var(--white);
+  color: var(--ink);
+  transition: border-color .15s var(--ease), box-shadow .15s var(--ease);
+}
+body.atp-complete-create dialog[class*="_modal_"] input[class*="_bigInput_"]:focus { border-color: var(--signal); outline: 0; box-shadow: 0 0 0 3px var(--signal-soft); }
+body.atp-complete-create dialog[class*="_modal_"] input[type="range"] { accent-color: var(--ink); }
+body.atp-complete-create dialog[class*="_modal_"] :is([class*="_quote_"], [class*="_notice_"], [class*="_launch_"]) { border: 0; background: var(--paper); color: var(--deep); }
+body.atp-complete-create dialog[class*="_modal_"] [class*="_fixed_"] { color: var(--ink); }
+
+@layer app-shapes {
+  body.atp-complete-create:not(#_):not(#__) dialog[class*="_modal_"] { border-radius: var(--r-lg) !important; }
+  body.atp-complete-create:not(#_):not(#__) dialog[class*="_modal_"] :is(input[class*="_bigInput_"], [class*="_quote_"], [class*="_notice_"], [class*="_launch_"]) { border-radius: var(--r-ctl) !important; }
+  @media (max-width: 719px) {
+    body.atp-complete-create:not(#_):not(#__) :is([class*="_editor_"], [class*="_panel_"]) { border-radius: 0 !important; }
+  }
+}
+
+/* ══ 新版設計器（features/create/FundDesigner.tsx，2026-11-13）══════════════
+   順序：1 Holdings（常用資產一鍵加入）→ 2 名稱與封面 → 3 More options（預設收合）。 */
+body.atp-complete-create #root [class*="_quickAdd_"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--hair);
+}
+body.atp-complete-create #root [class*="_quickLabel_"] { margin-right: 4px; color: var(--steel); font: 500 13px/1 var(--sans); }
+body.atp-complete-create #root button[class*="_quickChip_"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 12px 0 8px;
+  border: 0;
+  background: var(--snow);
+  color: var(--ink);
+  font: 500 13px/1 var(--mono);
+  cursor: pointer;
+  transition: background-color .15s var(--ease), transform .12s var(--ease);
+}
+body.atp-complete-create #root button[class*="_quickChip_"]:hover:not(:disabled) { background: #e2e5e9; }
+body.atp-complete-create #root button[class*="_quickChip_"]:active:not(:disabled) { transform: scale(.97); }
+body.atp-complete-create #root button[class*="_quickChip_"]:disabled { background: transparent; box-shadow: inset 0 0 0 1px var(--hair); color: var(--slate); cursor: default; }
+body.atp-complete-create #root button[class*="_quickChip_"]:disabled::after { content: "✓"; font: 500 12px/1 var(--sans); color: var(--positive); }
+body.atp-complete-create #root button[class*="_quickBrowse_"] {
+  min-height: 36px;
+  margin-left: auto;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 500 14px/1 var(--sans);
+  text-decoration: none;
+  cursor: pointer;
+}
+body.atp-complete-create #root button[class*="_quickBrowse_"]::after { content: " →"; }
+body.atp-complete-create #root button[class*="_quickBrowse_"]:hover:not(:disabled) { background: var(--snow); }
+body.atp-complete-create #root [class*="_empty_"] { padding: 28px 24px 30px; text-align: left; }
+body.atp-complete-create #root [class*="_empty_"] p { max-width: 60ch; margin: 0; color: var(--steel); font: 400 14px/1.55 var(--sans); }
+
+/* More options：一列可展開的標題，展開後裡面是原本的兩個區塊。 */
+body.atp-complete-create #root details[class*="_more2_"] > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 18px 24px;
+  border: 1px solid var(--hair);
+  background: var(--white);
+  transition: background-color .15s var(--ease);
+}
+body.atp-complete-create #root details[class*="_more2_"] > summary:hover { background: var(--paper); }
+body.atp-complete-create #root details[class*="_more2_"] > summary::after { color: var(--steel); font: 400 18px/1 var(--mono); }
+body.atp-complete-create #root [class*="_more2Title_"] { display: flex; align-items: center; gap: 12px; color: var(--ink); font: 600 18px/1.25 var(--sans); letter-spacing: -.2px; }
+body.atp-complete-create #root [class*="_more2Title_"]::before {
+  counter-increment: builder-step;
+  content: counter(builder-step);
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--white);
+  font: 500 12px/1 var(--mono);
+}
+body.atp-complete-create #root details[class*="_more2_"] > summary [class*="_note_"] { color: var(--steel); font: 400 14px/1.4 var(--sans); }
+body.atp-complete-create #root [class*="_more2Tag_"] { padding: 3px 8px; background: var(--signal-soft); color: var(--signal); font: 500 12px/1.2 var(--sans); }
+body.atp-complete-create #root [class*="_more2Body_"] { gap: 16px; padding-top: 16px; }
+/* 展開後裡面的區塊標題比外層小一級、沒有編號。 */
+body.atp-complete-create #root [class*="_more2Body_"] h2 { font: 600 16px/1.25 var(--sans); letter-spacing: -.1px; }
+
+@media (max-width: 719px) {
+  body.atp-complete-create #root [class*="_quickAdd_"] { padding: 12px 0 14px; border-bottom: 0; }
+  body.atp-complete-create #root button[class*="_quickBrowse_"] { margin-left: 0; padding-inline: 0; }
+  body.atp-complete-create #root [class*="_empty_"] { padding: 8px 0 20px; }
+  body.atp-complete-create #root details[class*="_more2_"] > summary { padding: 18px 0; border: 0; border-top: 1px solid var(--hair); background: transparent; }
+}
+@layer app-shapes {
+  body.atp-complete-create:not(#_):not(#__) :is(button[class*="_quickChip_"], button[class*="_quickBrowse_"]) { border-radius: var(--r-sm) !important; }
+  body.atp-complete-create:not(#_):not(#__) details[class*="_more2_"] > summary { border-radius: var(--r-lg) !important; }
+  body.atp-complete-create:not(#_):not(#__) [class*="_more2Tag_"] { border-radius: var(--r-xs) !important; }
+  @media (max-width: 719px) {
+    body.atp-complete-create:not(#_):not(#__) details[class*="_more2_"] > summary { border-radius: 0 !important; }
+  }
+}
+
+/* 收尾（2026-11-13） */
+/* 上面已經有 Popular 與 Browse all assets，列表下方那顆「+ Add asset」就不重複。 */
+body.atp-complete-create #root section[aria-label="Holdings"]:has([class*="_quickAdd_"]) [class*="_foot_"] > [class*="_lineBtn_"] { display: none; }
+@media (min-width: 720px) {
+  body.atp-complete-create #root section[aria-label="Fund cover"] { row-gap: 0; padding-bottom: 22px; }
+  body.atp-complete-create #root section[aria-label="Fund cover"] > [class*="_heading_"] { margin-bottom: 14px; }
+  body.atp-complete-create #root section[aria-label="Fund cover"] > [class*="_controls_"] { padding-top: 20px; }
+}
+@layer app-shapes {
+  /* 多一個 :not() 只為了壓過上面桌面版的圓角規則（那條的 :is() 裡有 dialog 選擇器，權重較高）。 */
+  @media (max-width: 719px) {
+    body.atp-complete-create:not(#_):not(#__):not(#___) #root :is(section, aside, div):is([class*="_editor_"], [class*="_panel_"]) { border-radius: 0 !important; }
+  }
+}
