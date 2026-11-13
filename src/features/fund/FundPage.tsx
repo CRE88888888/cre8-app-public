@@ -1138,7 +1138,7 @@ function FundPageBody(): ReactNode {
             body: `Sending ${Number(formatEther(topUpWei)).toFixed(4)} BNB to the fund's account…`,
           });
           // 這是 owner 錢包 → 帳戶的普通 BNB 轉帳（會再要一次簽名）。
-          showProgress({ tone: 'pending', title: 'Top up network gas', detail: 'Approve the BNB transfer in your wallet.' });
+          showProgress({ tone: 'pending', title: 'Top up network gas', detail: 'Approve the BNB transfer in your wallet, then wait for it to confirm.' });
           await sendGasTopUp({ wallet, to: account as Address, valueWei: topUpWei });
           toast.replace(toastId, { tone: 'pending', title: 'Buy', body: 'Confirm the USDT transfer in your wallet…' });
         }

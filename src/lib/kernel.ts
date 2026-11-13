@@ -390,16 +390,45 @@ export async function readAllowance(args: {
 }
 
 /**
- * 從 owner 錢包送 BNB 到某個位址（給新帳戶付 UserOp 的 gas）。
+ * 從 owner 錢包送 BNB 到某個位址（給新帳戶付 UserOp 的 gas），**並等這筆轉帳上鏈**才回傳。
  *
  * 為什麼需要它：新帳戶部署時 operator 付 gas，但**之後**每一筆 UserOp（approve、再平衡）都由帳戶自己付。
  * 帳戶沒有 BNB 時，approve 這筆 op 會因為付不出 gas 而失敗 —— 而錯誤訊息不會提到「沒錢」。
+ *
+ * 為什麼要等上鏈（cre8-app#22）：呼叫端下一步就是送 UserOp，bundler 估 gas 時讀的是鏈上餘額。
+ * 只拿到 tx hash 就往下走的話，轉帳還在 mempool、帳戶還是 0 BNB，UserOp 會在模擬時
+ * `AA21 didn't pay prefund`。anvil「有交易就出塊」時看不出來，定時出塊（真鏈也是）就會撞到。
+ *
+ * - 轉帳 revert → 丟錯（gas 沒到，後面一定失敗，不如現在講清楚）。
+ * - 等到逾時還沒看到收據 → **不丟錯**，照舊回傳 hash 讓呼叫端繼續：交易已經送出，
+ *   多半只是 RPC 慢；這時中斷流程（例如買入做到一半）比繼續更糟。
  */
 export async function sendGasTopUp(args: {
   wallet: RenewalWallet;
   to: Address;
   valueWei: bigint;
+  /** 等收據的上限（毫秒）。預設 60 秒。 */
+  timeoutMs?: number;
+  /** 輪詢間隔（毫秒）。BSC 出塊不到 1 秒，預設每秒問一次。 */
+  pollingIntervalMs?: number;
 }): Promise<Hex> {
+  const hash = await submitGasTopUp(args);
+  let status: 'success' | 'reverted';
+  try {
+    const receipt = await publicClientFor(args.wallet).waitForTransactionReceipt({
+      hash,
+      timeout: args.timeoutMs ?? 60_000,
+      pollingInterval: args.pollingIntervalMs ?? 1_000,
+    });
+    status = receipt.status;
+  } catch {
+    return hash;
+  }
+  if (status !== 'success') throw new Error(`The gas top-up transaction reverted: ${hash}`);
+  return hash;
+}
+
+async function submitGasTopUp(args: { wallet: RenewalWallet; to: Address; valueWei: bigint }): Promise<Hex> {
   if (args.wallet.kind === 'dev') {
     const rpcUrl = import.meta.env.VITE_RPC_URL ?? (import.meta.env.DEV ? '/rpc' : undefined);
     if (rpcUrl === undefined || rpcUrl === '') {

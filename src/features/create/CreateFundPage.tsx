@@ -36,7 +36,7 @@ const STEP_LABEL: Record<Exclude<Step, 'idle' | 'done'>, string> = {
   'creating-strategy': 'Creating the strategy (mirrors to the on-chain registry)…',
   'publishing-version': 'Publishing the version (weights + schedule)…',
   enrolling: 'Deploying the smart account (enroll)…',
-  'topping-up-gas': 'Sending gas to the new account…',
+  'topping-up-gas': 'Sending gas to the new account and waiting for it to arrive…',
   approving: 'Signing the approval (one wallet signature)…',
 };
 
@@ -155,6 +155,7 @@ export function ActivateFundPage(): ReactNode {
             const shortfall = BigInt(portfolio.gas?.shortfallWei ?? '0');
             if (shortfall > 0n) {
               setStep('topping-up-gas');
+              // `sendGasTopUp` 會等轉帳上鏈才回來：下面的 approve UserOp 要靠這筆 BNB 付 gas（cre8-app#22）。
               await sendGasTopUp({ wallet: renewalWallet, to: status.account as `0x${string}`, valueWei: shortfall });
             }
             setStep('approving');
