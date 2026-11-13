@@ -15,3 +15,7 @@ dist/
 
 # wrangler dev 的本機暫存
 .wrangler/
+
+# 誤 commit 過的本機產物：GitHub Actions run log 的快取與一個空檔（cre8-app#9）
+.gh-cache/
+/span
