@@ -11,12 +11,14 @@ import {
   diffAllocations,
   pauseSourcesFromFlags,
   resumeNeedsWarning,
+  upgradeDoneMessage,
+  upgradeSummary,
   PLATFORM_PAUSED_MESSAGE,
 } from '../../lib/a10';
 import type { PauseSource } from '../../lib/a10';
-import { enrollCalldata, setPausedCalldata } from '../../lib/atp-contracts';
-import type { OnchainAllocation } from '../../lib/atp-contracts';
-import { sendSudoCalls } from '../../lib/kernel';
+import { readOnchainAccount, setPausedCalldata, upgradeCalls } from '../../lib/atp-contracts';
+import type { AccountCall, OnchainAccount, OnchainAllocation } from '../../lib/atp-contracts';
+import { publicClientFor, sendSudoCalls } from '../../lib/kernel';
 import type { RenewalWallet } from '../../lib/kernel';
 import type { AccountOnchain } from './use-account-onchain';
 
@@ -30,11 +32,15 @@ import type { AccountOnchain } from './use-account-onchain';
  * 兩個動作都是 owner 簽的 sudo UserOp：`account.execute(registry.enroll(account, id))` 與
  * `account.execute(registry.setPaused(account, bool))`。session key 碰不到 registry，
  * 所以只有帳戶 owner 本人做得到。
+ *
+ * 升版時，新版本多出來的資產會在**同一個 UserOp** 裡一起 `approve(executor, max)`（cre8-app#50）：
+ * 不然升版成功、下一輪再平衡卻因為 allowance 不足被擋，使用者得另外再簽一筆。
  */
 export function AccountControls({
   wallet,
   token,
   account,
+  executor,
   dbStrategyId,
   onchain,
   loading,
@@ -47,6 +53,8 @@ export function AccountControls({
   wallet: RenewalWallet | null;
   token: string | null;
   account: string;
+  /** executor 位址（新資產 approve 的對象，也是重讀鏈上狀態的起點）。null = 後端沒有給。 */
+  executor: string | null;
   /** 後端的策略 id（算帳戶 salt 用）；跟 registry 上的 id 不一定是同一個數字。 */
   dbStrategyId: number;
   onchain: AccountOnchain | undefined;
@@ -71,6 +79,8 @@ export function AccountControls({
     state !== null && state.pauseFlags !== null ? pauseSourcesFromFlags(state.pauseFlags) : backendPauseSources;
   const upgradeTo = enrolled && state.latestVersion > state.version ? state.latestVersion : null;
   const changes = upgradeTo !== null && state?.current && state.latest ? diffAllocations(state.current, state.latest) : [];
+  /** 新版本多出來的資產（代號）：升版時會一起授權。 */
+  const addedSymbols = changes.filter((row) => row.kind === 'added').map((row) => symbolOf(row.asset));
   const allowance = onchain?.allowance ?? null;
   const allowanceState = allowance === null ? null : buyAllowanceState(allowance, Math.floor(Date.now() / 1000));
   const canSign = wallet !== null && token !== null && state !== null;
@@ -83,21 +93,51 @@ export function AccountControls({
     const title = kind === 'upgrade' ? 'Updating fund version' : kind === 'pause' ? 'Pausing trading' : 'Resuming trading';
     const id = toast.pending(title, 'Confirm it in your wallet…');
     try {
-      const data =
-        kind === 'upgrade'
-          ? enrollCalldata(account as Address, state.strategyId)
-          : setPausedCalldata(account as Address, kind === 'pause');
+      let calls: AccountCall[];
+      let upgraded: { version: number; symbols: string[] } | null = null;
+      if (kind === 'upgrade') {
+        // 送出前重讀一次鏈上狀態（cre8-app#50）：`enroll` 釘的是**送出當下**的最新版本，
+        // 要授權的新資產必須照那一版算，不能照畫面上可能已經過時的那一版。
+        if (executor === null) throw new Error('The fund executor address is not known, so the update cannot be prepared. Reload and try again.');
+        let fresh: OnchainAccount;
+        try {
+          fresh = await readOnchainAccount(publicClientFor(wallet), executor as Address, account as Address);
+        } catch (cause) {
+          throw new Error(`Could not read the fund registry, so nothing was sent: ${(cause as Error).message.split('\n')[0]}`);
+        }
+        if (fresh.current === null || fresh.latest === null || fresh.latestVersion <= fresh.version) {
+          await onChanged();
+          throw new Error('This account is already on the latest version. Nothing was sent.');
+        }
+        // 使用者看的是 v{state.latestVersion} 的差異表；期間又發了更新的版本，就不能讓他簽一個沒看過的版本。
+        if (fresh.latestVersion !== state.latestVersion) {
+          await onChanged();
+          throw new Error(`Version ${fresh.latestVersion} was published while you were reviewing version ${state.latestVersion}. Nothing was sent — check the new changes and update again.`);
+        }
+        const plan = upgradeCalls({
+          registry: fresh.registry,
+          executor: executor as Address,
+          account: account as Address,
+          strategyOnchainId: fresh.strategyId,
+          current: fresh.current,
+          latest: fresh.latest,
+        });
+        calls = plan.calls;
+        upgraded = { version: fresh.latestVersion, symbols: plan.newAssets.map(symbolOf) };
+      } else {
+        calls = [{ to: state.registry, data: setPausedCalldata(account as Address, kind === 'pause'), value: 0n }];
+      }
       const receipt = await sendSudoCalls({
         wallet,
         token,
         accountAddress: account as Address,
         strategyId: dbStrategyId,
-        calls: [{ to: state.registry, data, value: 0n }],
+        calls,
       });
       if (!receipt.success) throw new Error(`The transaction landed on-chain but reverted: ${receipt.txHash}`);
       const message =
-        kind === 'upgrade'
-          ? `Updated to version ${state.latestVersion}. The next rebalance moves your holdings to the new weights.`
+        upgraded !== null
+          ? upgradeDoneMessage(upgraded.version, upgraded.symbols)
           : kind === 'pause'
             ? 'Trading is paused for this account.'
             : 'Trading is on again for this account.';
@@ -184,7 +224,7 @@ export function AccountControls({
                     {busy === 'upgrade' ? 'Updating…' : `Update to version ${upgradeTo}`}
                   </button>
                   <p className="fine" style={{ marginTop: 6 }}>
-                    One wallet signature. The next rebalance then trades your holdings to the new weights.
+                    {upgradeSummary(addedSymbols)}
                     {paused ? ' Updating also turns trading back on for this account.' : ''}
                   </p>
                 </div>

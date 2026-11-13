@@ -11,7 +11,7 @@
  *    呼叫會 revert，這裡一律接住回 `null`，代表「這個部署沒有這個功能／現在讀不到」，
  *    呼叫端看到 `null` 就不顯示，不可以當成 false 或 0。
  */
-import { encodeFunctionData } from 'viem';
+import { encodeFunctionData, erc20Abi, maxUint256 } from 'viem';
 import type { Address, Hex, PublicClient } from 'viem';
 
 export const REGISTRY_ABI = [
@@ -59,6 +59,48 @@ export function setPausedCalldata(account: Address, paused: boolean): Hex {
 }
 
 export type OnchainAllocation = { asset: Address; weightBps: number }[];
+
+/** 帳戶要執行的一筆呼叫（owner 簽的 sudo UserOp 裡的一項）。 */
+export type AccountCall = { to: Address; data: Hex; value: bigint };
+
+/**
+ * 升版要送的呼叫（cre8-app#50）：`registry.enroll(account, id)`，加上**新版本多出來的資產**各一筆
+ * `approve(executor, max)`，全部放在同一個 UserOp，使用者簽一次。
+ *
+ * 為什麼要一起 approve：executor 是用 `transferFrom` 從帳戶拿代幣去換的。新版本多了一個資產、
+ * 帳戶卻沒有授權它的話，升版會成功，但下一輪再平衡會被後端的前置檢查擋下（allowance 不足），
+ * 使用者得另外再簽一筆。
+ *
+ * - 「新資產」＝在 `latest` 裡、不在 `current` 裡的位址（不分大小寫、不重複）。權重是 0 的也算：
+ *   它在這個版本的資產清單裡，executor 就可能要動它。
+ * - 沒有新資產時只有 `enroll` 一筆。
+ * - 兩份配置必須是**剛從鏈上讀到的**：`enroll` 釘的是送出當下的最新版本，不是畫面上那一版。
+ */
+export function upgradeCalls(args: {
+  registry: Address;
+  executor: Address;
+  account: Address;
+  strategyOnchainId: bigint;
+  current: OnchainAllocation;
+  latest: OnchainAllocation;
+}): { calls: AccountCall[]; newAssets: Address[] } {
+  const held = new Set(args.current.map((row) => row.asset.toLowerCase()));
+  const newAssets: Address[] = [];
+  for (const row of args.latest) {
+    const key = row.asset.toLowerCase();
+    if (held.has(key)) continue;
+    held.add(key);
+    newAssets.push(row.asset);
+  }
+  const approve = encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [args.executor, maxUint256] });
+  return {
+    calls: [
+      { to: args.registry, data: enrollCalldata(args.account, args.strategyOnchainId), value: 0n },
+      ...newAssets.map((asset) => ({ to: asset, data: approve, value: 0n })),
+    ],
+    newAssets,
+  };
+}
 
 export type OnchainAccount = {
   registry: Address;

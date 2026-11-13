@@ -185,3 +185,27 @@ export function checkEnrollment(input: {
   }
   return { ok: true };
 }
+
+/**
+ * 升版成功後的訊息（cre8-app#50）。`newSymbols` 是這次一起授權的新資產代號。
+ * 有新資產就講明已經一起授權了；沒有就只說升版。
+ */
+export function upgradeDoneMessage(version: number, newSymbols: readonly string[]): string {
+  const tail = 'The next rebalance moves your holdings to the new weights.';
+  if (newSymbols.length === 0) return `Updated to version ${version}. ${tail}`;
+  return `Updated to version ${version} and approved ${listWords(newSymbols)} for trading. ${tail}`;
+}
+
+/** 升版按鈕下面那一行：一次簽名會做哪些事。 */
+export function upgradeSummary(newSymbols: readonly string[]): string {
+  const base = 'One wallet signature. The next rebalance then trades your holdings to the new weights.';
+  if (newSymbols.length === 0) return base;
+  return `${base} The same signature lets the fund trade the new asset${newSymbols.length === 1 ? '' : 's'}: ${listWords(newSymbols)}.`;
+}
+
+/** `["ETH"]` → `ETH`；`["ETH","SOL"]` → `ETH and SOL`；三個以上用逗號加 and。 */
+function listWords(items: readonly string[]): string {
+  if (items.length <= 1) return items[0] ?? '';
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+}

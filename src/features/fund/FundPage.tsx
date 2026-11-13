@@ -991,6 +991,7 @@ function FundPageBody(): ReactNode {
               wallet={wallet}
               token={token}
               account={live.account}
+              executor={live.executorAddress}
               dbStrategyId={holding?.strategyId ?? strategy?.id ?? 0}
               onchain={onchain.data}
               loading={onchain.isPending}
