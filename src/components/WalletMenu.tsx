@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { connectProvider, discoverProviders, ensureChain } from '../lib/wallet';
@@ -15,6 +15,14 @@ import { pairWalletConnect, rememberWalletConnectApp, WALLETCONNECT_RDNS, wallet
 import { ErrorNote } from './ui';
 import { AppIcon } from './AppIcon';
 import { WalletConnectPairing } from './WalletConnectPairing';
+
+/**
+ * dev 私鑰登入（cre8-app#19）：只在 dev build 載入。
+ *
+ * `import.meta.env.DEV` 在正式 build 是常數 false，所以這個動態 import 連同整個
+ * `DevKeyLogin` 檔案都不會進產物 —— 不要改成靜態 import，也不要把條件搬進元件裡面。
+ */
+const DevKeyLogin = import.meta.env.DEV ? lazy(() => import('./DevKeyLogin')) : null;
 
 /** 任何地方都可以叫出錢包選單。 */
 export const OPEN_WALLET_MENU = 'cre8:open-wallet-menu';
@@ -208,6 +216,11 @@ export function WalletMenu({ inline = false, showIcon = false, iconOnly = false 
                       {connecting === detail.info.rdns && <span className="wallet-menu__hint">Connecting…</span>}
                     </button>
                   )))}
+                  {DevKeyLogin !== null && (
+                    <Suspense fallback={null}>
+                      <DevKeyLogin disabled={connecting !== null} />
+                    </Suspense>
+                  )}
                 </>
               )}
               <ErrorNote error={connectError} />
