@@ -56,3 +56,31 @@ export function daysUntil(iso: string, now: Date = new Date()): number | null {
   if (Number.isNaN(target.getTime())) return null;
   return Math.floor((target.getTime() - now.getTime()) / 86_400_000);
 }
+
+/**
+ * 十進位金額字串 → wei（BigInt）。**多出來的小數直接截掉，不進位。**
+ *
+ * 為什麼不用 `Number#toFixed` 再 `parseUnits`：`toFixed` 是四捨五入，會把
+ * `49.7634356781…` 變成 `49.763436`，比實際多 —— 拿去當轉帳金額就超過餘額而 revert（cre8-app#18）。
+ * 金額要轉出去時只能往下取。
+ *
+ * 不接受負數、科學記號或空字串以外的非數字；那些一律回 `0n`，由呼叫端當成「沒有金額」處理。
+ */
+export function decimalToWeiFloor(amount: string, decimals: number): bigint {
+  const match = /^(\d*)(?:\.(\d*))?$/.exec(amount.trim());
+  if (match === null) return 0n;
+  const whole = match[1] === '' ? '0' : match[1];
+  const fraction = (match[2] ?? '').slice(0, decimals).padEnd(decimals, '0');
+  return BigInt(whole) * 10n ** BigInt(decimals) + (fraction === '' ? 0n : BigInt(fraction));
+}
+
+/**
+ * 提領實際要轉出的金額（wei）＝ min(使用者要的, 帳戶鏈上餘額)。
+ *
+ * 全程 BigInt，所以結果**永遠不會超過 `balanceWei`** —— 這是這個函式存在的唯一理由：
+ * 轉帳金額只要比餘額多 1 wei，整筆 UserOp 就在模擬時 revert（`transfer amount exceeds balance`）。
+ */
+export function withdrawAmountWei(requested: string, balanceWei: bigint, decimals: number): bigint {
+  const wanted = decimalToWeiFloor(requested, decimals);
+  return wanted > balanceWei ? balanceWei : wanted;
+}

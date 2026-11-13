@@ -19,7 +19,7 @@ import { REFERENCE_METADATA, referenceFund } from '../../lib/public-funds';
 import { symbolOf, synthesizeCommunityFund } from '../../lib/community-fund';
 import {periodMetrics} from '../../reference/lib/fund-explore';
 import {FundOverview} from '../reference/FundOverview';
-import { shortAddress } from '../../lib/format';
+import { shortAddress, withdrawAmountWei } from '../../lib/format';
 import { queryKeys } from '../../lib/query';
 import { useBodyClass } from '../../lib/use-body-class';
 import { useOwnerWallet } from '../../lib/use-owner-wallet';
@@ -62,6 +62,15 @@ function pct(bps: number, digits = 2): string {
  *      並讓使用者把 USDT 轉進**自己的** Kernel 帳戶（存款＝ERC-20 transfer，不需要 approve）
  */
 export function FundPage(): ReactNode {
+  // 換到另一支基金時整個重新掛載（cre8-app#18 次要問題）。
+  // `/funds/strategy/1` 與 `/funds/strategy/2` 是同一個元件，React 會沿用 state：
+  // 輸入框的金額、上一筆的「Withdrawn. tx …」與「Sent $… of …」都會留在下一支基金的畫面上。
+  // 這一頁的 state 有二十幾個，逐一重置一定會漏；用 key 讓每支基金有自己的一份最不會錯。
+  const { slug, id } = useParams<{ slug: string; id: string }>();
+  return <FundPageBody key={id === undefined ? `slug:${slug ?? ''}` : `strategy:${id}`} />;
+}
+
+function FundPageBody(): ReactNode {
   useBodyClass('vault-page', 'fund-detail-redesign', 'atp-formal-fund', 'atp-complete-fund');
   const { slug, id: strategyIdParam } = useParams<{ slug: string; id: string }>();
   const strategyId = strategyIdParam === undefined ? null : Number(strategyIdParam);
@@ -1499,6 +1508,32 @@ export function FundPage(): ReactNode {
     }
   }
 
+  /**
+   * 帳戶此刻在鏈上的 USDT 餘額（wei）。提領最後一步的轉帳上限就是它。
+   *
+   * 先直接問鏈（`balanceOf`）；RPC 讀不到時退回後端 status 的 `amountWei`（一樣是 wei 字串，
+   * 不是美元價值）。兩條路都不經過浮點數。
+   */
+  async function readAccountUsdtWei(account: Address, asset: Address): Promise<bigint> {
+    if (wallet !== null) {
+      try {
+        const balance = await publicClientFor(wallet).readContract({
+          address: asset,
+          abi: ERC20_ABI,
+          functionName: 'balanceOf',
+          args: [account],
+        });
+        return balance as bigint;
+      } catch {
+        // 讀鏈失敗 → 用後端剛讀到的餘額。
+      }
+    }
+    if (token === null || holding === undefined) return 0n;
+    const fresh = await getPortfolioStatus(token, holding.id);
+    const row = (fresh.holdings ?? []).find((entry) => entry.asset.toLowerCase() === asset.toLowerCase());
+    return row === undefined ? 0n : BigInt(row.amountWei);
+  }
+
   async function withdraw(): Promise<void> {
     if (wallet === null || token === null || holding === undefined || live === undefined) return;
     const account = holding.smartAccounts[0]?.address;
@@ -1572,10 +1607,21 @@ export function FundPage(): ReactNode {
         if (redeemed.outcome === 'noop') break;
       }
 
-      const sendable = Math.min(effective, available);
-      if (sendable <= 0.000001) throw new Error('there is nothing to send after selling');
-      const decimals = usdtRow?.decimals ?? 18;
-      const value = parseUnits(sendable.toFixed(Math.min(decimals, 6)), decimals);
+      // 轉出的金額全程走 BigInt，並以帳戶**鏈上的 USDT 餘額（wei）**為上限（cre8-app#18）。
+      //
+      // 原本是 `parseUnits(sendable.toFixed(6))`：`sendable` 來自 `usdValueE8`（美元價值，不是代幣數量），
+      // 而 `toFixed` 會四捨五入進位 —— 實測餘額 49.763435678… 被寫成 49.763436，比帳戶多，
+      // UserOp 在模擬時就 revert（`BEP20: transfer amount exceeds balance`）。
+      // 上面賣出迴圈裡的 `available`（美元）只用來決定「還要不要再賣一輪」，不再拿來算轉帳金額。
+      const decimals = usdtRow?.decimals ?? usdtDecimals;
+      const balanceWei = await readAccountUsdtWei(account as Address, usdtAsset as Address);
+      // 使用者輸入的字串直接換成 wei（多的小數截掉）；只有被夾到基金總值時才用那個數字。
+      // （輸入若不是單純的十進位數字，例如 `1e2`，也改用已經驗過的數值。）
+      const plain = /^\d*\.?\d*$/.test(withdrawAmount.trim());
+      const wanted = requested > ceiling + 1e-6 || !plain ? effective.toFixed(8) : withdrawAmount;
+      const value = withdrawAmountWei(wanted, balanceWei, decimals);
+      if (value === 0n) throw new Error('there is nothing to send after selling');
+      const sendable = Number(formatUnits(value, decimals));
       showProgress({ tone: 'pending', title: 'Approve the sale in your wallet' });
       const receipt = await sendWithdraw({
         wallet,
