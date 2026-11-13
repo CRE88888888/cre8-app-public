@@ -551,3 +551,45 @@ export function getOperatorActivity(
 ): Promise<{ activity: OperatorActivityRow[] }> {
   return request<{ activity: OperatorActivityRow[] }>(`/operator/activity?limit=${limit}`, { token });
 }
+
+/**
+ * `GET /platform/status`（公開、免登入）—— 平台層級的鏈上狀態（backend#44）。
+ * 讀鏈失敗時後端回 503，`globalPaused`／`maxBuyBps`／`block` 都是 null。
+ */
+export type PlatformStatus = {
+  chainId: number;
+  executor: string | null;
+  registry: string | null;
+  globalPaused: boolean | null;
+  maxBuyBps: number | null;
+  checkedAt: string;
+  block: string | null;
+};
+
+/**
+ * 從 `/platform/status` 的回應判斷平台是不是全域暫停。
+ *
+ * 只有「HTTP 200 而且 `globalPaused` 是布林值」才算知道答案；其他一律是 `null`（不知道）：
+ * 503（後端讀不到鏈）、A 段臨時網址的 `PREVIEW_ONLY`、被導到 SPA 的 HTML、壞掉的 JSON、欄位缺漏。
+ * **`null` 不可以當成 false**：不知道就是不知道，不能說成「沒有暫停」。
+ */
+export function platformPausedFrom(status: number, text: string): boolean | null {
+  if (status !== 200) return null;
+  try {
+    const body = JSON.parse(text) as Partial<PlatformStatus> | null;
+    return typeof body?.globalPaused === 'boolean' ? body.globalPaused : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 平台現在是不是全域暫停：`true`／`false` = 確定，`null` = 不知道（含網路失敗）。不丟錯。 */
+export async function getPlatformPaused(signal?: AbortSignal): Promise<boolean | null> {
+  try {
+    const response = await fetch(`${BASE}/platform/status`, signal === undefined ? {} : { signal });
+    return platformPausedFrom(response.status, await response.text());
+  } catch {
+    return null;
+  }
+}
+

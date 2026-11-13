@@ -1,51 +1,37 @@
 import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import type { Address } from 'viem';
-import { getPortfolioStatus, getPortfolios } from '../lib/api';
+import { getPlatformPaused } from '../lib/api';
 import { PLATFORM_PAUSED_MESSAGE } from '../lib/a10';
-import { readGlobalPaused } from '../lib/atp-contracts';
-import { publicClientFor } from '../lib/kernel';
-import { queryKeys } from '../lib/query';
-import { useConnectedSessionToken } from '../lib/use-connected-session';
-import { useOwnerWallet } from '../lib/use-owner-wallet';
 
 /**
- * 全站橫幅：平台全域暫停交易時顯示（cre8-app#29 第 5 點）。
+ * 全站橫幅：平台全域暫停交易時顯示（cre8-app#29 第 5 點；cre8-app#41 改讀公開端點）。
  *
- * 判斷來源是鏈上的 `executor.globalPaused()`，不是後端的說法 —— 那是 Safe 才能開關的總開關，
- * 開著的時候買、賣、再平衡全部被合約擋下，但使用者的資產仍在他自己的帳戶裡，可以用錢包直接領。
+ * 來源是後端的公開端點 `GET /platform/status`（它讀鏈上的 `executor.globalPaused()`，快取 10 秒），
+ * 所以**不用登入、不用連錢包**，所有訪客都看得到。全域暫停是 Safe 才能開關的總開關：開著的時候
+ * 買、賣、再平衡全部被合約擋下，但使用者的資產仍在他自己的帳戶裡，可以用錢包直接領。
  *
- * ⚠ 目前只有「已登入而且至少有一個基金帳戶」的人看得到：前端要知道 executor 的位址才能問鏈，
- * 而那個位址現在只出現在 `GET /portfolios/:id/status`。沒有帳戶的人不受暫停影響（沒有資產在裡面），
- * 他們第一次買入時會在買入流程看到同一句話。要對所有訪客顯示，需要後端公開 executor 位址。
+ * 三種答案，三種處理：
+ * - `true`  → 顯示橫幅。
+ * - `false` → 不顯示。
+ * - 不知道（503、A 段臨時網址的 PREVIEW_ONLY、網路失敗）→ **不改變畫面**：
+ *   沒看過確定的答案就不顯示；上一次確定是暫停的話，橫幅留著。
+ *   不顯示「狀態無法確認」：臨時網址上那會是一條永遠掛著的訊息，後端短暫讀不到鏈時也只會嚇到人。
+ *   不顯示不等於說「沒有暫停」—— 真的暫停時，買賣流程自己還會再告訴使用者一次。
  *
- * 讀不到（舊合約沒有這個函式、RPC 掛了）就不顯示：橫幅只在確定暫停時出現。
+ * 做法：查詢函式在「不知道」時丟錯，react-query 會保留上一次成功的資料，正好就是上面的行為。
  */
 export function PlatformPauseBanner(): ReactNode {
-  const wallet = useOwnerWallet();
-  const token = useConnectedSessionToken();
-  const portfolios = useQuery({
-    queryKey: queryKeys.portfolios(token),
-    queryFn: () => getPortfolios(token as string),
-    enabled: token !== null,
-    staleTime: 60_000,
-  });
-  const first = portfolios.data?.[0];
-  // 與基金頁同一個 queryKey，兩邊共用同一份快取。
-  const status = useQuery({
-    queryKey: ['fund-status', token, first?.id],
-    queryFn: () => getPortfolioStatus(token as string, first?.id as number),
-    enabled: token !== null && first !== undefined,
-    staleTime: 60_000,
-    retry: 0,
-  });
-  const executor = status.data?.executorAddress ?? null;
   const paused = useQuery({
-    queryKey: ['a10-global-paused', executor?.toLowerCase() ?? null],
-    queryFn: () => readGlobalPaused(publicClientFor(wallet as NonNullable<typeof wallet>), executor as Address),
-    enabled: wallet !== null && executor !== null,
+    queryKey: ['platform-paused'],
+    queryFn: async ({ signal }) => {
+      const answer = await getPlatformPaused(signal);
+      if (answer === null) throw new Error('platform status unknown');
+      return answer;
+    },
+    retry: 0,
     staleTime: 30_000,
-    refetchInterval: 60_000,
+    // 知道答案時每分鐘重問；不知道時（例如臨時網址）放慢到五分鐘，不要一直打一個只會回 503 的端點。
+    refetchInterval: (query) => (query.state.status === 'error' ? 300_000 : 60_000),
   });
 
   if (paused.data !== true) return null;
