@@ -26,6 +26,7 @@ import { useOwnerWallet } from '../../lib/use-owner-wallet';
 import { useConnectedSessionToken } from '../../lib/use-connected-session';
 import { WalletMenu } from '../../components/WalletMenu';
 import { WHITELIST_COPY } from '../../lib/live-funds';
+import { hasSellablePositions, lowerOf, sweepNativeWei } from '../../lib/close-position';
 import { useWallet } from '../../store/wallet';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -1445,23 +1446,55 @@ function FundPageBody(): ReactNode {
     setWithdrawError(null);
     setWithdrawTx(null);
     setWithdrawNote(null);
-    const toastId = toast.pending('Closing position', 'Selling every position to USDT…');
+    const toastId = toast.pending('Closing position', 'Checking what is left to sell…');
     try {
-      const sold = await closePosition(token, holding.id);
-      if (sold.outcome !== 'executed' && sold.outcome !== 'noop') {
-        throw new Error(`closing the position failed: ${sold.reason}`);
+      // 先看帳戶裡還有沒有值得賣的部位（cre8-app#23）。
+      // 沒有 → 跳過賣出直接掃。這是「上一次賣完了、掃回那一步失敗」的重試路徑：
+      // 那時投組已經 paused，後端的 `/close` 會拒絕，但也沒有東西要它賣了。
+      const cashSymbol = usdt?.symbol ?? 'USDT';
+      const before = await getPortfolioStatus(token, holding.id);
+      let soldSteps = 0;
+      if (hasSellablePositions(before.holdings ?? [], cashSymbol)) {
+        toast.replace(toastId, { tone: 'pending', title: 'Closing position', body: 'Selling every position to USDT…' });
+        const sold = await closePosition(token, holding.id);
+        if (sold.outcome !== 'executed' && sold.outcome !== 'noop') {
+          throw new Error(`closing the position failed: ${sold.reason}`);
+        }
+        soldSteps = sold.steps.length;
       }
-      // 賣完重讀餘額：USDT + 所有非零餘額（含賣不掉的塵埃）一起掃回去。
-      const fresh = await getPortfolioStatus(token, holding.id);
-      const balances = fresh.holdings.map((row) => ({ asset: row.asset as Address, amountWei: BigInt(row.amountWei) }));
+      // 賣完重讀：USDT + 所有非零餘額（含賣不掉的塵埃）一起掃回去。
+      // 清單（有哪些代幣）問後端；每一個的數量**再直接問鏈一次，取兩邊較小的那個**。
+      // 兩個來源各自可能落後一兩個塊：拿到賣出前的數量去轉就會超過餘額而 revert。
+      // 取較小值代表只要有一邊是新的就不會超轉；最壞情況是少掃一點，再按一次 Close 就清掉。
+      const fresh = soldSteps === 0 ? before : await getPortfolioStatus(token, holding.id);
+      const reader = publicClientFor(wallet);
+      const balances = await Promise.all(
+        (fresh.holdings ?? []).map(async (row) => {
+          const asset = row.asset as Address;
+          const reported = BigInt(row.amountWei);
+          try {
+            const onChain = await reader.readContract({ address: asset, abi: ERC20_ABI, functionName: 'balanceOf', args: [account as Address] });
+            return { asset, amountWei: lowerOf(onChain as bigint, reported) };
+          } catch {
+            return { asset, amountWei: reported };
+          }
+        }),
+      );
       // 連 gas 一起：清倉的語意是「這個帳戶什麼都不剩」。
       // 必須留一點付**這一筆** UserOp 的 gas，否則連驗證都過不了（AA21/AA51）。
-      const gasWei = live?.gas?.balanceWei;
-      // 掃回時保留的 gas：一筆 sudo UserOp 約 0.000025 BNB，0.0005 是 20 倍餘裕。
-      // 原本的 0.003 會讓每次清倉多留 6 倍的錢在帳戶裡。
-      const GAS_RESERVE = parseEther('0.0005');
-      const nativeWei =
-        gasWei === null || gasWei === undefined ? 0n : BigInt(gasWei) > GAS_RESERVE ? BigInt(gasWei) - GAS_RESERVE : 0n;
+      //
+      // BNB 餘額要用**賣完之後**的：賣出那幾筆 UserOp 是帳戶自己付 gas。原本用的是頁面上
+      // 那份舊的 `live.gas.balanceWei`（實測 0.0311636，鏈上只剩 0.0013423），
+      // 掃出去的金額比餘額多，整筆 sweep 在模擬時 revert。
+      const reportedGas = fresh.gas?.balanceWei;
+      let gasBalanceWei = reportedGas === null || reportedGas === undefined ? null : BigInt(reportedGas);
+      try {
+        const onChain = await reader.getBalance({ address: account as Address });
+        gasBalanceWei = gasBalanceWei === null ? onChain : lowerOf(onChain, gasBalanceWei);
+      } catch {
+        // 讀鏈失敗 → 用後端剛回的數字；兩邊都沒有就不掃 BNB。
+      }
+      const nativeWei = sweepNativeWei(gasBalanceWei ?? 0n);
       const receipt = await sendSweep({
         wallet,
         token,
@@ -1479,7 +1512,9 @@ function FundPageBody(): ReactNode {
       } else {
         setWithdrawTx(receipt.txHash);
         setWithdrawNote(
-          `Closed: ${sold.steps.length} sell step(s), then ${balances.filter((row) => row.amountWei > 0n).length} token(s) sent back to your wallet.`,
+          soldSteps === 0
+            ? `Nothing left to sell — ${balances.filter((row) => row.amountWei > 0n).length} token(s) sent back to your wallet.`
+            : `Closed: ${soldSteps} sell step(s), then ${balances.filter((row) => row.amountWei > 0n).length} token(s) sent back to your wallet.`,
         );
       }
       // 存款後要重抓的是**整條依賴鏈**，不是只有 portfolios：
