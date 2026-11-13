@@ -1,5 +1,33 @@
 import { expect, test } from "bun:test";
-import { MAX_SELL_BATCHES, SellBatchError, formatRemainingUsd, runSellBatches, type SellBatch } from "../src/lib/sell-batches";
+import { MAX_SELL_BATCHES, SellBatchError, afterSellRun, formatRemainingUsd, runSellBatches, type SellBatch, type SellRun } from "../src/lib/sell-batches";
+
+// 一輪續做之後該怎麼辦（cre8-app#44）：`remainingUsdE8: null` 是「不知道」，不可以當成完成。
+test("what the caller does after a run: proceed, press again, or stop on an unknown remainder", () => {
+  const run = (status: SellRun["status"], remainingUsdE8: bigint | null): SellRun => ({ status, batches: 1, steps: 1, remainingUsdE8, lastReason: "r" });
+  // 賣完了。
+  expect(afterSellRun(run("done", 0n))).toBe("proceed");
+  // 到上限還有剩：再按一次。
+  expect(afterSellRun(run("limit", 5_000_000_000n))).toBe("press-again");
+  // 剩下的確定賣不動：往下做（提領轉出已有的、清倉把殘餘掃回）。
+  expect(afterSellRun(run("stalled", 5_000_000_000n))).toBe("proceed");
+  // 後端沒說還剩多少：停下，不轉出、不掃回。
+  expect(afterSellRun(run("stalled", null))).toBe("unknown");
+  expect(afterSellRun(run("limit", null))).toBe("unknown");
+});
+
+test("a batch that reports an unknown remainder never ends up as 'proceed'", async () => {
+  for (const outcome of ["executed", "noop"] as const) {
+    const result = await runSellBatches({
+      first: async () => ({ outcome, reason: "規劃前被擋下", steps: [], remainingUsdE8: null }),
+      next: async () => {
+        throw new Error("must not continue with a guessed amount");
+      },
+    });
+    expect(result.remainingUsdE8).toBeNull();
+    expect(result.lastReason).toBe("規劃前被擋下");
+    expect(afterSellRun(result)).toBe("unknown");
+  }
+});
 
 const E8 = 100_000_000n;
 const batch = (remaining: bigint | null | undefined, extra: Partial<SellBatch> = {}): SellBatch => ({

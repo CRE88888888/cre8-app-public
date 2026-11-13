@@ -29,7 +29,7 @@ import { WHITELIST_COPY } from '../../lib/live-funds';
 import { hasSellablePositions, lowerOf, sweepNativeWei } from '../../lib/close-position';
 import { isPermissionFailure, renewedMessage, tradingPermissionHealth } from '../../lib/trading-permission';
 import { buyAllowanceState, buyLimitMessage, checkEnrollment, describePause, explainA10Failure, pauseSourcesFromFlags, sameAllocation, PLATFORM_PAUSED_MESSAGE } from '../../lib/a10';
-import { MAX_SELL_BATCHES, SellBatchError, SellUnfinished, formatRemainingUsd, runSellBatches } from '../../lib/sell-batches';
+import { MAX_SELL_BATCHES, SellBatchError, SellUnfinished, afterSellRun, formatRemainingUsd, runSellBatches } from '../../lib/sell-batches';
 import { AccountControls } from './AccountControls';
 import { accountOnchainKey, loadAccountOnchain, useAccountOnchain } from './use-account-onchain';
 import { useWallet } from '../../store/wallet';
@@ -1743,14 +1743,22 @@ function FundPageBody(): ReactNode {
                   'What was sold is safe in the fund account as USDT — press Close position again to continue.',
           );
         }
+        const after = afterSellRun(run);
         // 到批數上限還沒賣完：不掃。現在掃會把還沒賣的部位當成代幣原樣送回錢包，不是使用者要的「清倉」。
-        if (run.status === 'limit' && run.remainingUsdE8 !== null) {
+        if (after === 'press-again' && run.remainingUsdE8 !== null) {
           throw new SellUnfinished(
             `Sold in ${run.batches} batches so far; about ${formatRemainingUsd(run.remainingUsdE8)} is still to be sold. ` +
               'Press Close position again to continue.',
           );
         }
-        // `stalled`：剩下的再賣也賣不動（單筆上限為 0、流動性不足、渣）→ 照舊往下，當代幣掃回錢包。
+        // 後端沒說還剩多少（`remainingUsdE8: null`）：不能當成賣完。不掃，顯示原因，請使用者再按一次。
+        if (after === 'unknown') {
+          throw new Error(
+            `closing the position stopped: the fund could not work out how much is left to sell (${run.lastReason}). ` +
+              'Nothing was sent to your wallet — press Close position again.',
+          );
+        }
+        // 剩下的確定賣不動（單筆上限為 0、流動性不足、渣）→ 照舊往下，當代幣掃回錢包。
         soldSteps = run.steps;
       }
       // 賣完重讀：USDT + 所有非零餘額（含賣不掉的塵埃）一起掃回去。
@@ -1961,14 +1969,23 @@ function FundPageBody(): ReactNode {
           );
         }
         batchesLeft -= run.batches;
-        if (run.status === 'limit' && run.remainingUsdE8 !== null) {
+        const after = afterSellRun(run);
+        if (after === 'press-again' && run.remainingUsdE8 !== null) {
           throw new SellUnfinished(
             `Sold in ${MAX_SELL_BATCHES - batchesLeft} batches so far; about ${formatRemainingUsd(run.remainingUsdE8)} is still to be sold. ` +
               'The USDT raised so far is waiting in the fund account — press Sell again to continue.',
           );
         }
+        // 後端沒說還剩多少（`remainingUsdE8: null`）：不能當成賣完，也不能說成「沒有部位可賣了」。
+        // 不轉出，顯示原因，請使用者再按一次。
+        if (after === 'unknown') {
+          throw new Error(
+            `selling stopped: the fund could not work out how much is left to sell (${run.lastReason}). ` +
+              'Nothing was transferred — press Sell again.',
+          );
+        }
         available = await readCash();
-        // 再賣也賣不動（沒有可賣的部位、單筆上限擋住、不知道還剩多少）→ 再試也是一樣，直接停，
+        // 剩下的確定賣不動（沒有可賣的部位、單筆上限擋住）→ 再試也是一樣，直接停，
         // 往下把已經有的 USDT 轉出並說明少了多少。
         if (run.status === 'stalled' || run.steps === 0) break;
       }

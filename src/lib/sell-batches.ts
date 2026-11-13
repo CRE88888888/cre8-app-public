@@ -132,6 +132,21 @@ function sellStatus(input: {
   return null;
 }
 
+/**
+ * 一輪續做結束後，呼叫端接下來該怎麼辦。
+ *
+ * - `proceed`     可以往下做（提領：轉出；清倉：掃回錢包）。賣完了，或剩下的確定賣不動。
+ * - `press-again` 到了批數上限還有剩：停下，請使用者再按一次。
+ * - `unknown`     後端沒說還剩多少（`remainingUsdE8: null`，規劃前就被擋下）：**不可以當成完成**。
+ *                 停下、顯示原因、請使用者再按一次。往下做的話，提領會少給，清倉會把還沒賣的
+ *                 部位當成代幣原樣送回錢包 —— 而我們根本不知道是不是還有東西該賣。
+ */
+export function afterSellRun(run: SellRun): 'proceed' | 'press-again' | 'unknown' {
+  if (run.status === 'done') return 'proceed';
+  if (run.remainingUsdE8 === null) return 'unknown';
+  return run.status === 'limit' ? 'press-again' : 'proceed';
+}
+
 /** `4999798943n` → `"$49.99"`（美元 1e8 定點，截到分）。 */
 export function formatRemainingUsd(remainingUsdE8: bigint): string {
   const cents = remainingUsdE8 / 1_000_000n;
