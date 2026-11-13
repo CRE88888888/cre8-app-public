@@ -1,12 +1,14 @@
 import type { ReactNode } from 'react';
 import { AppIcon } from '../../components/AppIcon';
 import { Link } from 'react-router-dom';
-import { Spinner } from '../../components/ui';
+import { Spinner, TechnicalDetails } from '../../components/ui';
 
 export type TicketAction = 'deposit' | 'withdraw';
 export type TicketProgress = {
   title: string;
   detail?: string;
+  /** 可展開的技術細節（後端原文）；`detail` 只放白話訊息。 */
+  technical?: string;
   tone: 'pending' | 'confirmed' | 'notice' | 'error';
   hash?: string;
   amount?: string;
@@ -82,6 +84,7 @@ export function TicketReceipt({
         <strong>{progress.title}</strong>
         {progress.amount && <span className="app-ticket-receipt-amount">{progress.amount}</span>}
         {progress.detail && <p>{progress.detail}</p>}
+        <TechnicalDetails text={progress.technical} />
       </div>
       {fund}
       {extra}

@@ -56,8 +56,11 @@ export function withdrawShortfallNote(input: {
   /** 賣完之後最新的持倉。 */
   holdings: readonly HoldingValue[];
   cashSymbol: string;
-  /** 最後一批賣出時後端說的話（賣不動的原因）；沒有賣過就不傳。 */
-  reason?: string | null;
+  /**
+   * 賣不動的原因：**一句完整的白話英文**（`explainTradeFailure` 的 `summary`）。認不出原因或沒有賣過就不傳。
+   * 後端的原文不要放進來，由呼叫端收進可展開的細節（cre8-app#55）。
+   */
+  cause?: string | null;
 }): string | null {
   const missing = input.askedUsd - input.sentUsd;
   if (!(missing > SHORTFALL_FLOOR_USD)) return null;
@@ -65,9 +68,9 @@ export function withdrawShortfallNote(input: {
   if (!hasSellablePositions(input.holdings, input.cashSymbol)) {
     return `${head} — the account has no positions left to sell.`;
   }
-  const reason = input.reason?.trim();
+  const cause = input.cause?.trim();
   return (
-    `${head} — the remaining ${usd(missing)} could not be sold right now${reason ? ` (${reason})` : ''}. ` +
-    'Your positions are still in the fund; you can try again.'
+    `${head} — the remaining ${usd(missing)} could not be sold right now. ` +
+    `${cause ? `${cause} ` : ''}Your positions are still in the fund; you can try again.`
   );
 }

@@ -31,12 +31,13 @@ import { isPermissionFailure, renewedMessage, tradingPermissionHealth } from '..
 import { buyAllowanceState, buyLimitMessage, checkEnrollment, describePause, explainA10Failure, pauseSourcesFromFlags, sameAllocation, PLATFORM_PAUSED_MESSAGE } from '../../lib/a10';
 import { MAX_SELL_BATCHES, SellBatchError, SellUnfinished, afterSellRun, formatRemainingUsd, runSellBatches } from '../../lib/sell-batches';
 import { cashUsdOf, sellTargetUsd, totalUsdOf, withdrawShortfallNote } from '../../lib/withdraw-plan';
+import { TradeFailureError, explainTradeFailure } from '../../lib/trade-failure';
 import { AccountControls } from './AccountControls';
 import { accountOnchainKey, loadAccountOnchain, useAccountOnchain } from './use-account-onchain';
 import { useWallet } from '../../store/wallet';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge, ErrorNote, Note, Spinner } from '../../components/ui';
+import { Badge, ErrorNote, Note, Spinner, TechnicalDetails } from '../../components/ui';
 import { AssetLogo } from '../../components/AssetLogo';
 import { toast, type ToastId } from '../../components/Toast';
 import { TradeRoutes } from '../../components/TradeRoutes';
@@ -277,6 +278,8 @@ function FundPageBody(): ReactNode {
   const [withdrawError, setWithdrawError] = useState<unknown>(null);
   const [withdrawTx, setWithdrawTx] = useState<string | null>(null);
   const [withdrawNote, setWithdrawNote] = useState<string | null>(null);
+  /** `withdrawNote` 背後的後端原文（可展開）；提示本身只放白話英文（cre8-app#55）。 */
+  const [withdrawNoteDetail, setWithdrawNoteDetail] = useState<string | null>(null);
   /**
    * 最近一次買入／賣出實際成交的每一步（含走哪個交易場所，cre8-app#47）。
    * 每次開始新的買入、賣出或清倉時清空；分批賣出時每成交一批就接在後面。
@@ -398,6 +401,9 @@ function FundPageBody(): ReactNode {
   /** 把 A10 的合約錯誤換成看得懂的話；認不出來就原樣回傳。 */
   const friendlyFailure = (message: string): string =>
     explainA10Failure(message, { pauseSources, nextBuyAt: buyLimit?.nextBuyAt ?? null }) ?? message;
+  /** 後端說「這一輪沒成交」時，換成白話英文；原文留在 `technical`（cre8-app#55）。 */
+  const tradeFailure = (result: { outcome?: string | null; reason?: string | null }) =>
+    explainTradeFailure(result, { pauseSources, nextBuyAt: buyLimit?.nextBuyAt ?? null });
 
   /**
    * 讀「哪些資產還沒授權給 executor」。
@@ -670,6 +676,7 @@ function FundPageBody(): ReactNode {
                             </>
                           )}
                           {withdrawNote === null ? null : <p className="fine warn">{withdrawNote}</p>}
+                          {withdrawNote === null ? null : <TechnicalDetails text={withdrawNoteDetail} />}
                           {withdrawTx === null ? null : (
                             <p className="fine">
                               Withdrawn. tx <span className="mono">{withdrawTx}</span>
@@ -1298,6 +1305,8 @@ function FundPageBody(): ReactNode {
     let transferHash: string | undefined;
     let transferState: 'submitted' | 'confirmed' | 'reverted' = 'submitted';
     let allocation = 'Check Portfolio for the latest allocation.';
+    /** 第一次配置沒成交時，後端的原文（收進可展開的細節）。 */
+    let allocationTechnical: string | undefined;
     showProgress({ tone: 'pending', title: 'Preparing your purchase', detail: 'Follow the prompts in your wallet.' });
     try {
       // 沒有帳戶就先建（enroll）——「存款就是跟隨」，使用者不必先理解 enroll。
@@ -1490,13 +1499,14 @@ function FundPageBody(): ReactNode {
           //   executed → 配置完成
           //   blocked  → 被前置檢查擋下（最常見是 allowance），要**再按一次**或先 approve
           //   noop     → 規劃器認為沒事可做（錢沒被看到/已經對齊）
-          // A10：被平台全域暫停、帳戶暫停或買入額度擋下時，直接說是哪一種（錢已經在帳戶裡，仍是 USDT）。
-          const a10Reason = round.outcome === 'executed' ? null
-            : explainA10Failure(round.reason ?? '', { pauseSources, nextBuyAt: buyLimit?.nextBuyAt ?? null });
-          allocation = round.outcome === 'executed' ? 'Initial allocation executed.' :
-            a10Reason !== null ? `Your USDT arrived and is waiting in your account. ${a10Reason}` :
-            round.outcome === 'blocked' ? 'Initial allocation was blocked. Check Portfolio for the latest status.' :
-              'No initial allocation was executed. Check Portfolio for the latest status.';
+          // 沒成交時說白話的原因（平台暫停、帳戶暫停、買入額度、價格來源、報價重問失敗…），
+          // 後端的原文收進可展開的細節（cre8-app#55）。錢已經在帳戶裡，仍是 USDT。
+          // 這裡用 `summary` 不用 `message`：「再試一次」在買入的情境會被理解成再存一次錢。
+          const failure = round.outcome === 'executed' ? null : tradeFailure(round);
+          allocationTechnical = failure?.technical || undefined;
+          allocation = failure === null ? 'Initial allocation executed.' :
+            failure.kind === 'nothing-to-do' ? 'No initial allocation was executed. Check Portfolio for the latest status.' :
+              `Your USDT arrived and is waiting in your account. ${failure.summary}${failure.recognized ? '' : ' Check Portfolio for the latest status.'}`;
           const tone = round.outcome === 'executed' ? 'ok' : round.outcome === 'blocked' ? 'bad' : 'warn';
           const title =
             round.outcome === 'executed'
@@ -1507,7 +1517,8 @@ function FundPageBody(): ReactNode {
           toast.replace(configuringId, {
             tone,
             title,
-            body: round.txHash ?? a10Reason ?? round.reason ?? undefined,
+            body: failure === null ? round.txHash ?? undefined : failure.summary,
+            detail: allocationTechnical,
           });
         } catch (cause) {
           // 配置失敗不影響入金；收據獨立顯示這兩個狀態。
@@ -1541,6 +1552,7 @@ function FundPageBody(): ReactNode {
         title: transferState === 'confirmed' ? 'Purchase confirmed' : 'Transfer submitted',
         amount: sent,
         detail: transferState === 'confirmed' ? allocation : 'Check the block explorer for confirmation.',
+        technical: transferState === 'confirmed' ? allocationTechnical : undefined,
         hash,
       });
     } catch (cause) {
@@ -1756,6 +1768,7 @@ function FundPageBody(): ReactNode {
     setWithdrawError(null);
     setWithdrawTx(null);
     setWithdrawNote(null);
+    setWithdrawNoteDetail(null);
     setRoutes(null);
     const toastId = toast.pending('Closing position', 'Checking what is left to sell…');
     try {
@@ -1784,12 +1797,14 @@ function FundPageBody(): ReactNode {
           });
         } catch (cause) {
           if (!(cause instanceof SellBatchError)) throw cause;
-          throw new Error(
-            cause.completedBatches === 0
-              ? `closing the position failed: ${cause.message}`
-              : `closing the position stopped after ${cause.completedBatches} batch${cause.completedBatches === 1 ? '' : 'es'}: ${cause.message}. ` +
-                  'What was sold is safe in the fund account as USDT — press Close position again to continue.',
-          );
+          const failure = tradeFailure({ outcome: cause.outcome, reason: cause.message });
+          throw new TradeFailureError(failure, {
+            title: 'Close not completed',
+            message: cause.completedBatches === 0
+              ? failure.message
+              : `Closing stopped after ${cause.completedBatches} batch${cause.completedBatches === 1 ? '' : 'es'}; the next one did not go through. ${failure.summary} ` +
+                  'What was already sold is safe in the fund account as USDT — press Close position again to continue.',
+          });
         }
         const after = afterSellRun(run);
         // 到批數上限還沒賣完：不掃。現在掃會把還沒賣的部位當成代幣原樣送回錢包，不是使用者要的「清倉」。
@@ -1801,10 +1816,13 @@ function FundPageBody(): ReactNode {
         }
         // 後端沒說還剩多少（`remainingUsdE8: null`）：不能當成賣完。不掃，顯示原因，請使用者再按一次。
         if (after === 'unknown') {
-          throw new Error(
-            `closing the position stopped: the fund could not work out how much is left to sell (${run.lastReason}). ` +
-              'Nothing was sent to your wallet — press Close position again.',
-          );
+          const failure = tradeFailure({ outcome: run.lastOutcome, reason: run.lastReason });
+          throw new TradeFailureError(failure, {
+            title: 'Close not completed',
+            message:
+              'Closing stopped because the fund could not work out how much is left to sell. ' +
+              `${failure.recognized ? `${failure.summary} ` : ''}Nothing was sent to your wallet — press Close position again.`,
+          });
         }
         // 剩下的確定賣不動（單筆上限為 0、流動性不足、渣）→ 照舊往下，當代幣掃回錢包。
         soldSteps = run.steps;
@@ -1890,11 +1908,17 @@ function FundPageBody(): ReactNode {
         await queryClient.invalidateQueries({ queryKey: ['fund-status'], refetchType: 'all' });
         return;
       }
-      const raw = String((cause as Error).message ?? cause);
-      const friendly = explainA10Failure(raw, { pauseSources, nextBuyAt: buyLimit?.nextBuyAt ?? null });
-      setWithdrawError(friendly === null ? cause : new Error(friendly));
-      if (isPermissionFailure(raw)) setWithdrawNote(PERMISSION_HINT);
-      toast.replace(toastId, { tone: 'bad', title: 'Close failed', body: (friendly ?? raw).split('\n')[0].slice(0, 180) });
+      // 後端說沒成交（`TradeFailureError`）：訊息已經是白話英文，原文在可展開的細節裡。
+      if (cause instanceof TradeFailureError) {
+        setWithdrawError(cause);
+        toast.replace(toastId, { tone: 'bad', title: 'Close not completed', body: cause.message });
+      } else {
+        const raw = String((cause as Error).message ?? cause);
+        const friendly = explainA10Failure(raw, { pauseSources, nextBuyAt: buyLimit?.nextBuyAt ?? null });
+        setWithdrawError(friendly === null ? cause : new Error(friendly));
+        if (isPermissionFailure(raw)) setWithdrawNote(PERMISSION_HINT);
+        toast.replace(toastId, { tone: 'bad', title: 'Close failed', body: (friendly ?? raw).split('\n')[0].slice(0, 180) });
+      }
       // 失敗前可能已經賣掉一部分：讓面板上的數字跟上。
       void queryClient.invalidateQueries({ queryKey: ['fund-status'], refetchType: 'all' });
     } finally {
@@ -1938,6 +1962,7 @@ function FundPageBody(): ReactNode {
     setWithdrawError(null);
     setWithdrawTx(null);
     setWithdrawNote(null);
+    setWithdrawNoteDetail(null);
     setRoutes(null);
     const toastId = toast.pending('Sell', 'Preparing…');
     if (mobile) ticketToast.current = toastId;
@@ -1999,8 +2024,8 @@ function FundPageBody(): ReactNode {
         latest = await getPortfolioStatus(token, holding.id);
         return cashUsdOf(latest.holdings ?? [], cashSymbol);
       };
-      /** 最後一批賣出時後端說的話；轉出的比要求的少時拿來說明原因。 */
-      let lastSellReason: string | null = null;
+      /** 最後一批賣出時後端回的結果；轉出的比要求的少時拿來說明原因。 */
+      let lastSell: { outcome: string; reason: string } | null = null;
 
       // 分批（cre8-app#39）：每個資產有單筆交易上限，後端一次只賣一批並回報還剩多少（`remainingUsdE8`）。
       // 所以「一輪」不再是一次呼叫，而是「首批送 usd，之後把剩餘量帶回去續做，直到 0」。
@@ -2027,12 +2052,14 @@ function FundPageBody(): ReactNode {
           });
         } catch (cause) {
           if (!(cause instanceof SellBatchError)) throw cause;
-          throw new Error(
-            cause.completedBatches === 0
-              ? `selling the shortfall failed: ${cause.message}`
-              : `selling stopped after ${cause.completedBatches} batch${cause.completedBatches === 1 ? '' : 'es'}: ${cause.message}. ` +
-                  'What was sold is in the fund account as USDT — press Sell again to continue.',
-          );
+          const failure = tradeFailure({ outcome: cause.outcome, reason: cause.message });
+          throw new TradeFailureError(failure, {
+            title: 'Sale not completed',
+            message: cause.completedBatches === 0
+              ? failure.message
+              : `Selling stopped after ${cause.completedBatches} batch${cause.completedBatches === 1 ? '' : 'es'}; the next one did not go through. ${failure.summary} ` +
+                  'What was already sold is in the fund account as USDT — press Sell again to continue.',
+          });
         }
         batchesLeft -= run.batches;
         const after = afterSellRun(run);
@@ -2045,16 +2072,19 @@ function FundPageBody(): ReactNode {
         // 後端沒說還剩多少（`remainingUsdE8: null`）：不能當成賣完，也不能說成「沒有部位可賣了」。
         // 不轉出，顯示原因，請使用者再按一次。
         if (after === 'unknown') {
-          throw new Error(
-            `selling stopped: the fund could not work out how much is left to sell (${run.lastReason}). ` +
-              'Nothing was transferred — press Sell again.',
-          );
+          const failure = tradeFailure({ outcome: run.lastOutcome, reason: run.lastReason });
+          throw new TradeFailureError(failure, {
+            title: 'Sale not completed',
+            message:
+              'Selling stopped because the fund could not work out how much is left to sell. ' +
+              `${failure.recognized ? `${failure.summary} ` : ''}Nothing was transferred — press Sell again.`,
+          });
         }
         available = await readCash();
         // 剩下的確定賣不動（沒有可賣的部位、單筆上限擋住）→ 再試也是一樣，直接停，
         // 往下把已經有的 USDT 轉出並說明少了多少。
         if (run.status === 'stalled' || run.steps === 0) {
-          lastSellReason = run.lastReason;
+          lastSell = { outcome: run.lastOutcome, reason: run.lastReason };
           break;
         }
       }
@@ -2087,13 +2117,22 @@ function FundPageBody(): ReactNode {
       if (!receipt.success) throw new Error(`UserOp landed but reverted: ${receipt.txHash}`);
       // 轉出的比要求的少：只有最新的 status 真的沒有部位時才說「沒有部位可賣」，
       // 其餘情況說的是「這次賣不動」與原因（cre8-app#49）。
-      setWithdrawNote(withdrawShortfallNote({
+      // 原因用白話英文；後端的原文收進提示下方可展開的細節（cre8-app#55）。
+      // 「沒有部位可賣」「這次不用交易」這兩類不當原因：有沒有部位由最新的 status 決定，不是那句話。
+      const stall = lastSell === null ? null : tradeFailure(lastSell);
+      const cause =
+        stall !== null && stall.recognized && stall.kind !== 'nothing-to-sell' && stall.kind !== 'nothing-to-do'
+          ? stall.summary
+          : null;
+      const shortfall = withdrawShortfallNote({
         sentUsd: sendable,
         askedUsd: effective,
         holdings: latest.holdings ?? [],
         cashSymbol,
-        reason: lastSellReason,
-      }));
+        cause,
+      });
+      setWithdrawNote(shortfall);
+      setWithdrawNoteDetail(shortfall === null ? null : stall?.technical ?? null);
       setWithdrawTx(receipt.txHash);
       showProgress({
         tone: 'confirmed', title: 'Sale confirmed', hash: receipt.txHash,
@@ -2126,13 +2165,20 @@ function FundPageBody(): ReactNode {
         await queryClient.invalidateQueries({ queryKey: ['fund-status'], refetchType: 'all' });
         return;
       }
-      const rawDetail = String((cause as Error).message ?? cause);
-      const friendlyDetail = explainA10Failure(rawDetail, { pauseSources, nextBuyAt: buyLimit?.nextBuyAt ?? null });
-      const detail = (friendlyDetail ?? rawDetail).split('\n')[0].slice(0, 200);
-      setWithdrawError(friendlyDetail === null ? cause : new Error(friendlyDetail));
-      if (isPermissionFailure(String((cause as Error).message ?? cause))) setWithdrawNote(PERMISSION_HINT);
-      showProgress({ tone: 'error', title: 'Sale not completed', detail });
-      toast.replace(toastId, { tone: 'bad', title: 'Sale not completed', body: detail });
+      // 後端說沒成交（`TradeFailureError`）：訊息已經是白話英文，原文在可展開的細節裡。
+      if (cause instanceof TradeFailureError) {
+        setWithdrawError(cause);
+        showProgress({ tone: 'error', title: 'Sale not completed', detail: cause.message, technical: cause.technical });
+        toast.replace(toastId, { tone: 'bad', title: 'Sale not completed', body: cause.message });
+      } else {
+        const rawDetail = String((cause as Error).message ?? cause);
+        const friendlyDetail = explainA10Failure(rawDetail, { pauseSources, nextBuyAt: buyLimit?.nextBuyAt ?? null });
+        const detail = (friendlyDetail ?? rawDetail).split('\n')[0].slice(0, 200);
+        setWithdrawError(friendlyDetail === null ? cause : new Error(friendlyDetail));
+        if (isPermissionFailure(rawDetail)) setWithdrawNote(PERMISSION_HINT);
+        showProgress({ tone: 'error', title: 'Sale not completed', detail });
+        toast.replace(toastId, { tone: 'bad', title: 'Sale not completed', body: detail });
+      }
       // 失敗前可能已經賣掉一部分（現金變多、部位變少）：讓面板上的數字跟上，不要停在舊的。
       void queryClient.invalidateQueries({ queryKey: ['fund-status'], refetchType: 'all' });
     } finally {

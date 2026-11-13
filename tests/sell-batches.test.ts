@@ -3,7 +3,7 @@ import { MAX_SELL_BATCHES, SellBatchError, afterSellRun, formatRemainingUsd, run
 
 // 一輪續做之後該怎麼辦（cre8-app#44）：`remainingUsdE8: null` 是「不知道」，不可以當成完成。
 test("what the caller does after a run: proceed, press again, or stop on an unknown remainder", () => {
-  const run = (status: SellRun["status"], remainingUsdE8: bigint | null): SellRun => ({ status, batches: 1, steps: 1, remainingUsdE8, lastReason: "r" });
+  const run = (status: SellRun["status"], remainingUsdE8: bigint | null): SellRun => ({ status, batches: 1, steps: 1, remainingUsdE8, lastReason: "r", lastOutcome: "executed" });
   // 賣完了。
   expect(afterSellRun(run("done", 0n))).toBe("proceed");
   // 到上限還有剩：再按一次。
@@ -25,6 +25,8 @@ test("a batch that reports an unknown remainder never ends up as 'proceed'", asy
     });
     expect(result.remainingUsdE8).toBeNull();
     expect(result.lastReason).toBe("規劃前被擋下");
+    // 最後一批的 outcome 一起帶出來，畫面才能依它選訊息（cre8-app#55）。
+    expect(result.lastOutcome).toBe(outcome);
     expect(afterSellRun(result)).toBe("unknown");
   }
 });
@@ -72,7 +74,7 @@ test("stops at zero and feeds each remainder into the next batch", async () => {
   // backend#46 的例子：要賣 200，首批 150，剩 50 用 sellUsdE8 續做。
   const flow = scripted([batch(50n * E8), batch(0n)]);
   const run = await flow.run();
-  expect(run).toEqual({ status: "done", batches: 2, steps: 2, remainingUsdE8: 0n, lastReason: "ok" });
+  expect(run).toEqual({ status: "done", batches: 2, steps: 2, remainingUsdE8: 0n, lastReason: "ok", lastOutcome: "executed" });
   expect(flow.sent).toEqual(["first", 50n * E8]);
   expect(flow.progress).toEqual(["batch 2, $50.00 left"]);
 });
@@ -121,6 +123,8 @@ test("a blocked, reverted or failed batch throws with what is left", async () =>
     expect(error.completedBatches).toBe(2);
     // 第三批沒成交：還剩的是送進去的 40。
     expect(error.remainingUsdE8).toBe(40n * E8);
+    // 那一批的 outcome 也帶著：畫面依它選訊息（reverted 與 blocked 要說的話不一樣，cre8-app#55）。
+    expect(error.outcome).toBe(outcome);
   }
 });
 

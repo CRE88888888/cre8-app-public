@@ -132,6 +132,9 @@ export function explainA10Failure(
   message: string,
   context: { pauseSources?: readonly PauseSource[] | null; nextBuyAt?: number | null } = {},
 ): string | null {
+  // `[EXECUTOR_PAUSE_UNAVAILABLE]`、`[BUY_ALLOWANCE_UNAVAILABLE]` 是後端「讀不到」那個狀態，不是它真的發生了：
+  // 不可以說成「平台已暫停」或「額度用完」（cre8-app#55）。
+  if (/(EXECUTOR_PAUSE|BUY_ALLOWANCE)_UNAVAILABLE/.test(message)) return null;
   if (/ExecutorPaused|EXECUTOR_PAUSE|全域暫停/.test(message)) return PLATFORM_PAUSED_MESSAGE;
   if (/BuyLimitExceeded|BUY_ALLOWANCE|買入額度/.test(message)) return buyLimitMessage(context.nextBuyAt ?? windowEndFrom(message));
   if (/(^|[^A-Za-z])Paused\b(\(\))?/.test(message) || /帳戶.*暫停|已暫停/.test(message)) {

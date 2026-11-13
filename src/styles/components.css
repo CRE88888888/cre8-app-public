@@ -230,6 +230,44 @@
   font-weight: 600;
 }
 
+/* 可展開的技術細節（後端原文）。主要訊息在上面，這裡預設收起來。 */
+.tech-details {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.tech-details summary {
+  width: fit-content;
+  min-height: 24px;
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+/* 手機收據整塊置中：展開鈕跟著置中，原文仍靠左。 */
+.app-ticket-result .tech-details summary {
+  margin-inline: auto;
+}
+
+.tech-details summary:hover,
+.tech-details[open] summary {
+  opacity: 1;
+}
+
+.tech-details pre {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: rgba(0, 0, 0, 0.05);
+  color: inherit;
+  font: 400 12px/1.5 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 180px;
+  overflow: auto;
+}
+
 /* 鍵值列 */
 .kv {
   display: grid;

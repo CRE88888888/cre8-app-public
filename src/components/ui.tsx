@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { ApiError } from '../lib/api';
+import { TradeFailureError } from '../lib/trade-failure';
 
 export type Tone = 'neutral' | 'ok' | 'warn' | 'bad';
 
@@ -30,6 +31,20 @@ export function Note({
 }
 
 /**
+ * 可展開的技術細節：後端的原始訊息（多半是給營運看的中文內部訊息）收在這裡，
+ * 主要訊息只放白話英文（cre8-app#55）。沒有內容就不顯示。
+ */
+export function TechnicalDetails({ text }: { text: string | null | undefined }): ReactNode {
+  if (text === null || text === undefined || text.trim() === '') return null;
+  return (
+    <details className="tech-details">
+      <summary>Technical details</summary>
+      <pre>{text}</pre>
+    </details>
+  );
+}
+
+/**
  * 錯誤顯示。**刻意把 `code` 與 HTTP status 一起秀出來**：
  * 「後端開關沒開」與「後端壞了」是兩種完全不同的處置，而訊息長得一樣時人只會看到紅字。
  */
@@ -56,6 +71,17 @@ export function ErrorNote({ error }: { error: unknown }): ReactNode {
         </strong>
         <div style={{ marginTop: 6 }}>{error.message}</div>
         <div style={{ marginTop: 6, opacity: 0.75 }}>{detail}</div>
+      </Note>
+    );
+  }
+
+  // 後端說「這一輪沒成交」：白話訊息在 `message`，後端原文收進可展開的細節。
+  if (error instanceof TradeFailureError) {
+    return (
+      <Note tone="bad">
+        <strong>{error.title}</strong>
+        <div style={{ marginTop: 6 }}>{error.message}</div>
+        <TechnicalDetails text={error.technical} />
       </Note>
     );
   }

@@ -38,6 +38,8 @@ export type SellRun = {
   /** 還沒賣的名義額；不知道時為 null。 */
   remainingUsdE8: bigint | null;
   lastReason: string;
+  /** 最後一批的 `outcome`（一定是 `executed` 或 `noop`，其餘會丟 `SellBatchError`）。 */
+  lastOutcome: 'executed' | 'noop';
 };
 
 /** 某一批被擋下、revert 或失敗。帶著「已經做了幾批、還剩多少」，讓呼叫端可以告訴使用者接下來怎麼辦。 */
@@ -45,9 +47,15 @@ export class SellBatchError extends Error {
   readonly batches: number;
   readonly completedBatches: number;
   readonly remainingUsdE8: bigint | null;
-  constructor(message: string, info: { batches: number; completedBatches: number; remainingUsdE8: bigint | null }) {
+  /** 沒成交的那一批後端回的 `outcome`（`blocked`／`reverted`／`failed`）；`message` 是它的 `reason` 原文。 */
+  readonly outcome: SellBatch['outcome'] | null;
+  constructor(
+    message: string,
+    info: { batches: number; completedBatches: number; remainingUsdE8: bigint | null; outcome?: SellBatch['outcome'] },
+  ) {
     super(message);
     this.name = 'SellBatchError';
+    this.outcome = info.outcome ?? null;
     this.batches = info.batches;
     this.completedBatches = info.completedBatches;
     this.remainingUsdE8 = info.remainingUsdE8;
@@ -99,12 +107,13 @@ export async function runSellBatches(options: {
         completedBatches: batches - 1,
         // 這一批沒成交：還剩的就是送進去的那個量（上一批回報的剩餘）。
         remainingUsdE8: previous ?? remaining,
+        outcome: result.outcome,
       });
     }
     steps += result.steps.length;
     const status = sellStatus({ outcome: result.outcome, remaining, previous, batches, max });
     if (status !== null) {
-      return { status, batches, steps, remainingUsdE8: remaining, lastReason: result.reason };
+      return { status, batches, steps, remainingUsdE8: remaining, lastReason: result.reason, lastOutcome: result.outcome };
     }
     // `status === null` 代表可以繼續，那時 `remaining` 一定是正數。
     const carry = remaining as bigint;

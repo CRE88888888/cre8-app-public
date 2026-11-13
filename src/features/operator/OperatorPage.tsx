@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Badge, ErrorNote, Spinner } from '../../components/ui';
 import { toast } from '../../components/Toast';
+import { explainTradeFailure } from '../../lib/trade-failure';
 import { Link } from 'react-router-dom';
 import { AppIcon } from '../../components/AppIcon';
 import { WalletMenu } from '../../components/WalletMenu';
@@ -237,10 +238,15 @@ function Dashboard({
       const ok = result.outcome === 'executed' || result.outcome === 'noop';
       // 成交的那一輪順便說每一步走了哪個交易場所（cre8-app#47）。
       const venues = result.outcome === 'executed' ? venueSummary(result.steps ?? []) : null;
+      // 沒成交：第二行是白話英文，後端的原文（給營運看的內部訊息）收進可展開的細節（cre8-app#55）。
+      const failure = result.outcome === 'executed' ? null : explainTradeFailure(result);
       toast.replace(toastId, {
         tone: ok ? 'ok' : 'bad',
         title: `#${id}: ${result.outcome}`,
-        body: `${(result.txHash ?? result.reason ?? '').slice(0, 120)}${venues === null ? '' : ` · via ${venues}`}`,
+        body: failure === null
+          ? `${(result.txHash ?? '').slice(0, 120)}${venues === null ? '' : ` · via ${venues}`}`
+          : failure.message,
+        detail: failure?.technical,
       });
       await refetch();
     } catch (cause) {

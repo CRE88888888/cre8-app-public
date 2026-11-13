@@ -63,14 +63,17 @@ test("'no positions left' is only said when there really are none", () => {
   expect(note).not.toContain("no positions left");
 });
 
-test("when positions remain, the backend's reason is passed on", () => {
+test("when positions remain, the plain-English cause is added as its own sentence", () => {
+  // 原因是呼叫端給的一句白話英文（`explainTradeFailure` 的 `summary`）；後端原文不進這裡（cre8-app#55）。
   expect(
-    withdrawShortfallNote({ sentUsd: 150, askedUsd: 250, holdings: fresh, cashSymbol: "USDT", reason: " 單筆上限 150 USDT " }),
+    withdrawShortfallNote({ sentUsd: 150, askedUsd: 250, holdings: fresh, cashSymbol: "USDT", cause: " The amount is too small to trade, so nothing was sent. " }),
   ).toBe(
-    "Sent $150.00 of the $250.00 you asked for — the remaining $100.00 could not be sold right now (單筆上限 150 USDT). Your positions are still in the fund; you can try again.",
+    "Sent $150.00 of the $250.00 you asked for — the remaining $100.00 could not be sold right now. The amount is too small to trade, so nothing was sent. Your positions are still in the fund; you can try again.",
   );
-  // 原因是空的就不加括號。
-  expect(withdrawShortfallNote({ sentUsd: 150, askedUsd: 250, holdings: fresh, cashSymbol: "USDT", reason: "  " })).not.toContain("()");
+  // 原因是空的就不多一句。
+  expect(withdrawShortfallNote({ sentUsd: 150, askedUsd: 250, holdings: fresh, cashSymbol: "USDT", cause: "  " })).toBe(
+    "Sent $150.00 of the $250.00 you asked for — the remaining $100.00 could not be sold right now. Your positions are still in the fund; you can try again.",
+  );
 });
 
 test("a holding whose value cannot be read counts as a position, not as 'nothing left'", () => {

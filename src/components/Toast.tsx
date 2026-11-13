@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Toaster as SonnerToaster, toast as sonner } from 'sonner';
+import { TechnicalDetails } from './ui';
 
 /**
  * Toast —— **用 shadcn 的 sonner**，不再自己寫。
@@ -28,6 +29,8 @@ export type ToastInput = {
   title: string;
   /** 第二行（tx hash、金額、原因）。sonner 稱它 `description`。 */
   body?: string;
+  /** 可展開的技術細節（後端原文）。主要訊息放 `body`，這裡只給想看原文的人（cre8-app#55）。 */
+  detail?: string;
 };
 
 const DURATION = { ok: 8_000, warn: 12_000, bad: 15_000 } as const;
@@ -48,7 +51,13 @@ function emit(input: ToastInput, id?: ToastId): ToastId {
   const options = {
     // `id` 有值 → 更新既有的那一則（不是新增）。這是 replace 的實作方式。
     ...(id === undefined ? {} : { id }),
-    description: input.body,
+    description:
+      input.detail === undefined || input.detail.trim() === '' ? input.body : (
+        <>
+          {input.body}
+          <TechnicalDetails text={input.detail} />
+        </>
+      ),
     // pending 不自動消失：它會被下一次 replace 換掉。其餘按嚴重度給不同的停留時間
     // （失敗要留久一點才看得完）。
     ...(input.tone === 'pending' ? { duration: PENDING_MAX_MS } : { duration: DURATION[input.tone] }),
