@@ -30,6 +30,7 @@ import { hasSellablePositions, lowerOf, sweepNativeWei } from '../../lib/close-p
 import { isPermissionFailure, renewedMessage, tradingPermissionHealth } from '../../lib/trading-permission';
 import { buyAllowanceState, buyLimitMessage, checkEnrollment, describePause, explainA10Failure, pauseSourcesFromFlags, sameAllocation, PLATFORM_PAUSED_MESSAGE } from '../../lib/a10';
 import { MAX_SELL_BATCHES, SellBatchError, SellUnfinished, afterSellRun, formatRemainingUsd, runSellBatches } from '../../lib/sell-batches';
+import { cashUsdOf, sellTargetUsd, totalUsdOf, withdrawShortfallNote } from '../../lib/withdraw-plan';
 import { AccountControls } from './AccountControls';
 import { accountOnchainKey, loadAccountOnchain, useAccountOnchain } from './use-account-onchain';
 import { useWallet } from '../../store/wallet';
@@ -243,6 +244,16 @@ function FundPageBody(): ReactNode {
   const requestedReturn = search.get('returnTo');
   const backTo = safePublicReturn(requestedReturn);
   const [tab, setTab] = useState<'deposit' | 'withdraw'>(search.get('tab') === 'withdraw' ? 'withdraw' : 'deposit');
+  // 切到 Sell 分頁時，手上的 status 如果不是剛讀的就重讀一次（cre8-app#49）。
+  // 排程器會在背景買賣，頁面不會自己知道；而 Sell 面板的 Cash／positions／total 是使用者決定賣多少的依據。
+  // 只在「切到 Sell」那一刻檢查（不跟著每次資料更新重跑）；送出前另外還會再讀一次，那才是判斷要不要賣的依據。
+  const statusUpdatedAt = status.dataUpdatedAt;
+  const holdingId = holding?.id;
+  useEffect(() => {
+    if (tab !== 'withdraw' || holdingId === undefined || token === null) return;
+    if (statusUpdatedAt === 0 || Date.now() - statusUpdatedAt < 5_000) return;
+    void queryClient.invalidateQueries({ queryKey: ['fund-status', token, holdingId] });
+  }, [tab, holdingId, token]);
   // 金額**不預填**：任何預設值都是猜的（使用者的餘額、他想存多少，我們都不知道），
   // 而預填超過餘額的數字會讓他一進頁面就看到紅字警告。留空，讓他自己輸入或按 Max。
   const [amount, setAmount] = useState('');
@@ -1542,6 +1553,8 @@ function FundPageBody(): ReactNode {
       toast.replace(toastId, transferHash ? {
         tone: 'warn', title: transferState === 'confirmed' ? 'Purchase received; check allocation' : 'Check transfer status', body: transferHash,
       } : { tone: 'bad', title: 'Purchase failed', body: friendlyFailure((cause as Error).message).split('\n')[0].slice(0, 180) });
+      // 轉帳已經送出的話，錢可能已經到帳（只是後面的配置沒完成）：讓 Sell 面板的現金與總值跟上。
+      if (transferHash) void queryClient.invalidateQueries({ queryKey: ['fund-status'], refetchType: 'all' });
     } finally {
       setBusy(false);
     }
@@ -1881,6 +1894,8 @@ function FundPageBody(): ReactNode {
       setWithdrawError(friendly === null ? cause : new Error(friendly));
       if (isPermissionFailure(raw)) setWithdrawNote(PERMISSION_HINT);
       toast.replace(toastId, { tone: 'bad', title: 'Close failed', body: (friendly ?? raw).split('\n')[0].slice(0, 180) });
+      // 失敗前可能已經賣掉一部分：讓面板上的數字跟上。
+      void queryClient.invalidateQueries({ queryKey: ['fund-status'], refetchType: 'all' });
     } finally {
       setClosing(false);
     }
@@ -1915,9 +1930,8 @@ function FundPageBody(): ReactNode {
   async function withdraw(): Promise<void> {
     if (wallet === null || token === null || holding === undefined || live === undefined) return;
     const account = holding.smartAccounts[0]?.address;
-    const cash = cashUsd();
     const requested = Number(withdrawAmount === '' ? '0' : withdrawAmount);
-    const usdtRow = (live.holdings ?? []).find((entry) => entry.symbol === (usdt?.symbol ?? 'USDT'));
+    const cashSymbol = usdt?.symbol ?? 'USDT';
     const usdtAsset = usdt?.address;
     setWithdrawBusy(true);
     setWithdrawError(null);
@@ -1944,11 +1958,27 @@ function FundPageBody(): ReactNode {
       }
       if (account === undefined || usdtAsset === undefined) throw new Error('找不到帳戶或會計資產');
       if (!Number.isFinite(requested) || requested <= 0) throw new Error('amount must be greater than zero');
+      // 送出前**重讀一次** status，現金與總值都用這一份（cre8-app#49）。
+      //
+      // 原本用的是頁面上快取的 `live`。頁面資料舊的時候（剛存款、排程器在背景又買了幾批），
+      // 會以為現金夠而完全不賣出，只把帳戶裡實際有的 USDT 轉出，還說成「沒有可賣的部位」
+      // （實測：要提 250，頁面以為現金 400，實際只有 39.66 與 $356 的 DOGE；redeem 一次都沒被呼叫）。
+      // 讀不到就停下：拿舊資料決定要不要賣，正是這個 bug。
+      let latest: PortfolioStatus;
+      try {
+        latest = await getPortfolioStatus(token, holding.id);
+      } catch (cause) {
+        throw new Error(`could not read the fund's current balances, so nothing was sold or sent: ${(cause as Error).message}`);
+      }
+      // 順便讓頁面上的 Cash／positions／total 跟上剛讀到的數字。
+      queryClient.setQueryData(['fund-status', token, holding.id], latest);
+      const cash = cashUsdOf(latest.holdings ?? [], cashSymbol);
+      const usdtRow = (latest.holdings ?? []).find((entry) => entry.symbol === cashSymbol);
       // ⚠ 不因為「超過總值」丟錯，而是**夾到可提領上限**。
       // 這裡本來是 `throw`，結果 Max 按鈕只要因為四捨五入多填 0.01，使用者就完全無法提領
       // （實測：total 996.0999 → Max 填 996.10 → 直接被自己的驗證擋掉）。
       // 提領自己的錢，多填一點的正確反應是「提出全部」，不是報錯。
-      const ceiling = totalUsd();
+      const ceiling = totalUsdOf(latest.totalUsdE8);
       const effective = Math.min(requested, ceiling);
       if (requested > ceiling + 1e-6) {
         setWithdrawNote(`Capped to the fund value: ${formatUsd(ceiling)} (you asked for ${formatUsd(requested)}).`);
@@ -1962,13 +1992,14 @@ function FundPageBody(): ReactNode {
       //
       // 所以：① 按 1/(1−緩衝) 放大 ② 賣完重讀餘額 ③ 還是不夠就再補一輪（最多 2 輪）。
       // 上限 2 輪是刻意的：真的賣不動（流動性不足）時，重試只會燒 gas 而不會變好。
-      const SELL_BUFFER = 0.06;
+      // （放大比例 `SELL_BUFFER` 與缺口的算法在 lib/withdraw-plan.ts。）
       const MAX_SELL_ROUNDS = 2;
       const readCash = async (): Promise<number> => {
-        const fresh = await getPortfolioStatus(token, holding.id);
-        const row = (fresh.holdings ?? []).find((entry) => entry.symbol === (usdt?.symbol ?? 'USDT'));
-        return row === undefined ? 0 : Number(row.usdValueE8) / 1e8;
+        latest = await getPortfolioStatus(token, holding.id);
+        return cashUsdOf(latest.holdings ?? [], cashSymbol);
       };
+      /** 最後一批賣出時後端說的話；轉出的比要求的少時拿來說明原因。 */
+      let lastSellReason: string | null = null;
 
       // 分批（cre8-app#39）：每個資產有單筆交易上限，後端一次只賣一批並回報還剩多少（`remainingUsdE8`）。
       // 所以「一輪」不再是一次呼叫，而是「首批送 usd，之後把剩餘量帶回去續做，直到 0」。
@@ -1977,9 +2008,8 @@ function FundPageBody(): ReactNode {
       let available = cash;
       let batchesLeft = MAX_SELL_BATCHES;
       for (let round = 1; round <= MAX_SELL_ROUNDS; round += 1) {
-        const shortfall = effective - available;
-        if (shortfall <= 0.01 || batchesLeft <= 0) break;
-        const target = Math.ceil((shortfall / (1 - SELL_BUFFER)) * 1e6) / 1e6;
+        const target = sellTargetUsd(effective, available);
+        if (target === null || batchesLeft <= 0) break;
         showProgress({ tone: 'pending', title: 'Selling positions', detail: 'Raising USDT for your sale.' });
         toast.replace(toastId, { tone: 'pending', title: 'Selling positions', body: `Round ${round}: raising ${formatUsd(target)}…` });
         let run;
@@ -2022,7 +2052,10 @@ function FundPageBody(): ReactNode {
         available = await readCash();
         // 剩下的確定賣不動（沒有可賣的部位、單筆上限擋住）→ 再試也是一樣，直接停，
         // 往下把已經有的 USDT 轉出並說明少了多少。
-        if (run.status === 'stalled' || run.steps === 0) break;
+        if (run.status === 'stalled' || run.steps === 0) {
+          lastSellReason = run.lastReason;
+          break;
+        }
       }
 
       // 轉出的金額全程走 BigInt，並以帳戶**鏈上的 USDT 餘額（wei）**為上限（cre8-app#18）。
@@ -2051,11 +2084,15 @@ function FundPageBody(): ReactNode {
         amountWei: value,
       });
       if (!receipt.success) throw new Error(`UserOp landed but reverted: ${receipt.txHash}`);
-      setWithdrawNote(
-        sendable < effective - 0.01
-          ? `Sent ${formatUsd(sendable)} of the ${formatUsd(effective)} you asked for — the account ran out of sellable positions (${formatUsd(effective - sendable)} still in stock).`
-          : null,
-      );
+      // 轉出的比要求的少：只有最新的 status 真的沒有部位時才說「沒有部位可賣」，
+      // 其餘情況說的是「這次賣不動」與原因（cre8-app#49）。
+      setWithdrawNote(withdrawShortfallNote({
+        sentUsd: sendable,
+        askedUsd: effective,
+        holdings: latest.holdings ?? [],
+        cashSymbol,
+        reason: lastSellReason,
+      }));
       setWithdrawTx(receipt.txHash);
       showProgress({
         tone: 'confirmed', title: 'Sale confirmed', hash: receipt.txHash,
@@ -2095,6 +2132,8 @@ function FundPageBody(): ReactNode {
       if (isPermissionFailure(String((cause as Error).message ?? cause))) setWithdrawNote(PERMISSION_HINT);
       showProgress({ tone: 'error', title: 'Sale not completed', detail });
       toast.replace(toastId, { tone: 'bad', title: 'Sale not completed', body: detail });
+      // 失敗前可能已經賣掉一部分（現金變多、部位變少）：讓面板上的數字跟上，不要停在舊的。
+      void queryClient.invalidateQueries({ queryKey: ['fund-status'], refetchType: 'all' });
     } finally {
       setWithdrawBusy(false);
     }
