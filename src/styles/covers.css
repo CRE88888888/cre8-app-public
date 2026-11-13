@@ -1,0 +1,44 @@
+/*
+ * 點畫封面（hedcut）的版式（2026-11-13，規格見 DESIGN.md「封面」）。
+ * 圖是純白底、黑色墨線，所以一律放在淺色面上、用 multiply 疊上去（白色會消失，不用去背）。
+ * 深色面（主打牌）不反白：反白後臉會變成負片，所以只放白底的小頭像。
+ */
+
+/* ── 基金頁上方的封面：左邊名稱，右邊點畫 ─────────────── */
+body.atp-formal-fund #root #atp-fund-cover.is-hedcut { border: 1px solid var(--hair); background: var(--paper); }
+body.atp-formal-fund #root #atp-fund-cover.is-hedcut > img {
+  inset: 0 5% 0 auto;
+  width: auto;
+  height: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  object-position: 50% 16%;
+  mix-blend-mode: multiply;
+}
+body.atp-formal-fund #root #atp-fund-cover.is-hedcut .atp-fund-cover-shade { display: none; }
+body.atp-formal-fund #root #atp-fund-cover.is-hedcut h1 { right: auto; max-width: 54%; color: var(--ink); }
+body.atp-formal-fund #root #atp-fund-cover.is-hedcut h1 :is(a, button, span) { color: inherit; }
+
+@media (min-width: 720px) {
+  body.atp-formal-fund #root #atp-fund-cover.is-hedcut > img { height: 124%; inset: auto 6% -24% auto; object-position: 50% 0; }
+  body.atp-formal-fund #root #atp-fund-cover.is-hedcut h1 { left: 28px; bottom: 76px; }
+  /* Fund facts 與人物介紹移到名稱下方（原本在右下角，會壓到人像）。 */
+  body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-hedcut) .atp-fund-byline { right: auto; left: 28px; bottom: 24px; }
+  body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-hedcut) .atp-fund-byline :is(.btn, .fund-introduction-trigger) { background: var(--white); box-shadow: inset 0 0 0 1px var(--hair); }
+  body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-hedcut) .atp-fund-byline :is(.btn, .fund-introduction-trigger):hover { background: var(--snow); }
+  /* 物件不出血：整個留在框內、上下留白。 */
+  body.atp-formal-fund #root #atp-fund-cover.is-hedcut.is-object > img { height: 100%; inset: 0 7% 0 auto; object-position: 50% 50%; }
+}
+@media (max-width: 719px) {
+  body.atp-formal-fund #root #atp-fund-cover.is-hedcut { border-inline: 0; }
+  body.atp-formal-fund #root #atp-fund-cover.is-hedcut > img { inset: 0 0 0 auto; }
+  body.atp-formal-fund #root #atp-fund-cover.is-hedcut h1 { max-width: 50%; }
+}
+
+/* ── 縮圖與頭像：白底，加一圈細線才不會跟白色頁面糊在一起 ── */
+#root :is(.mkt-avatar, .app-holding-cover, .fund-thumb, .fund-introduction-identity img, .app-ticket-fund img) {
+  background: var(--white);
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+#root .mkt-avatar img { object-position: 50% 30% !important; transform: scale(1.18); }
+#fund-explore .mkt-deck .mkt-avatar { box-shadow: none; }

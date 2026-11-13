@@ -56,7 +56,7 @@ export function FundOverview({
             <AppIcon name="left" size={16} /> {fromPortfolio ? "Portfolio" : "All funds"}
           </Link>
           <div className="vault-heading">
-            <div className="atp-fund-cover" id="atp-fund-cover" data-fund-cover>
+            <div className={`atp-fund-cover${meta?.cover.art === "hedcut" ? ` is-hedcut is-${meta.cover.subject ?? "person"}` : ""}`} id="atp-fund-cover" data-fund-cover>
               {meta === undefined ? (
                 <div
                   style={{
@@ -171,7 +171,7 @@ export function FundOverview({
         <details className="vault-details public-cover-credits">
           <summary>Cover image credits</summary>
           <p>
-            AI-generated editorial illustrations based on public identity
+            Stipple illustrations generated with AI from public identity
             references. Public figures identify portfolio themes; the publisher
             is CRE8.
           </p>

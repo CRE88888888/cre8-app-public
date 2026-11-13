@@ -54,6 +54,10 @@ test("every model has its approved cover, real holdings, history and all recorde
   for (const fund of REFERENCE_FUNDS) {
     const meta = REFERENCE_METADATA[fund.slug];
     expect(fs.existsSync(path.join("public", meta.cover.src))).toBe(true);
+    expect(fs.existsSync(path.join("public", meta.cover.thumbnailSrc))).toBe(true);
+    // 2026-11-13：30 檔參考基金的封面統一成點畫（DESIGN.md「基金封面：點畫」）。
+    expect(meta.cover.art).toBe("hedcut");
+    expect(meta.cover.src).toBe(`/fund-covers/hedcut/${fund.slug}.webp`);
     expect(meta.holdings.length).toBeGreaterThan(0);
     expect(meta.updates.length).toBeGreaterThan(0);
     expect(fund.nav!.length).toBeGreaterThan(90);

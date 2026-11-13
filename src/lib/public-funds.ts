@@ -51,16 +51,83 @@ export type ReferenceMetadata = {
     thumbnailSrc: string;
     position: number;
     thumbnailPosition: number;
+    /** `hedcut` = 白底點畫圖：版式是「圖靠右、名稱在左」，不是滿版照片。 */
+    art?: "hedcut";
+    /** 點畫圖畫的是人像（肩膀可以出血到下緣）還是物件（要完整留在框內）。 */
+    subject?: "person" | "object";
   };
   profile: FundProfile | null;
   updates: ModelTradeUpdate[];
   holdings: HoldingView[];
 };
 export const REFERENCE_FUNDS = payload.funds as unknown as ReferenceFund[];
-export const REFERENCE_METADATA = metadata as unknown as Record<
-  string,
-  ReferenceMetadata
->;
+/**
+ * 點畫封面（hedcut）：2026-11-13 起，30 檔參考基金的封面統一成同一種畫法 ——
+ * 純白底、黑色墨點與線條（規格見 DESIGN.md「封面」）。圖在 `public/fund-covers/hedcut/`，
+ * 每檔一張大圖（`<slug>.webp`）與一張縮圖（`<slug>-thumb.webp`）。
+ *
+ * 封面的來源資料（`src/reference/data/fund-metadata.json`）是同步來的不能改，
+ * 所以在這裡覆蓋 `cover`：所有讀 `REFERENCE_METADATA[slug].cover` 的地方（列表頭像、
+ * 基金頁封面、Portfolio 縮圖、交易抽屜）會一起換，不用各自處理。
+ * 不在這份清單裡的基金（例如使用者自己建的）沒有圖，各處用名稱縮寫。
+ */
+export const HEDCUT_SLUGS: ReadonlySet<string> = new Set([
+  "mag7",
+  "ai-buildout",
+  "multi-asset-balanced",
+  "crypto-leaders",
+  "treasury-reserve",
+  "elon-universe",
+  "pelosi-disclosed-equity",
+  "berkshire-disclosed-equities",
+  "trump-universe",
+  "dan-bin-oriental-harbor",
+  "ray-dalio-bridgewater",
+  "bill-ackman-pershing",
+  "bill-gates-foundation",
+  "cathie-wood-arkk",
+  "tom-lee-granny-shots",
+  "dan-ives-ai",
+  "stanley-druckenmiller-duquesne",
+  "ken-griffin-citadel",
+  "serenity-x",
+  "raoul-pal-x",
+  "ming-chi-kuo-x",
+  "herman-jin-x",
+  "chris-lee-x",
+  "peter-schiff-euro-pacific",
+  "jeffrey-gundlach-doubleline",
+  "gavin-baker-atreides",
+  "david-einhorn-dme",
+  "jim-cramer-x",
+  "lyn-alden-x",
+  "leopold-aschenbrenner-situational",
+]);
+/** 畫的不是人像的那幾張（主題基金的物件，以及頭像本來就不是真人照片的 X 帳號）。 */
+const HEDCUT_OBJECTS: ReadonlySet<string> = new Set([
+  "mag7",
+  "ai-buildout",
+  "multi-asset-balanced",
+  "crypto-leaders",
+  "treasury-reserve",
+  "serenity-x",
+  "raoul-pal-x",
+  "ming-chi-kuo-x",
+]);
+const hedcutCover = (slug: string): ReferenceMetadata["cover"] => ({
+  src: `/fund-covers/hedcut/${slug}.webp`,
+  thumbnailSrc: `/fund-covers/hedcut/${slug}-thumb.webp`,
+  position: 50,
+  thumbnailPosition: 50,
+  art: "hedcut",
+  subject: HEDCUT_OBJECTS.has(slug) ? "object" : "person",
+});
+export const REFERENCE_METADATA: Record<string, ReferenceMetadata> = Object.fromEntries(
+  Object.entries(metadata as unknown as Record<string, ReferenceMetadata>).map(([slug, meta]) => [
+    slug,
+    HEDCUT_SLUGS.has(slug) ? { ...meta, cover: hedcutCover(slug) } : meta,
+  ]),
+);
 export const REFERENCE_ASSETS = assetData as UnderlyingAsset[];
 export let RISK_FREE: RiskFreeReference | null =
   payload.riskFree as RiskFreeReference;

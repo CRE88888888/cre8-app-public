@@ -147,3 +147,19 @@
 - **`/create/activate` 是啟用表單**（真的建立：createStrategy → publishVersion → enroll → approve）。左邊三個步驟（命名、選資產與權重、再平衡頻率），右邊跟著捲動的「Your fund」摘要。資產是可點的列，勾了才出現權重框；有「Split evenly」；合計用進度條顯示還差多少；按鈕下方一次只說一件還缺的事。未登入時顯示三步驟說明，主要動作是「Design a fund」。
 - **資產頁**：跟基金頁同一條左緣（1344px／40px）與右側欄；Create 卡為深色。
 - 未動：錢包、SIWE、API、交易與簽名流程的邏輯。
+
+## 基金封面：點畫（2026-11-13）
+
+使用者決定：原本每檔封面各畫各的（彩色 AI 肖像、照片感場景），放在一起很亂。參考 Glider 與 Autopilot 後，30 檔參考基金的封面統一成**點畫（hedcut）**：純白底、黑色墨點與短線，像《華爾街日報》的人像與鈔票上的版畫。
+
+- **圖**：`public/fund-covers/hedcut/<slug>.webp`（800px 大圖）與 `<slug>-thumb.webp`（192px 縮圖）。清單在 `src/lib/public-funds.ts` 的 `HEDCUT_SLUGS`，在那裡覆蓋同步來的 `cover`（來源 `src/reference/` 不能改）。舊封面檔案還留著：設計器的封面選項仍在用。
+- **畫什麼**：人物基金畫本人的頭肩像，臉略朝左；主題基金畫一個物件（機櫃、石塊、天平、硬幣、國庫建築）；X 帳號的頭像若不是真人照片（像素圖、動漫、風景），就把那個頭像畫成點畫。
+- **構圖固定**：人像的頭寬佔大圖 46%、頭頂上方留 15%、水平置中、肩膀出血到下緣；物件佔 68%、四邊留白。這是 `scripts/hedcut-normalize.py` 自動裁出來的，所以生成時頭大頭小不用計較，只要不碰到上、左、右三邊。縮圖只比大圖緊一點（頭寬約 52%），放進 40px 圓框四周還有留白。
+- **版式**：
+  - 基金頁封面：淺灰底（paper）、名稱與按鈕在左、點畫在右，圖用 `mix-blend-mode: multiply` 疊上去（白色會消失，不用去背）。人像肩膀出血到框的下緣；物件完整留在框內（`is-object`）。
+  - 列表、主打牌、Portfolio、交易面板：白底小頭像，淺色面上加一圈細線。
+  - **深色面不反白。** 反白後臉會變成照片負片，所以深色主打牌上只放白底的圓形小頭像。
+- **新增一檔的做法**：用同一段畫法描述生成一張正方形 PNG（至少 1024px、純白底、無文字無邊框；人像附本人照片當參考），跑 `scripts/hedcut-normalize.py`，把兩個 webp 放進 `public/fund-covers/hedcut/`，再把 slug 加進 `HEDCUT_SLUGS`（物件類另外加進 `HEDCUT_OBJECTS`）。
+- **說明文字**：基金頁「Cover image credits」寫明是 AI 依公開身分參考生成的點畫插圖。
+- 樣式集中在 `src/styles/covers.css`。
+
