@@ -11,10 +11,11 @@ import { queryKeys } from '../../lib/query';
 import { useBodyClass } from '../../lib/use-body-class';
 import { useConnectedSessionToken } from '../../lib/use-connected-session';
 import { useMobile } from '../../lib/use-mobile';
+import { RENEW_SOON_DAYS } from '../../lib/trading-permission';
 import { useWallet } from '../../store/wallet';
 
 type Tone = 'ok' | 'warn' | 'bad';
-type Flag = { label: string; tone: Tone; detail: string };
+type Flag = { label: string; tone: Tone; detail: string; action?: { label: string; to: string } };
 
 type StudioFund = {
   strategy: StrategySummary;
@@ -35,12 +36,14 @@ function fundFlags(portfolio: Portfolio | undefined, status: PortfolioStatus | u
     return [{ label: 'No account', tone: 'warn', detail: 'This fund has no account yet, so it cannot hold assets or trade.' }];
   }
   const flags: Flag[] = [];
+  // 續期的入口在基金頁的 My position（`?position=1` 直接打開那個抽屜）。
+  const renew = { label: 'Renew permission', to: `/funds/strategy/${portfolio.strategyId}?position=1` };
   const expires = portfolio.sessionKey?.expiresAt ? Date.parse(portfolio.sessionKey.expiresAt) : NaN;
   if (Number.isFinite(expires) && expires <= now) {
-    flags.push({ label: 'Permission expired', tone: 'bad', detail: 'Trading is paused until you renew the trading permission.' });
-  } else if (Number.isFinite(expires) && expires - now < 7 * DAY) {
+    flags.push({ label: 'Permission expired', tone: 'bad', detail: 'Trading is paused until you renew the trading permission.', action: renew });
+  } else if (Number.isFinite(expires) && expires - now < RENEW_SOON_DAYS * DAY) {
     const days = Math.max(1, Math.ceil((expires - now) / DAY));
-    flags.push({ label: `Renew in ${days}d`, tone: 'warn', detail: `The trading permission expires in ${days} ${days === 1 ? 'day' : 'days'}.` });
+    flags.push({ label: `Renew in ${days}d`, tone: 'warn', detail: `The trading permission expires in ${days} ${days === 1 ? 'day' : 'days'}.`, action: renew });
   }
   if (status === undefined) return flags;
   if (status.gas?.ready === false) {
@@ -159,7 +162,12 @@ function FundLedger({ funds, detail }: { funds: StudioFund[]; detail: 'flags' | 
                 : flags.length ? flags.map((flag) => <Badge key={flag.label} tone={flag.tone}>{flag.label}</Badge>)
                 : <Badge tone="ok">Running</Badge>}
             </div>
-            {detail === 'flags' && flags[0] && <p className="app-studio-detail">{flags[0].detail}</p>}
+            {detail === 'flags' && flags[0] && (
+              <p className="app-studio-detail">
+                {flags[0].detail}
+                {flags[0].action && <> <Link className="app-studio-action" to={flags[0].action.to}>{flags[0].action.label}</Link></>}
+              </p>
+            )}
             {detail === 'summary' && (
               <p className="app-studio-detail">
                 Created {new Date(strategy.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}

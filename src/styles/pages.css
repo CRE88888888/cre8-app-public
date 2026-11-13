@@ -180,3 +180,7 @@ html body #root .cf-submit { width: 100%; min-height: 54px; font-size: 16px; }
   .cf-total-bar, .cf-total-bar i { border-radius: 3px !important; }
   .cf-summary { border-radius: var(--r-lg) !important; }
 }
+
+/* Studio「需要處理」列裡的行動連結（例如 Renew permission，cre8-app#25）：要看得出來可以按。 */
+#root .app-studio-action { color: var(--ink); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
+#root .app-studio-action:hover { color: var(--signal); }

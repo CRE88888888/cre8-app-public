@@ -4,8 +4,8 @@ import type { ReactNode } from 'react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { encodeFunctionData, formatEther, formatUnits, parseEther, parseUnits } from 'viem';
 import type { Address } from 'viem';
-import { closePosition, enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, getStrategy, listStrategies, postRebalance, redeemPortfolio } from '../../lib/api';
-import { CHAIN_ID, approveCalldata, bsc as appChain, publicClientFor, readOnlyClient, sendGasTopUp, sendSudoCalls, sendSweep, sendWithdraw } from '../../lib/kernel';
+import { closePosition, enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, getRenewalParams, getStrategy, listStrategies, postRebalance, postRenewalResult, redeemPortfolio } from '../../lib/api';
+import { CHAIN_ID, approveCalldata, bsc as appChain, publicClientFor, readOnlyClient, sendGasTopUp, sendRenewalUserOp, sendSudoCalls, sendSweep, sendWithdraw } from '../../lib/kernel';
 import type { PortfolioStatus } from '../../lib/api';
 import { MOCK_FUNDS } from '../../data/mock-funds';
 import {safePublicReturn} from '../../lib/public-navigation';
@@ -27,12 +27,17 @@ import { useConnectedSessionToken } from '../../lib/use-connected-session';
 import { WalletMenu } from '../../components/WalletMenu';
 import { WHITELIST_COPY } from '../../lib/live-funds';
 import { hasSellablePositions, lowerOf, sweepNativeWei } from '../../lib/close-position';
+import { isPermissionFailure, renewedMessage, tradingPermissionHealth } from '../../lib/trading-permission';
 import { useWallet } from '../../store/wallet';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge, ErrorNote, Note, Spinner } from '../../components/ui';
 import { AssetLogo } from '../../components/AssetLogo';
 import { toast, type ToastId } from '../../components/Toast';
+
+/** 賣出／清倉因為交易權限失效而失敗時，接在錯誤後面的那句話。 */
+const PERMISSION_HINT =
+  'The fund could not sell because its trading permission is no longer accepted. Open My position and choose Renew permission, then try again.';
 
 const ERC20_ABI = [
   { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: '', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] },
@@ -246,6 +251,9 @@ function FundPageBody(): ReactNode {
   /** 還沒授權給 executor 的資產（`null` = 還沒讀完）。有錢但沒授權時，UI 必須說出來。 */
   const [unapproved, setUnapproved] = useState<string[] | null>(null);
   const [approving, setApproving] = useState(false);
+  /** 續期交易權限（session key）：進行中的旗標，與成功後要留在畫面上的那句話。 */
+  const [renewing, setRenewing] = useState(false);
+  const [renewNote, setRenewNote] = useState<string | null>(null);
   // 提領：預設 USDT（現金腿），可選帳戶裡任何有餘額的資產 —— 每個都只是一筆 transfer。
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawBusy, setWithdrawBusy] = useState(false);
@@ -333,6 +341,8 @@ function FundPageBody(): ReactNode {
   }, [wallet, usdtAddress]);
 
   const live = status.data;
+  // 交易權限（session key）現在的狀態；My position 抽屜用。
+  const permission = tradingPermissionHealth(live?.sessionKey);
 
   /**
    * 讀「哪些資產還沒授權給 executor」。
@@ -842,6 +852,30 @@ function FundPageBody(): ReactNode {
                       >
                         {toppingUp ? 'Topping up…' : 'Top up 0.0005 BNB'}
                       </button>
+                    )}
+                  </dd>
+                  <dt>trading permission</dt>
+                  <dd id="trading-permission">
+                    <Badge tone={permission.tone}>{permission.label}</Badge>
+                    <div className={`fine${permission.tone === 'bad' ? ' neg' : ''}`} style={{ marginTop: 4 }}>
+                      {permission.detail}
+                    </div>
+                    {wallet === null ? null : (
+                      <button
+                        type="button"
+                        className={permission.needsAction ? 'btn sm' : 'btn ghost sm'}
+                        style={{ marginTop: 6 }}
+                        disabled={renewing}
+                        onClick={() => void renewPermission()}
+                      >
+                        {renewing ? 'Renewing…' : permission.needsAction ? 'Renew permission' : 'Renew now'}
+                      </button>
+                    )}
+                    <div className="fine" style={{ marginTop: 6 }}>
+                      One wallet signature. Also use it if selling fails because the permission is no longer accepted.
+                    </div>
+                    {renewNote === null ? null : (
+                      <div className="fine pos" role="status" style={{ marginTop: 6 }}>{renewNote}</div>
                     )}
                   </dd>
                 </dl>
@@ -1421,6 +1455,76 @@ function FundPageBody(): ReactNode {
     }
   }
 
+  /**
+   * 續期交易權限（cre8-app#25）：owner 簽一筆 sudo UserOp，在帳戶上安裝後端派生好的新 session key，
+   * 成功後回報後端記錄。到期前、或後端換了 master seed 之後都走這一條。
+   *
+   * 三步都用既有的東西：`GET renewal-params` → `sendRenewalUserOp` → `POST renewal-result`。
+   * 這裡只是把入口接回來（原本在 `/portfolios/:id` 頁，那一頁移除後就沒有地方按了）。
+   */
+  async function renewPermission(): Promise<void> {
+    if (wallet === null || token === null || holding === undefined) return;
+    setRenewing(true);
+    setError(null);
+    setRenewNote(null);
+    const id = toast.pending('Renewing trading permission', 'Preparing the new permission…');
+    try {
+      const params = await getRenewalParams(token, holding.id);
+      if (params.ownerAddress.toLowerCase() !== wallet.address.toLowerCase()) {
+        throw new Error('This account belongs to a different wallet. Connect the wallet that created it and try again.');
+      }
+      toast.replace(id, { tone: 'pending', title: 'Renewing trading permission', body: 'Confirm it in your wallet…' });
+      const receipt = await sendRenewalUserOp({
+        wallet,
+        token,
+        accountAddress: params.accountAddress as Address,
+        entryPoint: params.entryPoint,
+        initConfig: params.initConfig as `0x${string}`[],
+        strategyId: params.strategyId,
+      });
+      if (!receipt.success) throw new Error(`The renewal landed on-chain but reverted: ${receipt.txHash}`);
+      // 鏈上已經裝好了；回報只是讓後端知道有這一把。回報失敗就多試兩次 ——
+      // 這時再按一次 Renew 會多裝一把新的，不是使用者想要的。
+      let recorded = false;
+      let lastError: unknown = null;
+      for (let attempt = 1; attempt <= 3 && !recorded; attempt += 1) {
+        try {
+          await postRenewalResult(token, holding.id, {
+            keyRef: params.keyRef,
+            permissionId: params.permissionId,
+            validUntil: params.validUntil,
+            policySnapshot: params.policySnapshot,
+          });
+          recorded = true;
+        } catch (cause) {
+          lastError = cause;
+          if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 1_000));
+        }
+      }
+      if (!recorded) {
+        throw new Error(
+          `The new permission is installed on-chain (${receipt.txHash}), but the server did not record it: ` +
+            `${String((lastError as Error)?.message ?? lastError).split('\n')[0].slice(0, 120)}`,
+        );
+      }
+      setRenewNote(renewedMessage(params.validUntil));
+      toast.replace(id, { tone: 'ok', title: 'Trading permission renewed', body: receipt.txHash });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token), refetchType: 'all' }),
+        queryClient.invalidateQueries({ queryKey: ['fund-status'], refetchType: 'all' }),
+      ]);
+    } catch (cause) {
+      toast.replace(id, {
+        tone: 'bad',
+        title: 'Renewal not completed',
+        body: (cause as Error).message.split('\n')[0].slice(0, 140),
+      });
+      setError(cause);
+    } finally {
+      setRenewing(false);
+    }
+  }
+
   /** 幫帳戶補 gas（owner 錢包轉 BNB 進帳戶，與 portfolio 頁的 top-up 同一條路徑）。 */
   async function topUpGas(): Promise<void> {
     if (wallet === null || token === null || holding === undefined) return;
@@ -1537,6 +1641,7 @@ function FundPageBody(): ReactNode {
       toast.replace(toastId, { tone: 'ok', title: 'Position closed', body: 'Every asset is back in your wallet.' });
     } catch (cause) {
       setWithdrawError(cause);
+      if (isPermissionFailure(String((cause as Error).message ?? cause))) setWithdrawNote(PERMISSION_HINT);
       toast.replace(toastId, { tone: 'bad', title: 'Close failed', body: (cause as Error).message.split('\n')[0].slice(0, 140) });
     } finally {
       setClosing(false);
@@ -1700,6 +1805,7 @@ function FundPageBody(): ReactNode {
     } catch (cause) {
       const detail = String((cause as Error).message ?? cause).split('\n')[0].slice(0, 180);
       setWithdrawError(cause);
+      if (isPermissionFailure(String((cause as Error).message ?? cause))) setWithdrawNote(PERMISSION_HINT);
       showProgress({ tone: 'error', title: 'Sale not completed', detail });
       toast.replace(toastId, { tone: 'bad', title: 'Sale not completed', body: detail });
     } finally {
