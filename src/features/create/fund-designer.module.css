@@ -389,3 +389,9 @@
 @media (pointer: coarse) {
   .quickChip, .quickBrowse { min-height: 40px; }
 }
+
+/* 上線時還不能上架的資產（cre8-app#51）：列出來但不能選。預設的 disabled 樣式是整塊 40% 透明，
+   picker 裡大多數資產都是這個狀態時字會看不清楚，所以這裡只淡化圖示與名稱，「After launch」保持可讀。 */
+.assetChoice[data-later] > button:disabled { opacity: 1; cursor: default; background: var(--paper); }
+.assetChoice[data-later] > button:disabled img { opacity: .4; filter: grayscale(1); }
+.assetChoice[data-later] > button:disabled b { color: var(--steel); font-weight: 500; }

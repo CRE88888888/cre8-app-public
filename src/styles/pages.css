@@ -212,3 +212,14 @@ html body #root .cf-submit { width: 100%; min-height: 54px; font-size: 16px; }
 .app-ticket-receipt .trade-routes { width: 100%; margin: 0; }
 /* 手機的 Activity 清單：其他列的值都靠右，這一格也靠右。 */
 .app-ticket-details .trade-routes.is-compact li { justify-content: flex-end; }
+
+/* 上線時能不能投資（cre8-app#51）：Funds 清單說明行最前面的短標示，與基金頁封面下的一句說明。 */
+#fund-explore .mkt-launch[data-status="open"] { color: var(--pos); font-weight: 600; }
+#fund-explore .mkt-deck .mkt-launch[data-status="open"] { color: #7fd6b4; }
+.fund-launch { display: flex; align-items: baseline; gap: 8px; margin: 12px 0 0; color: var(--steel); font: 400 14px/1.45 var(--sans); }
+.fund-launch[data-status="open"] { color: var(--ink); }
+.fund-launch-dot { flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--steel); transform: translateY(-1px); }
+.fund-launch[data-status="open"] .fund-launch-dot { background: var(--pos); }
+@media (max-width: 719px) {
+  .fund-launch { margin: 12px 16px 0; font-size: 13px; }
+}

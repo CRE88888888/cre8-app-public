@@ -3,7 +3,8 @@ import { AppIcon } from "../../components/AppIcon";
 import { toast } from "../../components/Toast";
 import { ReferenceSheet } from "./ReferenceSheet";
 import { Link, useSearchParams } from "react-router-dom";
-import { REFERENCE_METADATA, editorial } from "../../lib/public-funds";
+import { REFERENCE_METADATA, assetBySymbol, editorial } from "../../lib/public-funds";
+import { describeFundLaunch, fundLaunchStatus } from "../../lib/launch-funds";
 import type { ReferenceFund } from "../../lib/public-funds";
 import { performancePeriod } from "../../reference/lib/fund-navigation";
 import { Performance } from "./Performance";
@@ -31,6 +32,8 @@ export function FundOverview({
     meta = REFERENCE_METADATA[fund.slug] as (typeof REFERENCE_METADATA)[string] | undefined,
     copy = editorial(fund);
   const fromPortfolio = /^\/portfolios?(?:[?#]|$)/.test(backTo);
+  // 上線時這檔能不能投資（cre8-app#51）。社群策略不是展示基金，回 null、不顯示。
+  const launch = fundLaunchStatus(fund.slug);
   const [shareLink, setShareLink] = useState<string | null>(null);
   async function shareFund() {
     const url = new URL(`/funds/${fund.slug}`, window.location.origin);
@@ -113,6 +116,13 @@ export function FundOverview({
               </div>
             </div>
           </div>
+          {/* 封面下方獨立一行：byline 在點畫封面上是疊在圖上的，放不下一整句說明。 */}
+          {launch && (
+            <p className="fund-launch" data-status={launch.status}>
+              <span className="fund-launch-dot" aria-hidden="true" />
+              {describeFundLaunch(launch, (symbol) => assetBySymbol(symbol)?.symbol ?? symbol)}
+            </p>
+          )}
         </header>
       </div>
       <ReferenceSheet

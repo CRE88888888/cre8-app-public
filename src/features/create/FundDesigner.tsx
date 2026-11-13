@@ -17,6 +17,7 @@ import FundCoverEditor, { FundCoverPreview } from "../../reference/components/fu
 import FundSourceEditor, { XProfilePreview } from "../../reference/components/x-profile";
 import { normalizeXHandle, X_MODEL_DISCLAIMER } from "../../reference/lib/x-profile";
 import { underlyingSlug } from "../../reference/lib/asset-navigation";
+import { LAUNCH_COPY, POPULAR_ASSET_KEYS, isLaunchAsset } from "../../lib/launch-admission";
 
 const base = "";
 const app = "";
@@ -25,9 +26,10 @@ const testnetCreate = "/create/activate";
 const SWATCH = ["var(--ink)", "var(--steel)", "#6F93AE", "#2C7A68", "#8C7A4E", "#9C6F62", "#B7CDDE"];
 const cx = (...names: (string | false | null | undefined)[]) => names.filter(Boolean).join(" ");
 const assetSrc = (key: string) => base + B.logoPath(key === B.CASH.key ? { category: "crypto", key, symbol: key } : B.assetOf(key));
-// 「Popular」快速加入列：新手最常選的幾個資產。key 都是 B.ASSETS 裡實際存在的；
-// 不存在或 B.canPickAsset 不放行的會在 render 時濾掉，不會出現壞掉的 chip。
-const QUICK_KEYS = ["BTC", "ETH", "BNB", "SOL", "NVDA", "TSLA", "AAPL", "XAUT"] as const;
+// 「Popular」快速加入列：新手最常選的幾個資產，名單在 lib/launch-admission.ts（POPULAR_ASSET_KEYS）。
+// 不存在、B.canPickAsset 不放行、或上線時還不能上架的會在 render 時濾掉，不會出現壞掉的 chip。
+// 上線時能不能上架（cre8-app#51）：只看 lib/launch-admission.ts 的清單。testnet 模式有自己的 offered 名單，不套這個。
+const opensAtLaunch = (asset: B.Asset) => isLaunchAsset(asset.token);
 const venueSrc = (venue: string) => `${base}/logos/${venue === "stake" ? "lista" : venue}.webp`;
 
 // The saved draft is read once on the client; the server and the first client render both see none.
@@ -202,7 +204,8 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
   const requestedAsset = useSyncExternalStore(noSubscribe, () => new URLSearchParams(window.location.search).get("asset"), () => null);
   const seeded = useMemo(() => {
     if (!requestedAsset || embedded || testnet) return null;
-    const asset = B.ASSETS.find(a => a.key === requestedAsset && B.canPickAsset(a));
+    // 連結帶進來的資產也要在上線清單裡，否則等於繞過 picker 的「After launch」。
+    const asset = B.ASSETS.find(a => a.key === requestedAsset && B.canPickAsset(a) && opensAtLaunch(a));
     if (!asset) return null;
     const draft = restored ?? EMPTY;
     return draft.rows.some(row => row.key === asset.key) ? draft : B.addAsset(draft, asset.key, mode);
@@ -240,6 +243,9 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
   const issue = testnet ? testnet.problem(state) : B.problem(state, mode);
   const sourceIssue = state.xHandle?.trim() && !normalizeXHandle(state.xHandle) ? "Enter a valid X handle." : state.collection === "x-voices" && !normalizeXHandle(state.xHandle) ? "Add the X handle that inspired this index." : "";
   const notice = testnet ? testnet.notice(state) : "";
+  // 舊草稿裡可能已經有上線時還不能上架的資產（清單出來之前選的）：先講清楚，不要等到啟用才被擋。
+  const laterNames = testnet ? [] : [...new Set(state.rows.map((row) => B.assetOf(row.key)).filter((asset) => !opensAtLaunch(asset)).map((asset) => B.displayAssetSymbol(asset.symbol)))];
+  const launchNotice = laterNames.length === 0 ? "" : `${laterNames.join(", ")} ${laterNames.length === 1 ? "opens" : "open"} after launch. Remove ${laterNames.length === 1 ? "it" : "them"} to activate this fund now.`;
   const cashName = testnet ? testnet.cash : B.CASH.symbol;
   const symbol = symbolText || (testnet ? testnet.symbolFor(state.name) : "");
   const symbolValid = /^[A-Z0-9]{1,16}$/.test(symbol);
@@ -254,10 +260,10 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
   // Testnet review only: what CRE8's keeper can run of the design, row by row and rule by rule.
   const keeperLines = reviewing && testnet ? testnet.support(state) : null;
 
-  // 快速加入列：只在還放得下新資產時出現；資格與 picker 同一套（testnet 看 offered，其餘看 canPickAsset）。
+  // 快速加入列：只在還放得下新資產時出現；資格與 picker 同一套（testnet 看 offered，其餘看 canPickAsset 與上線清單）。
   const canGrow = keys.length < limits.assets && !B.positionsFull(state, mode);
-  const quick = QUICK_KEYS.map((key) => B.ASSET_BY_KEY.get(key))
-    .filter((asset): asset is B.Asset => !!asset && (testnet ? B.canAdd(asset) && !!testnet.offered?.has(asset.key) : B.canPickAsset(asset)))
+  const quick = POPULAR_ASSET_KEYS.map((key) => B.ASSET_BY_KEY.get(key))
+    .filter((asset): asset is B.Asset => !!asset && (testnet ? B.canAdd(asset) && !!testnet.offered?.has(asset.key) : B.canPickAsset(asset) && opensAtLaunch(asset)))
     .map((asset) => (testnet ? asset : B.stockSourceInDesign(asset, state.rows)))
     .slice(0, 8);
   // 「More options」收起來時，用一個小標籤提示裡面有東西被設定過。
@@ -268,7 +274,7 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
     setAdding(true);
   }
   function pick(key: string) {
-    if (testnet ? !B.canAdd(B.assetOf(key)) || !testnet.offered?.has(key) : !B.canPickAsset(B.assetOf(key)) && !state.rows.some(row => row.key === key)) return;
+    if (testnet ? !B.canAdd(B.assetOf(key)) || !testnet.offered?.has(key) : !(B.canPickAsset(B.assetOf(key)) && opensAtLaunch(B.assetOf(key))) && !state.rows.some(row => row.key === key)) return;
     const next = B.addAsset(state, key, mode);
     if (next === state) return;
     commit(next);
@@ -348,7 +354,7 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
                           <Logo src={assetSrc(asset.key)} size={32} className={styles.logo32} />
                           <span>
                             <b><a className={styles.assetInfo} href={`${app}/asset/${underlyingSlug(asset)}/?returnTo=${encodeURIComponent(`${base}/create/`)}`} target="_blank" rel="noopener noreferrer" aria-label={`About ${asset.name} (opens a new tab)`}>{asset.name} ↗</a>{twins.length > 1 && <span className={styles.slice}>{nth === 1 ? "Core" : `Slice ${nth}`}</span>}</b>
-                            <small>{B.displayAssetSymbol(asset.symbol)}{asset.issuer === "ondo" && " · Ondo"}{testnet && asset.status !== "ready" && <span className={styles.pending} title={B.STATUS_DETAIL[asset.status]}> · Pending</span>}</small>
+                            <small>{B.displayAssetSymbol(asset.symbol)}{asset.issuer === "ondo" && " · Ondo"}{testnet && asset.status !== "ready" && <span className={styles.pending} title={B.STATUS_DETAIL[asset.status]}> · Pending</span>}{!testnet && !opensAtLaunch(asset) && <span className={styles.pending} title={LAUNCH_COPY.assetLaterLong}> · {LAUNCH_COPY.assetLater}</span>}</small>
                           </span>
                         </div>
                         <div className={styles.shareCell}>
@@ -429,6 +435,7 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
             </dl>
             {(issue || sourceIssue) && <p className={styles.issue} role="status">{issue || sourceIssue}</p>}
             {notice && <p className={styles.note} role="status">{notice}</p>}
+            {launchNotice && <p className={styles.notice} role="status">{launchNotice}</p>}
             <button className={cx("btn", styles.wide)} type="button" disabled={!state.rows.length || !!issue || !!sourceIssue} onClick={openReview}>Review fund</button>
             {!state.rows.length && <p className={styles.note}>Add at least one asset to review.</p>}
           </div>
@@ -508,7 +515,8 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
             </> : <>
               <button className={cx("btn", styles.wide)} type="button" disabled={!state.name.trim() || !stakeValid || !!sourceIssue} onClick={download}>Download design</button>
               {(!state.name.trim() || !stakeValid) && <span className={styles.note}>{!state.name.trim() ? "Give your fund a name to continue." : `Set a stake of at least ${B.STAKE.min} USDT.`}</span>}
-              {previews.length === 0 && !B.problem(state) && <a className={styles.textLink} href={testnetCreate}>Activate a target-weight strategy →</a>}
+              {previews.length === 0 && !B.problem(state) && !launchNotice && <a className={styles.textLink} href={testnetCreate}>Activate a target-weight strategy →</a>}
+              {launchNotice && <span className={styles.note}>{launchNotice}</span>}
             </>}
             <div className={styles.field}><span className={styles.label}>At launch</span>
               <ol className={styles.steps}>
@@ -543,6 +551,9 @@ function AddAsset({ state, query, setQuery, tab, setTab, pick, close }: { state:
   const available = B.ASSETS.filter((asset) => testnet ? B.canAdd(asset) && !!testnet.offered?.has(asset.key) : B.canPickAsset(asset))
     .map(asset => testnet ? asset : B.stockSourceInDesign(asset, state.rows));
   const open = available.filter(asset => match(asset, q));
+  // 上線時還不能上架的資產照樣列出來，但標「After launch」、不能選（cre8-app#51）；同一組裡可以選的排前面。
+  const openNow = (asset: B.Asset) => !!testnet || opensAtLaunch(asset);
+  const openFirst = (items: B.Asset[]) => [...items].sort((a, b) => Number(openNow(b)) - Number(openNow(a)));
   function search(value: string) {
     setQuery(value);
     const text = value.trim().toLowerCase(), matches = available.filter(asset => match(asset, text));
@@ -558,11 +569,12 @@ function AddAsset({ state, query, setQuery, tab, setTab, pick, close }: { state:
     ["Crypto", testnet.sandbox ? "Sandbox copies of the mainnet tokens, at their real prices." : "Test tokens at their real prices, on testnet's Venus, Aave, Lista and PancakeSwap.", open.filter((asset) => asset.category === "crypto")],
     ["US stocks", testnet.sandbox ? "Sandbox copies of the tokenized shares (bStocks), at their real prices." : "Test copies of the tokenized shares (bStocks), priced by their own PancakeSwap pool like on mainnet.", open.filter((asset) => asset.category === "stock")],
   ] : [
-    ["Crypto", "", open.filter((asset) => B.classifyAsset(asset).assetClass === "crypto")],
-    ["US stocks · bStock", "", open.filter((asset) => B.classifyAsset(asset).assetClass === "stock" && asset.issuer !== "ondo").sort((a, b) => Number(B.hasStockLiquidity(b)) - Number(B.hasStockLiquidity(a)))],
-    ["US stocks · Ondo", "", open.filter((asset) => B.classifyAsset(asset).assetClass === "stock" && asset.issuer === "ondo")],
-    ["RWA", "", open.filter((asset) => B.classifyAsset(asset).assetClass === "rwa").sort((a, b) => B.rwaPickerOrder(a) - B.rwaPickerOrder(b) || a.name.localeCompare(b.name))],
+    ["Crypto", "", openFirst(open.filter((asset) => B.classifyAsset(asset).assetClass === "crypto"))],
+    ["US stocks · bStock", "", openFirst(open.filter((asset) => B.classifyAsset(asset).assetClass === "stock" && asset.issuer !== "ondo").sort((a, b) => Number(B.hasStockLiquidity(b)) - Number(B.hasStockLiquidity(a))))],
+    ["US stocks · Ondo", "", openFirst(open.filter((asset) => B.classifyAsset(asset).assetClass === "stock" && asset.issuer === "ondo"))],
+    ["RWA", "", openFirst(open.filter((asset) => B.classifyAsset(asset).assetClass === "rwa").sort((a, b) => B.rwaPickerOrder(a) - B.rwaPickerOrder(b) || a.name.localeCompare(b.name)))],
   ];
+  const laterCount = testnet ? 0 : available.filter((asset) => !openNow(asset)).length;
   const mode: B.BuilderMode = testnet ? "execution" : "demo", limits = B.builderLimits(mode);
   const full = have.size >= limits.assets, positions = B.positionsFull(state, mode);
   return (
@@ -578,9 +590,10 @@ function AddAsset({ state, query, setQuery, tab, setTab, pick, close }: { state:
             event.preventDefault();
             const index = enabledTabs.findIndex(([value]) => value === key), nextIndex = event.key === "Home" ? 0 : event.key === "End" ? enabledTabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + enabledTabs.length) % enabledTabs.length;
             const next = enabledTabs[nextIndex][0]; selectTab(next); document.getElementById(`${tabsId}-${next}-tab`)?.focus();
-          }}>{title}<small>{open.filter(asset => B.classifyAsset(asset).assetClass === key).length}</small></button>)}
+          }}>{title}<small>{open.filter(asset => B.classifyAsset(asset).assetClass === key && openNow(asset)).length}</small></button>)}
         </div>
         <input className={styles.search} type="search" placeholder="Search name or symbol" aria-label="Search assets" value={query} onChange={(event) => search(event.target.value)} autoFocus />
+        {laterCount > 0 && <p className={styles.note}>{available.length - laterCount} assets can be added now. The ones marked “{LAUNCH_COPY.assetLater}” open later.</p>}
         {ASSET_TABS.map(([key]) => <div key={key} id={`${tabsId}-${key}-panel`} role="tabpanel" aria-labelledby={`${tabsId}-${key}-tab`} hidden={tab !== key} tabIndex={0}>
         {tab === key && groups.filter(([, , items]) => items.length > 0 && B.classifyAsset(items[0]).assetClass === key).map(([title, line, items]) => (
           <div key={title}>
@@ -588,12 +601,13 @@ function AddAsset({ state, query, setQuery, tab, setTab, pick, close }: { state:
             <div className={cx(styles.assets, key === "rwa" && styles.rwaAssets)}>
               {items.map((asset) => {
                 const venues = testnet ? testnet.venues(asset.key).filter((v): v is B.LendVenue => v !== "hold" && v !== "stake") : B.venuesOf(asset), added = have.has(asset.key);
+                const later = !openNow(asset) && !added;
                 return (
-                  <div className={styles.assetChoice} key={asset.key}><button type="button" disabled={positions || (full && !added) || (!!testnet && added && B.isPlanningOnly(asset))} onClick={() => pick(asset.key)} aria-label={`${B.assetPickerName(asset)}, ${B.displayAssetSymbol(asset.symbol)}${B.assetPickerName(asset) !== asset.name ? `, ${asset.name}` : ""}${asset.issuer === "ondo" ? ", Ondo" : ""}${added ? ", already in the fund: add another strategy" : ""}${venues.length ? `, earns on ${venues.map((venue) => B.VENUE_NAME[venue]).join(", ")}` : ""}${asset.status === "history" ? ", price history pending" : ""}`}>
+                  <div className={styles.assetChoice} key={asset.key} data-later={later || undefined}><button type="button" title={later ? `${B.displayAssetSymbol(asset.symbol)} · ${LAUNCH_COPY.assetLaterLong}` : undefined} disabled={later || positions || (full && !added) || (!!testnet && added && B.isPlanningOnly(asset))} onClick={() => pick(asset.key)} aria-label={`${B.assetPickerName(asset)}, ${B.displayAssetSymbol(asset.symbol)}${B.assetPickerName(asset) !== asset.name ? `, ${asset.name}` : ""}${asset.issuer === "ondo" ? ", Ondo" : ""}${later ? `, ${LAUNCH_COPY.assetLaterLong.toLowerCase()}` : ""}${added ? ", already in the fund: add another strategy" : ""}${venues.length ? `, earns on ${venues.map((venue) => B.VENUE_NAME[venue]).join(", ")}` : ""}${asset.status === "history" ? ", price history pending" : ""}`}>
                     <Logo src={assetSrc(asset.key)} size={28} className={styles.logo28} />
-                    <span><b title={asset.name}>{B.assetPickerName(asset)}</b><small>{added ? `${B.displayAssetSymbol(asset.symbol)} · Added` : asset.status === "history" ? `${B.displayAssetSymbol(asset.symbol)} · pending` : B.displayAssetSymbol(asset.symbol)}</small></span>
-                    {!testnet && B.classifyAsset(asset).assetClass === "stock" && <span className={styles.liquidityDot} data-verified={asset.issuer !== "ondo" && B.hasStockLiquidity(asset)} title={`${B.hasStockLiquidity(asset) ? "Liquidity checked" : "Liquidity data pending"} · ${B.STOCK_LIQUIDITY_CHECKED_AT.slice(0, 10)}`} aria-hidden="true" />}
-                    {venues.length > 0 && <span className={styles.venueLogos} title={`Earns on ${venues.map((venue) => B.VENUE_NAME[venue]).join(", ")}`}>{venues.map((venue) => <Logo key={venue} src={venueSrc(venue)} size={18} className={styles.logo18} />)}</span>}
+                    <span><b title={asset.name}>{B.assetPickerName(asset)}</b><small>{added ? `${B.displayAssetSymbol(asset.symbol)} · Added` : later ? LAUNCH_COPY.assetLater : asset.status === "history" ? `${B.displayAssetSymbol(asset.symbol)} · pending` : B.displayAssetSymbol(asset.symbol)}</small></span>
+                    {!testnet && !later && B.classifyAsset(asset).assetClass === "stock" && <span className={styles.liquidityDot} data-verified={asset.issuer !== "ondo" && B.hasStockLiquidity(asset)} title={`${B.hasStockLiquidity(asset) ? "Liquidity checked" : "Liquidity data pending"} · ${B.STOCK_LIQUIDITY_CHECKED_AT.slice(0, 10)}`} aria-hidden="true" />}
+                    {venues.length > 0 && !later && <span className={styles.venueLogos} title={`Earns on ${venues.map((venue) => B.VENUE_NAME[venue]).join(", ")}`}>{venues.map((venue) => <Logo key={venue} src={venueSrc(venue)} size={18} className={styles.logo18} />)}</span>}
                   </button><a className={styles.assetChoiceInfo} href={`${app}/asset/${underlyingSlug(asset)}/?returnTo=${encodeURIComponent(`${base}/create/`)}`} target="_blank" rel="noopener noreferrer" aria-label={`About ${asset.name} (opens a new tab)`}>ⓘ</a></div>
                 );
               })}

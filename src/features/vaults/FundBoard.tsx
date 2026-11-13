@@ -11,6 +11,8 @@ import {
 import type { Period } from "../../reference/lib/fund-explore";
 import { REFERENCE_METADATA, assetBySymbol, pct } from "../../lib/public-funds";
 import type { ReferenceFund } from "../../lib/public-funds";
+import { LAUNCH_COPY } from "../../lib/launch-admission";
+import { fundLaunchStatus } from "../../lib/launch-funds";
 
 /**
  * Funds 頁的「主打卡」與「排行榜列」。
@@ -56,6 +58,23 @@ function describe(fund: ReferenceFund): string {
   if (org) return `${kind} · ${org}`;
   if (fund.group === "x-voices" && fund.xHandle) return `${kind} · @${fund.xHandle}`;
   return kind;
+}
+
+/**
+ * 上線時這檔能不能投資（cre8-app#51）：`Open to invest` 或 `Preview`，放在說明行最前面。
+ * 不是展示基金（社群策略）就不顯示。
+ */
+function LaunchTag({ fund }: { fund: ReferenceFund }): ReactNode {
+  const launch = fundLaunchStatus(fund.slug);
+  if (launch === null) return null;
+  return (
+    <>
+      <span className="mkt-launch" data-status={launch.status}>
+        {launch.status === "open" ? LAUNCH_COPY.fundOpen : LAUNCH_COPY.fundPreview}
+      </span>
+      {" · "}
+    </>
+  );
 }
 
 export function FundAvatar({ fund }: { fund: ReferenceFund }): ReactNode {
@@ -134,7 +153,7 @@ export function FeaturedCard({ fund, period, url, rank, fullDays }: {
           <FundAvatar fund={fund} />
           <span className="mkt-id">
             <strong>{nameParts(fund.name).title}</strong>
-            <small>{describe(fund)}</small>
+            <small><LaunchTag fund={fund} />{describe(fund)}</small>
           </span>
         </span>
         <span className="mkt-feature-figure">
@@ -185,7 +204,7 @@ export function BoardRow({ fund, period, url, rank, meta, fullDays }: {
           <FundAvatar fund={fund} />
           <span className="mkt-id">
             <strong>{title}</strong>
-            <small>{meta ?? describe(fund)}</small>
+            <small>{meta ?? <><LaunchTag fund={fund} />{describe(fund)}</>}</small>
           </span>
         </span>
         <span className="mkt-row-holdings">
