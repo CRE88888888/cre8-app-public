@@ -265,6 +265,11 @@ export type RebalanceStep = {
   tokenOut: string;
   amountIn: string;
   amountOutMin: string;
+  /**
+   * 這一步實際呼叫的 router 位址（A11，backend#47）：PancakeSwap Universal Router 或 KyberSwap。
+   * 欄位不存在 = 後端還沒有這個功能。顯示名稱見 `lib/venues.ts`。
+   */
+  venue?: string;
 };
 
 export type RebalanceResult = {
@@ -492,7 +497,7 @@ export type RedeemResult = {
   outcome: 'executed' | 'noop' | 'blocked' | 'reverted' | 'failed';
   reason: string;
   txHash: string | null;
-  steps: { tokenIn: string; tokenOut: string; amountIn: string; amountOutMin: string }[];
+  steps: RebalanceStep[];
   redeemedUsdE8: string;
   /**
    * 還沒賣的非現金名義額（美元，E8 整數字串），可以直接帶回 `sellUsdE8` 續做（backend#40）。

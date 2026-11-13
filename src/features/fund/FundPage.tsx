@@ -6,7 +6,7 @@ import { encodeFunctionData, formatEther, formatUnits, parseEther, parseUnits } 
 import type { Address } from 'viem';
 import { closePosition, continueRedeem, enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, getRenewalParams, getStrategy, listStrategies, postRebalance, postRenewalResult, redeemPortfolio } from '../../lib/api';
 import { CHAIN_ID, approveCalldata, bsc as appChain, publicClientFor, readOnlyClient, sendGasTopUp, sendRenewalUserOp, sendSudoCalls, sendSweep, sendWithdraw } from '../../lib/kernel';
-import type { PortfolioStatus } from '../../lib/api';
+import type { PortfolioStatus, RedeemResult } from '../../lib/api';
 import { MOCK_FUNDS } from '../../data/mock-funds';
 import {safePublicReturn} from '../../lib/public-navigation';
 import {useMobile} from '../../lib/use-mobile';
@@ -38,6 +38,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge, ErrorNote, Note, Spinner } from '../../components/ui';
 import { AssetLogo } from '../../components/AssetLogo';
 import { toast, type ToastId } from '../../components/Toast';
+import { TradeRoutes } from '../../components/TradeRoutes';
+import type { RoutedStep } from '../../lib/venues';
 
 /** 賣出／清倉因為交易權限失效而失敗時，接在錯誤後面的那句話。 */
 const PERMISSION_HINT =
@@ -264,6 +266,21 @@ function FundPageBody(): ReactNode {
   const [withdrawError, setWithdrawError] = useState<unknown>(null);
   const [withdrawTx, setWithdrawTx] = useState<string | null>(null);
   const [withdrawNote, setWithdrawNote] = useState<string | null>(null);
+  /**
+   * 最近一次買入／賣出實際成交的每一步（含走哪個交易場所，cre8-app#47）。
+   * 每次開始新的買入、賣出或清倉時清空；分批賣出時每成交一批就接在後面。
+   */
+  const [routes, setRoutes] = useState<{ action: 'deposit' | 'withdraw'; steps: RoutedStep[] } | null>(null);
+  const recordTrades = (action: 'deposit' | 'withdraw', steps: readonly RoutedStep[]): void => {
+    if (steps.length === 0) return;
+    setRoutes((previous) => ({ action, steps: [...(previous?.action === action ? previous.steps : []), ...steps] }));
+  };
+  /** 賣出的每一批回來時記下它成交的步驟。只記 `executed`：被擋下或 revert 的那一批沒有成交。 */
+  const recordSale = async (batch: Promise<RedeemResult>): Promise<RedeemResult> => {
+    const result = await batch;
+    if (result.outcome === 'executed') recordTrades('withdraw', result.steps);
+    return result;
+  };
   /**
    * 錢包（EOA）自己在鏈上的 USDT 餘額。
    *
@@ -647,6 +664,10 @@ function FundPageBody(): ReactNode {
                               Withdrawn. tx <span className="mono">{withdrawTx}</span>
                             </p>
                           )}
+                          {/* 手機的清倉沒有收據畫面，所以這一塊跟上面的「Withdrawn. tx」一樣不分桌機手機都顯示。 */}
+                          {routes?.action === 'withdraw' && (
+                            <TradeRoutes steps={routes.steps} symbolOf={symbolForAsset} title="Where your positions were sold" />
+                          )}
                           <ErrorNote error={withdrawError} />
                           {/* 清倉：把全部部位賣成 USDT，再把 USDT 與所有殘留的股票代幣（塵埃）掃回錢包。 */}
                           <button
@@ -767,6 +788,9 @@ function FundPageBody(): ReactNode {
                         <button type="button" className="link-button" onClick={() => setMyPosition(true)}>Review the update</button>
                       </p>
                     )}
+                    {!mobile && routes?.action === 'deposit' && (
+                      <TradeRoutes steps={routes.steps} symbolOf={symbolForAsset} title="Where your purchase traded" />
+                    )}
                     <ErrorNote error={error} />
                   </form>
                 )}
@@ -801,6 +825,13 @@ function FundPageBody(): ReactNode {
                   progress={progress}
                   busy={ticketBusy}
                   explorerUrl={CHAIN_ID === 56 ? 'https://bscscan.com' : undefined}
+                  extra={routes !== null && routes.action === tab && progress.tone !== 'pending' ? (
+                    <TradeRoutes
+                      steps={routes.steps}
+                      symbolOf={symbolForAsset}
+                      title={tab === 'deposit' ? 'Where your purchase traded' : 'Where your positions were sold'}
+                    />
+                  ) : undefined}
                   onDone={() => setTicketOpen(false)}
                   onViewPortfolio={dismissTicketToast}
                   onBack={() => {
@@ -1249,6 +1280,7 @@ function FundPageBody(): ReactNode {
     if (wallet === null || token === null || strategy === undefined || usdt === undefined) return;
     setBusy(true);
     setError(null);
+    setRoutes(null);
     const toastId = toast.pending('Buy', 'Preparing…');
     if (mobile) ticketToast.current = toastId;
     let transferHash: string | undefined;
@@ -1441,6 +1473,7 @@ function FundPageBody(): ReactNode {
 
         try {
           const round = await postRebalance(token, target);
+          if (round.outcome === 'executed') recordTrades('deposit', round.steps);
           // 三種結果要講清楚，因為它們要求使用者做的事完全不同：
           //   executed → 配置完成
           //   blocked  → 被前置檢查擋下（最常見是 allowance），要**再按一次**或先 approve
@@ -1709,6 +1742,7 @@ function FundPageBody(): ReactNode {
     setWithdrawError(null);
     setWithdrawTx(null);
     setWithdrawNote(null);
+    setRoutes(null);
     const toastId = toast.pending('Closing position', 'Checking what is left to sell…');
     try {
       // 先看帳戶裡還有沒有值得賣的部位（cre8-app#23）。
@@ -1721,7 +1755,7 @@ function FundPageBody(): ReactNode {
         toast.replace(toastId, { tone: 'pending', title: 'Closing position', body: 'Selling every position to USDT…' });
         // 大部位會被後端切成好幾批（每個資產有單筆上限，cre8-app#39）：一直叫 `/close` 到賣完為止。
         // 每一次呼叫都等那一批確認才回來。清倉的續做不用帶剩餘量 —— `/close` 永遠是「賣掉剩下的全部」。
-        const close = () => closePosition(token, holding.id);
+        const close = () => recordSale(closePosition(token, holding.id));
         let run;
         try {
           run = await runSellBatches({
@@ -1889,6 +1923,7 @@ function FundPageBody(): ReactNode {
     setWithdrawError(null);
     setWithdrawTx(null);
     setWithdrawNote(null);
+    setRoutes(null);
     const toastId = toast.pending('Sell', 'Preparing…');
     if (mobile) ticketToast.current = toastId;
     showProgress({ tone: 'pending', title: 'Preparing your sale', detail: 'Checking the fund’s available USDT.' });
@@ -1950,8 +1985,8 @@ function FundPageBody(): ReactNode {
         let run;
         try {
           run = await runSellBatches({
-            first: () => redeemPortfolio(token, holding.id, target),
-            next: (remainingUsdE8) => continueRedeem(token, holding.id, remainingUsdE8),
+            first: () => recordSale(redeemPortfolio(token, holding.id, target)),
+            next: (remainingUsdE8) => recordSale(continueRedeem(token, holding.id, remainingUsdE8)),
             maxBatches: batchesLeft,
             onContinue: ({ batch, remainingUsdE8 }) => {
               const detail = `Batch ${batch} — about ${formatRemainingUsd(remainingUsdE8)} left to sell.`;

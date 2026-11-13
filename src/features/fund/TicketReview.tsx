@@ -60,10 +60,12 @@ export function TicketReview({
 }
 
 export function TicketReceipt({
-  fund, progress, onDone, onBack, onViewPortfolio, explorerUrl, busy,
+  fund, progress, onDone, onBack, onViewPortfolio, explorerUrl, busy, extra,
 }: {
   fund: ReactNode;
   progress: TicketProgress;
+  /** 收據下方的補充內容（例如每一步走了哪個交易場所）。 */
+  extra?: ReactNode;
   onDone: () => void;
   onBack: () => void;
   onViewPortfolio: () => void;
@@ -82,6 +84,7 @@ export function TicketReceipt({
         {progress.detail && <p>{progress.detail}</p>}
       </div>
       {fund}
+      {extra}
       {progress.hash && explorerUrl && (
         <a className="app-ticket-explorer" href={`${explorerUrl}/tx/${progress.hash}`} target="_blank" rel="noreferrer">
           View transaction <AppIcon name="external" size={16} />

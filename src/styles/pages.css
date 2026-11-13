@@ -197,3 +197,18 @@ html body #root .cf-submit { width: 100%; min-height: 54px; font-size: 16px; }
 @media (max-width: 719px) {
   .platform-banner { padding: 10px 16px; font-size: 13px; }
 }
+
+/* 每一步交易走了哪個交易場所（cre8-app#47）：買入、賣出的結果與 Portfolio 的 Activity 共用。 */
+.trade-routes { margin: 10px 0 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-md, 8px); text-align: left; }
+.trade-routes-title { margin: 0 0 6px; color: var(--steel); font: 500 12px/1.4 var(--sans); }
+.trade-routes ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.trade-routes li { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; color: var(--ink); font: 400 13px/1.45 var(--sans); }
+.trade-routes-pair { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.trade-routes-count { color: var(--steel); }
+.trade-routes-venue { color: var(--ink); font-weight: 500; text-align: right; white-space: nowrap; }
+.trade-routes.is-compact { margin: 0; padding: 0; border: 0; }
+.trade-routes.is-compact li { justify-content: flex-start; gap: 8px; font-size: 12px; }
+.trade-routes.is-compact .trade-routes-venue { font-weight: 400; color: var(--steel); }
+.app-ticket-receipt .trade-routes { width: 100%; margin: 0; }
+/* 手機的 Activity 清單：其他列的值都靠右，這一格也靠右。 */
+.app-ticket-details .trade-routes.is-compact li { justify-content: flex-end; }

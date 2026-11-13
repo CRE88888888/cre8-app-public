@@ -6,14 +6,19 @@ import { Badge, ErrorNote, Spinner } from '../../components/ui';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { WalletMenu } from '../../components/WalletMenu';
 import { MOCK_FUNDS } from '../../data/mock-funds';
-import { getPortfolioActivity, getPortfolioStatus, getPortfolios } from '../../lib/api';
+import { TradeRoutes } from '../../components/TradeRoutes';
+import { getAssets, getPortfolioActivity, getPortfolioStatus, getPortfolios } from '../../lib/api';
 import type { PortfolioStatus } from '../../lib/api';
 import { formatUsdE8, shortAddress } from '../../lib/format';
+import { CHAIN_ID, publicClientFor } from '../../lib/kernel';
+import type { RenewalWallet } from '../../lib/kernel';
 import { REFERENCE_METADATA } from '../../lib/public-funds';
 import { queryKeys } from '../../lib/query';
 import { useBodyClass } from '../../lib/use-body-class';
 import { useConnectedSessionToken } from '../../lib/use-connected-session';
 import { useMobile } from '../../lib/use-mobile';
+import { useOwnerWallet } from '../../lib/use-owner-wallet';
+import { decodeRebalanceSteps, hasVenue } from '../../lib/venues';
 import { useWallet } from '../../store/wallet';
 
 function holdingState(status: PortfolioStatus | undefined) {
@@ -21,6 +26,34 @@ function holdingState(status: PortfolioStatus | undefined) {
   if (status.totalUsdE8 === '0') return <Badge tone="warn">Needs funding</Badge>;
   if (status.drift.needsRebalance) return <Badge tone="bad">Rebalance due</Badge>;
   return <Badge tone="ok">Aligned</Badge>;
+}
+
+/**
+ * 交易紀錄裡的一筆：每一步走了哪個交易場所（cre8-app#47）。
+ *
+ * `/activity` 沒有 steps，後端也沒存 venue，所以直接讀鏈上那筆交易、從 calldata 解回來
+ * （`decodeRebalanceSteps`）。交易上鏈後不會變，查到就一直留著（`staleTime: Infinity`）。
+ * 不是再平衡的交易、A11 之前的交易、或讀不到鏈，都顯示「—」。
+ */
+function ActivityVenues({ txHash, account, wallet, symbolOf }: {
+  txHash: string | null;
+  account: string | undefined;
+  wallet: RenewalWallet | null;
+  symbolOf: (asset: string) => string;
+}): ReactNode {
+  const enabled = txHash !== null && account !== undefined && wallet !== null;
+  const steps = useQuery({
+    queryKey: ['tx-venues', CHAIN_ID, txHash, account?.toLowerCase()],
+    queryFn: async () => {
+      const tx = await publicClientFor(wallet as RenewalWallet).getTransaction({ hash: txHash as `0x${string}` });
+      return decodeRebalanceSteps(tx.input, account as string);
+    },
+    enabled,
+    staleTime: Infinity,
+  });
+  if (enabled && steps.isPending) return <span className="muted">…</span>;
+  if (steps.data === null || steps.data === undefined || !hasVenue(steps.data)) return '—';
+  return <TradeRoutes compact steps={steps.data} symbolOf={symbolOf} title="Trading venues" />;
 }
 
 export function PortfoliosPage(): ReactNode {
@@ -49,6 +82,25 @@ export function PortfoliosPage(): ReactNode {
       enabled: token !== null,
     })),
   });
+  // 交易紀錄的「Venue」欄要把代幣位址換成代號。與基金頁共用同一份快取（同一個 queryKey）。
+  const ownerWallet = useOwnerWallet();
+  const assets = useQuery({
+    queryKey: ['assets', token],
+    queryFn: () => getAssets(token as string),
+    enabled: token !== null,
+    staleTime: 60_000,
+  });
+  const symbolForAsset = (asset: string): string => {
+    const wanted = asset.toLowerCase();
+    const listed = (assets.data ?? []).find((row) => row.address.toLowerCase() === wanted)?.symbol;
+    if (listed !== undefined) return listed;
+    // `/assets` 還沒回來或沒有這個代幣：退回各投組 status 裡看得到的代號。
+    for (const { data } of statuses) {
+      const known = [...(data?.holdings ?? []), ...(data?.targets ?? [])].find((row) => row.asset.toLowerCase() === wanted);
+      if (known !== undefined) return known.symbol;
+    }
+    return shortAddress(asset);
+  };
 
   const valueReady = portfolios.data !== undefined &&
     statuses.every((row) => row.data?.complete && row.data.totalUsdE8 != null);
@@ -86,6 +138,7 @@ export function PortfoliosPage(): ReactNode {
     drift: entry.driftBeforeBps === null || entry.driftAfterBps === null ? '—' : `${entry.driftBeforeBps} → ${entry.driftAfterBps} bps`,
     value: entry.usdBeforeE8 === null || entry.usdAfterE8 === null ? '—' : `${formatUsdE8(entry.usdBeforeE8)} → ${formatUsdE8(entry.usdAfterE8)}`,
     hash: entry.txHash === null ? '—' : `${entry.txHash.slice(0, 10)}…${entry.txHash.slice(-6)}`,
+    venues: <ActivityVenues txHash={entry.txHash} account={portfolio.smartAccounts[0]?.address} wallet={ownerWallet} symbolOf={symbolForAsset} />,
   }));
 
   return (
@@ -175,7 +228,7 @@ export function PortfoliosPage(): ReactNode {
                   )
                 ) : mobile ? (
                   <ul className="app-portfolio-ledger">
-                    {activity.map(({ key, name, date, state, drift, value, hash }) => (
+                    {activity.map(({ key, name, date, state, drift, value, hash, venues }) => (
                       <li key={key}>
                         <div className="app-ledger-heading">
                           <div className="app-ledger-title">
@@ -188,6 +241,7 @@ export function PortfoliosPage(): ReactNode {
                           <dt>Drift</dt><dd>{drift}</dd>
                           <dt>Value</dt><dd>{value}</dd>
                           <dt>Transaction</dt><dd>{hash}</dd>
+                          <dt>Venue</dt><dd>{venues}</dd>
                         </dl>
                       </li>
                     ))}
@@ -195,10 +249,10 @@ export function PortfoliosPage(): ReactNode {
                 ) : (
                   <div className="portfolio-table-scroll">
                     <table className="table" aria-label="Activity history">
-                      <thead><tr><th>Fund</th><th>When</th><th>State</th><th className="num">Drift</th><th className="num">Value</th><th>Transaction</th></tr></thead>
+                      <thead><tr><th>Fund</th><th>When</th><th>State</th><th className="num">Drift</th><th className="num">Value</th><th>Transaction</th><th>Venue</th></tr></thead>
                       <tbody>
-                        {activity.map(({ key, name, date, state, drift, value, hash }) => (
-                          <tr key={key}><td>{name}</td><td>{date}</td><td>{state}</td><td className="num mono">{drift}</td><td className="num mono">{value}</td><td className="mono muted">{hash}</td></tr>
+                        {activity.map(({ key, name, date, state, drift, value, hash, venues }) => (
+                          <tr key={key}><td>{name}</td><td>{date}</td><td>{state}</td><td className="num mono">{drift}</td><td className="num mono">{value}</td><td className="mono muted">{hash}</td><td>{venues}</td></tr>
                         ))}
                       </tbody>
                     </table>

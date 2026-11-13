@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ApiError, getOperatorActivity, getOperatorOverview, operatorForceRebalance } from '../../lib/api';
 import type { OperatorActivityRow, OperatorOverview, OperatorRow } from '../../lib/api';
+import { venueSummary } from '../../lib/venues';
 import { formatEther } from 'viem';
 import { formatUsdE8, shortAddress } from '../../lib/format';
 import { useBodyClass } from '../../lib/use-body-class';
@@ -234,10 +235,12 @@ function Dashboard({
     try {
       const result = await operatorForceRebalance(token, id);
       const ok = result.outcome === 'executed' || result.outcome === 'noop';
+      // 成交的那一輪順便說每一步走了哪個交易場所（cre8-app#47）。
+      const venues = result.outcome === 'executed' ? venueSummary(result.steps ?? []) : null;
       toast.replace(toastId, {
         tone: ok ? 'ok' : 'bad',
         title: `#${id}: ${result.outcome}`,
-        body: (result.txHash ?? result.reason ?? '').slice(0, 120),
+        body: `${(result.txHash ?? result.reason ?? '').slice(0, 120)}${venues === null ? '' : ` · via ${venues}`}`,
       });
       await refetch();
     } catch (cause) {
