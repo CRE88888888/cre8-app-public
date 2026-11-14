@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import type { Profile, SignInMethod, SignInMethodKind } from '../lib/privy-owner';
-import { markEntrySeen } from '../lib/sign-in-entry';
 
 /**
  * Privy 登入的畫面狀態（cre8-app#57）。
@@ -67,8 +66,6 @@ export type PrivyAuthState = {
   oauthError: unknown;
   /** 登入頁開著沒有。在這裡而不是元件裡：標頭、頁面內的按鈕都要能打開同一頁。 */
   signInOpen: boolean;
-  /** 這次是「一打開 app 就出現」的登入頁（整頁、可以先跳過），不是使用者自己按 Sign in 打開的。 */
-  signInEntry: boolean;
   actions: PrivyActions | null;
 };
 
@@ -83,32 +80,15 @@ export const PRIVY_INITIAL: PrivyAuthState = {
   emailError: null,
   oauthError: null,
   signInOpen: false,
-  signInEntry: false,
   actions: null,
 };
 
 export function openSignIn(): void {
-  usePrivyAuth.setState({ signInOpen: true, signInEntry: false });
-}
-
-/** 一打開 app 的登入頁（見 `lib/sign-in-entry.ts`）。已經開著就不動。 */
-export function openSignInEntry(): void {
-  if (usePrivyAuth.getState().signInOpen) return;
-  usePrivyAuth.setState({ signInOpen: true, signInEntry: true });
+  usePrivyAuth.setState({ signInOpen: true });
 }
 
 export function closeSignIn(): void {
-  // 開場的登入頁被關掉（跳過）：這個分頁不再自動跳出來。
-  if (usePrivyAuth.getState().signInEntry) markEntrySeen(sessionStorageOrNull());
-  usePrivyAuth.setState({ signInOpen: false, signInEntry: false });
-}
-
-function sessionStorageOrNull(): Storage | null {
-  try {
-    return window.sessionStorage;
-  } catch {
-    return null;
-  }
+  usePrivyAuth.setState({ signInOpen: false });
 }
 
 export const usePrivyAuth = create<PrivyAuthState>()(() => PRIVY_INITIAL);

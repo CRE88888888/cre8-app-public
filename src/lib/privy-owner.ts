@@ -129,16 +129,6 @@ export function readRememberedOwner(storage: OwnerStorage | null, userId: string
   }
 }
 
-/** 這台裝置有沒有人用 Privy 登入過（只看有沒有記過主人，不看是誰）。 */
-export function hasRememberedOwner(storage: Pick<Storage, 'getItem'> | null): boolean {
-  try {
-    const parsed: unknown = JSON.parse(storage?.getItem(OWNER_KEY) ?? 'null');
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) && Object.keys(parsed).length > 0;
-  } catch {
-    return false;
-  }
-}
-
 /** 只在確定時才記（`backend`、`only-wallet`）；推測出來的不記，免得把猜的變成「確定的」。 */
 export function rememberOwner(storage: OwnerStorage | null, userId: string, resolution: OwnerResolution): void {
   if (resolution.source !== 'backend' && resolution.source !== 'only-wallet') return;
