@@ -577,6 +577,14 @@
   color: var(--ink);
 }
 
+/* 列裡的按鈕（例如測試網的 Claim）：靠右、照內容寬。下單面板會把 .btn 撐成整排，這裡要蓋回來。 */
+:is(#root, body) .feature-locked__row > .btn {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 88px;
+  margin: 0;
+}
+
 .feature-locked__note {
   margin: 8px 4px 0;
   font-size: 12px;

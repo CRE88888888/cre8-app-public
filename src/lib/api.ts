@@ -8,6 +8,8 @@
  * 一律走相對路徑 `/api`（dev 由 vite proxy 轉到 127.0.0.1:8081）。同源就沒有 CORS 與 preflight。
  */
 
+import type { PackedSponsorOperation, SponsorResponse } from './paymaster';
+
 const BASE: string = import.meta.env.VITE_API_BASE ?? '/api';
 
 export class ApiError extends Error {
@@ -234,6 +236,22 @@ export function postLogin(message: string, signature: string): Promise<SessionCr
  */
 export function postPrivyLogin(identityToken: string): Promise<SessionCredentials & { address?: string }> {
   return request<SessionCredentials & { address?: string }>('/auth/privy', { method: 'POST', body: { identityToken } });
+}
+
+/**
+ * 向平台要一筆 UserOp 的代付簽名（backend#68，`POST /paymaster/sponsor`，只在測試網）。
+ * 被拒時是 `ApiError`，`code` 是 `PAYMASTER_*`；白話訊息見 `lib/paymaster.ts` 的 `explainSponsorFailure`。
+ */
+export function postSponsor(token: string, userOperation: PackedSponsorOperation): Promise<SponsorResponse> {
+  return request<SponsorResponse>('/paymaster/sponsor', { method: 'POST', token, body: { userOperation } });
+}
+
+/**
+ * 領測試 USDT（backend#69，`POST /faucet/usdt`，只在測試網）。`account` 是要收的地址。
+ * ⚠ 這個端點寫前端時還沒合併：請求與回應的欄位是照 issue 預先對的，定案後以後端為準。
+ */
+export function postFaucetUsdt(token: string, account: string): Promise<{ txHash?: string; amountWei?: string; amount?: string }> {
+  return request('/faucet/usdt', { method: 'POST', token, body: { account } });
 }
 
 /**

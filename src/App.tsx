@@ -11,6 +11,7 @@ function StrategyRedirect(): ReactNode {
 import { Toaster } from './components/Toast';
 import { TopBar } from './components/TopBar';
 import { PlatformPauseBanner } from './components/PlatformPauseBanner';
+import { TestnetBanner, WrongNetworkNotice } from './components/NetworkBanners';
 import { OwnerWalletNotice } from './components/PrivyWalletMenu';
 import { SignInScreen } from './components/SignInScreen';
 import { PrivyBoundary } from './features/auth/PrivyBoundary';
@@ -54,6 +55,8 @@ export function App(): ReactNode {
         </PrivyBoundary>
       )}
       <TopBar />
+      <TestnetBanner />
+      <WrongNetworkNotice />
       <PlatformPauseBanner />
       {PRIVY_ENABLED && <OwnerWalletNotice />}
       {PRIVY_ENABLED && <SignInScreen />}

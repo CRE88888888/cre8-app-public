@@ -3,7 +3,7 @@ import { useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError, createStrategy, enrollPortfolio, getAssets, getPortfolioStatus, publishVersion } from '../../lib/api';
-import { approveCalldata, sendGasTopUp, sendSudoCalls } from '../../lib/kernel';
+import { CHAIN, approveCalldata, sendGasTopUp, sendSudoCalls } from '../../lib/kernel';
 import type { RenewalWallet } from '../../lib/kernel';
 import { useWallet } from '../../store/wallet';
 import type { PriceableAsset } from '../../lib/api';
@@ -153,7 +153,8 @@ export function ActivateFundPage(): ReactNode {
           const executor = status.executorAddress;
           if (executor !== null) {
             const shortfall = BigInt(portfolio.gas?.shortfallWei ?? '0');
-            if (shortfall > 0n) {
+            // 代付的鏈（測試網）不補 gas：帳戶的 UserOp 由平台付（cre8-app#62）。
+            if (shortfall > 0n && !CHAIN.sponsored) {
               setStep('topping-up-gas');
               // `sendGasTopUp` 會等轉帳上鏈才回來：下面的 approve UserOp 要靠這筆 BNB 付 gas（cre8-app#22）。
               await sendGasTopUp({ wallet: renewalWallet, to: status.account as `0x${string}`, valueWei: shortfall });

@@ -5,7 +5,7 @@ import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { encodeFunctionData, formatEther, formatUnits, parseEther, parseUnits } from 'viem';
 import type { Address } from 'viem';
 import { closePosition, continueRedeem, enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, getRenewalParams, getStrategy, listStrategies, postRebalance, postRenewalResult, redeemPortfolio } from '../../lib/api';
-import { CHAIN_ID, approveCalldata, bsc as appChain, publicClientFor, readOnlyClient, sendGasTopUp, sendRenewalUserOp, sendSudoCalls, sendSweep, sendWithdraw } from '../../lib/kernel';
+import { CHAIN, CHAIN_ID, approveCalldata, bsc as appChain, publicClientFor, readOnlyClient, sendGasTopUp, sendRenewalUserOp, sendSudoCalls, sendSweep, sendWithdraw } from '../../lib/kernel';
 import type { PortfolioStatus, RedeemResult } from '../../lib/api';
 import { MOCK_FUNDS } from '../../data/mock-funds';
 import {safePublicReturn} from '../../lib/public-navigation';
@@ -845,7 +845,7 @@ function FundPageBody(): ReactNode {
                   fund={ticketFund}
                   progress={progress}
                   busy={ticketBusy}
-                  explorerUrl={CHAIN_ID === 56 ? 'https://bscscan.com' : undefined}
+                  explorerUrl={CHAIN.explorerUrl ?? undefined}
                   extra={routes !== null && routes.action === tab && progress.tone !== 'pending' ? (
                     <TradeRoutes
                       steps={routes.steps}
@@ -871,7 +871,9 @@ function FundPageBody(): ReactNode {
                     destination={tab === 'deposit' ? (holding?.smartAccounts[0]?.address ?? 'Your new fund account') : (walletAddress ?? 'Your wallet')}
                     network={appChain.name}
                     note={whitelistOnly ? undefined : tab === 'deposit'
-                      ? 'Your wallet may also ask for a BNB top-up or token approval.'
+                      ? CHAIN.sponsored
+                        ? `Your fund account’s network fees are covered by CRE8. Sending USDT from your own wallet still needs a little ${CHAIN.nativeSymbol} in that wallet.`
+                        : 'Your wallet may also ask for a BNB top-up or token approval.'
                       : [
                         withdrawRequested > totalUsd() && 'Limited to the current fund value.',
                         withdrawLimit > cashUsd() && 'The fund may sell holdings to pay you out. The final amount can change.',
@@ -953,10 +955,12 @@ function FundPageBody(): ReactNode {
                   </dd>
                   <dt>gas</dt>
                   <dd>
-                    {live.gas === null || live.gas.balanceWei === null || live.gas.balanceWei === undefined
+                    {CHAIN.sponsored
+                      ? 'Covered by CRE8 on this testnet'
+                      : live.gas === null || live.gas.balanceWei === null || live.gas.balanceWei === undefined
                       ? 'unknown'
                       : `${Number(formatEther(BigInt(live.gas.balanceWei))).toFixed(6)} BNB`}
-                    {wallet === null ? null : (
+                    {wallet === null || CHAIN.sponsored ? null : (
                       <button
                         type="button"
                         className="btn ghost sm"
@@ -1363,7 +1367,9 @@ function FundPageBody(): ReactNode {
       //
       // 只對**已存在的帳戶**：enroll 剛建好的新帳戶 gas 一定是 0，但那是「本來就該補」的情境，
       // 這裡也一併補（一次 top-up 同時覆蓋新帳戶與清倉後的舊帳戶）。
-      if (account !== undefined && account !== null) {
+      //
+      // 代付的鏈（測試網）不補：帳戶的 UserOp 由平台付 gas，帳戶裡不需要原生代幣（cre8-app#62）。
+      if (account !== undefined && account !== null && !CHAIN.sponsored) {
         const gas = live?.gas;
         const balance = gas !== null && gas !== undefined && gas.balanceWei !== undefined ? BigInt(gas.balanceWei) : 0n;
         // 最低 gas：後端算的 `minimumWei`，或退而求其次用 0.0005 BNB（與後端
@@ -1578,6 +1584,8 @@ function FundPageBody(): ReactNode {
 
   /** 帳戶的 BNB 是否低於可執行門檻（5e14 wei = 0.0005 BNB，與後端 `DEFAULT_MIN_SESSION_GAS_WEI` 一致）。 */
   function gasTooLow(status: PortfolioStatus): boolean {
+    // 代付的鏈（測試網）：帳戶不需要原生代幣，不提示補 gas。
+    if (CHAIN.sponsored) return false;
     if (status.gas === null) return true;
     const wei = status.gas.balanceWei;
     if (wei === null || wei === undefined) return true;

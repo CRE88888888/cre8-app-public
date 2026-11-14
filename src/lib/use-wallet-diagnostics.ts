@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { CHAIN_ID } from './kernel';
 
 /**
  * 錢包端診斷：**注入式錢包讀的是它自己設定的 RPC**，不是我們後端那一條。
@@ -20,7 +21,8 @@ export type WalletDiagnostics = {
   problem: string | null;
 };
 
-const EXPECTED_CHAIN_ID = 56;
+/** 這個 app 的鏈（`VITE_CHAIN_ID`）。原本寫死 56，在測試網與本機 fork 上會把對的錢包說成連錯。 */
+const EXPECTED_CHAIN_ID = CHAIN_ID;
 
 type Eip1193 = { request?: (args: { method: string; params: unknown[] }) => Promise<unknown> };
 

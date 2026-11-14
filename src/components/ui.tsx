@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { ApiError } from '../lib/api';
 import { TradeFailureError } from '../lib/trade-failure';
+import { SponsorshipError } from '../lib/paymaster';
 
 export type Tone = 'neutral' | 'ok' | 'warn' | 'bad';
 
@@ -75,8 +76,8 @@ export function ErrorNote({ error }: { error: unknown }): ReactNode {
     );
   }
 
-  // 後端說「這一輪沒成交」：白話訊息在 `message`，後端原文收進可展開的細節。
-  if (error instanceof TradeFailureError) {
+  // 後端說「這一輪沒成交」，或平台沒有代付這筆交易的 gas：白話訊息在 `message`，原文收進可展開的細節。
+  if (error instanceof TradeFailureError || error instanceof SponsorshipError) {
     return (
       <Note tone="bad">
         <strong>{error.title}</strong>

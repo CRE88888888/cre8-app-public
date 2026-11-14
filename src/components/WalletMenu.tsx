@@ -2,7 +2,8 @@ import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { connectProvider, discoverProviders, ensureChain } from '../lib/wallet';
-import { CHAIN_ID } from '../lib/kernel';
+import { CHAIN, CHAIN_ID } from '../lib/kernel';
+import { walletChainParams } from '../lib/chain-config';
 import type { ProviderDetail } from '../lib/wallet';
 import { shortAddress } from '../lib/format';
 import { useConnectedSessionToken } from '../lib/use-connected-session';
@@ -122,12 +123,8 @@ function ClassicWalletMenu({ inline = false, showIcon = false, iconOnly = false 
         // 之後打開主網網站，畫面像「連到測試網」，每個讀取都失敗，而訊息完全看不出原因。
         // 切不動（使用者按取消）就照常連上，由 wallet-warning 告訴他鏈不對。
         try {
-          await ensureChain(detail.provider, CHAIN_ID, {
-            chainName: 'BNB Smart Chain',
-            rpcUrls: [import.meta.env.VITE_RPC_URL ?? 'https://bsc-dataseed.binance.org'],
-            nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
-            blockExplorerUrls: ['https://bscscan.com'],
-          });
+          // 鏈的名稱、RPC、瀏覽器跟著這個 app 的鏈走（主網／測試網／本機），不再一律寫主網的（cre8-app#62）。
+          await ensureChain(detail.provider, CHAIN_ID, walletChainParams(CHAIN));
         } catch {
           // 切鏈失敗不該擋住連線。
         }

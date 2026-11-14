@@ -25,6 +25,10 @@ import { signerToEcdsaValidator } from '@zerodev/ecdsa-validator';
 import { createPublicClient, createWalletClient, custom, encodeFunctionData, encodePacked, http, keccak256 } from 'viem';
 import type { Address, Chain, Hex, LocalAccount, PublicClient, WalletClient } from 'viem';
 
+import { postSponsor } from './api';
+import { chainProfile, checkedContract } from './chain-config';
+import { SponsorshipError, packForSponsorship, sponsorshipFromResponse, stubPaymasterData } from './paymaster';
+
 const API_BASE: string = import.meta.env.VITE_API_BASE ?? '/api';
 
 /**
@@ -39,11 +43,17 @@ const API_BASE: string = import.meta.env.VITE_API_BASE ?? '/api';
  */
 export const CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID ?? 1337);
 
+/**
+ * 這條鏈的設定：主網、測試網（97）、本機 fork 各自一份，互不回落（cre8-app#62，`lib/chain-config.ts`）。
+ * 測試網的 RPC、區塊瀏覽器、合約地址、代付都從這裡來。
+ */
+export const CHAIN = chainProfile(CHAIN_ID, import.meta.env.VITE_RPC_URL);
+
 export const bsc = {
   id: CHAIN_ID,
-  name: CHAIN_ID === 56 ? 'BNB Smart Chain' : `CRE8 Local (${CHAIN_ID})`,
-  nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
-  rpcUrls: { default: { http: ['https://bsc-dataseed.binance.org'] } },
+  name: CHAIN.name,
+  nativeCurrency: { name: CHAIN.nativeSymbol, symbol: CHAIN.nativeSymbol, decimals: 18 },
+  rpcUrls: { default: { http: [CHAIN.rpcUrl] } },
 } as const satisfies Chain;
 
 /**
@@ -176,10 +186,33 @@ export async function sendSudoCalls(args: {
     );
   }
 
+  // 代付（測試網）：帳戶不需要原生代幣，gas 由平台的 paymaster 付。
+  // 被拒時 viem 會把原因包進它自己的錯誤裡（或在估 gas 階段換成別的訊息），所以把真正的原因記在這裡，
+  // 最後丟出去的是白話的 `SponsorshipError`，不是一句讓人以為要自己補 BNB 的 `AA21`。
+  const paymasterAddress = CHAIN.sponsored ? (CHAIN.contracts?.paymaster as Address | undefined) : undefined;
+  let sponsorFailure: SponsorshipError | null = null;
+
   const accountClient = createKernelAccountClient({
     account: sudoAccount,
     chain: bsc,
     client: publicClient,
+    ...(paymasterAddress === undefined
+      ? {}
+      : {
+          paymaster: {
+            // 估 gas 用的假資料：不打後端（後端只在拿到完整的 UserOp 時才簽名、記額度）。
+            getPaymasterStubData: async () => stubPaymasterData(paymasterAddress),
+            getPaymasterData: async (operation) => {
+              try {
+                const body = await postSponsor(args.token, packForSponsorship(operation));
+                return sponsorshipFromResponse(body, paymasterAddress);
+              } catch (cause) {
+                sponsorFailure = SponsorshipError.from(cause);
+                throw sponsorFailure;
+              }
+            },
+          },
+        }),
     bundlerTransport: http(`${API_BASE}/bundler`, {
       // relay 是認證端點：沒有這個標頭會回 401 UNAUTHORIZED。
       fetchOptions: { headers: { authorization: `Bearer ${args.token}` } },
@@ -195,7 +228,12 @@ export async function sendSudoCalls(args: {
     },
   });
 
-  const userOpHash = await accountClient.sendUserOperation({ calls: args.calls });
+  let userOpHash: Hex;
+  try {
+    userOpHash = await accountClient.sendUserOperation({ calls: args.calls });
+  } catch (cause) {
+    throw sponsorFailure ?? cause;
+  }
   const receipt = await accountClient.waitForUserOperationReceipt({
     hash: userOpHash,
     timeout: args.timeoutMs ?? 180_000,
@@ -327,6 +365,9 @@ export async function sendWithdraw(args: {
 }
 
 export function approveCalldata(spender: Address): Hex {
+  // 這支只用來授權 executor。測試網有地址簿：後端回報的 executor 不是地址簿上的那一個就停下，
+  // 不對一個錯的合約開無限額度（主網與本機 fork 沒有地址簿，照舊）。
+  checkedContract(CHAIN, 'executor', spender);
   return encodeFunctionData({
     abi: [
       {

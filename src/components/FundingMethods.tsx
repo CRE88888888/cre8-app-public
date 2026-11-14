@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { AppIcon } from './AppIcon';
 import { LockedFeature } from './FeatureLock';
+import { ClaimTestUsdt } from './ClaimTestUsdt';
+import { CHAIN } from '../lib/kernel';
 
 /**
  * 「怎麼把錢放進來」的清單（cre8-app#58）。
@@ -28,6 +30,8 @@ export function FundingMethods({ variant }: {
           <span className="feature-locked__icon" aria-hidden="true"><AppIcon name="wallet" size={22} /></span>
         </div>
       </div>
+      {/* 測試網：領測試 USDT（cre8-app#62）。 */}
+      {CHAIN.testnet && <ClaimTestUsdt />}
       <LockedFeature feature="depositCard" icon={<AppIcon name="deposit" size={22} />} description="Visa, Mastercard or Apple Pay" />
       <LockedFeature feature="depositCrossChain" icon={<AppIcon name="network" size={22} />} description="USDC or USDT on other networks" />
     </section>
