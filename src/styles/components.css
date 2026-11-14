@@ -732,6 +732,22 @@
   gap: 12px;
 }
 
+/* 一打開 app 的登入頁：整頁，後面不透出 app。 */
+.signin-screen[data-entry='true'] .signin-screen__backdrop {
+  background: var(--app-grouped, #f6f7f8);
+}
+
+.signin-screen[data-entry='true'] .signin-screen__card {
+  box-shadow: none;
+}
+
+.signin-screen__skip {
+  justify-self: center;
+  min-height: 44px;
+  padding: 0 12px;
+  font-size: 14px;
+}
+
 @media (max-width: 719px) {
   .signin-screen {
     place-items: stretch;

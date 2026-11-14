@@ -1,7 +1,46 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
-import { closeSignIn, usePrivyAuth } from '../store/privy';
+import { useLocation } from 'react-router-dom';
+import { PRIVY_ENABLED } from '../lib/privy-config';
+import { hasRememberedOwner } from '../lib/privy-owner';
+import { entrySeen, shouldOpenEntry } from '../lib/sign-in-entry';
+import { closeSignIn, openSignInEntry, usePrivyAuth } from '../store/privy';
+import { sessionIsLive, useSession } from '../store/session';
 import { AppIcon } from './AppIcon';
+
+function storageOrNull(kind: 'localStorage' | 'sessionStorage'): Storage | null {
+  try {
+    return window[kind];
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 一打開 app 就先出現登入頁（規則在 `lib/sign-in-entry.ts`）。
+ * 登入頁開著時 Privy 才發現載不起來：自己收掉，不把人卡在一頁按不動的按鈕前面。
+ */
+function useSignInEntry(): void {
+  const phase = usePrivyAuth((state) => state.phase);
+  const signInEntry = usePrivyAuth((state) => state.signInEntry);
+  const sessionLive = useSession((state) => sessionIsLive(state));
+  const { pathname } = useLocation();
+  useEffect(() => {
+    if (signInEntry && phase === 'unavailable') {
+      usePrivyAuth.setState({ signInOpen: false, signInEntry: false });
+      return;
+    }
+    const open = shouldOpenEntry({
+      enabled: PRIVY_ENABLED,
+      pathname,
+      phase,
+      returning: hasRememberedOwner(storageOrNull('localStorage')),
+      seen: entrySeen(storageOrNull('sessionStorage')),
+      sessionLive,
+    });
+    if (open) openSignInEntry();
+  }, [phase, signInEntry, sessionLive, pathname]);
+}
 
 /**
  * 我們自己的登入頁（Privy 模式，`VITE_PRIVY_APP_ID` 有設定時）。
@@ -13,9 +52,13 @@ import { AppIcon } from './AppIcon';
  * 錢包打開 Privy 的選錢包視窗。Privy 那一側登入完成後這一頁自己關掉，後面的進度在標頭的選單裡。
  *
  * 這個元件不 import Privy SDK：動作來自 `usePrivyAuth`。
+ *
+ * 兩種出現方式：使用者按 Sign in（置中的卡片，後面看得到 app），或一打開 app 就出現（`signInEntry`：
+ * 整頁、沒有右上角的關閉鈕，下面有「Browse first」可以先逛）。
  */
 export function SignInScreen(): ReactNode {
-  const { signInOpen, phase, actions, emailStep, emailError, oauthError } = usePrivyAuth();
+  useSignInEntry();
+  const { signInOpen, signInEntry, phase, actions, emailStep, emailError, oauthError } = usePrivyAuth();
   const [step, setStep] = useState<'choose' | 'email' | 'code'>('choose');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -91,12 +134,15 @@ export function SignInScreen(): ReactNode {
   }
 
   return (
-    <div className="signin-screen" role="dialog" aria-modal="true" aria-labelledby="signin-title">
-      <div className="signin-screen__backdrop" aria-hidden="true" onClick={closeSignIn} />
+    <div className="signin-screen" data-entry={signInEntry ? 'true' : undefined} role="dialog" aria-modal="true" aria-labelledby="signin-title">
+      {/* 開場的登入頁是一整頁，點旁邊不會關掉；要先逛就按下面的「Browse first」。 */}
+      <div className="signin-screen__backdrop" aria-hidden="true" onClick={signInEntry ? undefined : closeSignIn} />
       <div className="signin-screen__card">
-        <button type="button" className="signin-screen__close" aria-label="Close" onClick={closeSignIn}>
-          <AppIcon name="close" size={20} />
-        </button>
+        {!signInEntry && (
+          <button type="button" className="signin-screen__close" aria-label="Close" onClick={closeSignIn}>
+            <AppIcon name="close" size={20} />
+          </button>
+        )}
 
         <header className="signin-screen__head">
           <img src="/logos/cre8-icon.svg" alt="" width={64} height={64} />
@@ -130,6 +176,11 @@ export function SignInScreen(): ReactNode {
               <p className="signin-screen__error" role="alert">That sign-in could not be started. Please try again.</p>
             )}
             {!ready && <p className="signin-screen__hint" role="status">Getting sign-in ready…</p>}
+            {signInEntry && (
+              <button type="button" className="wallet-menu__link signin-screen__skip" onClick={closeSignIn}>
+                Browse first
+              </button>
+            )}
           </div>
         ) : step === 'email' ? (
           <form className="signin-screen__options" onSubmit={sendEmail}>
