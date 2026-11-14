@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { SignInMethod, SignInMethodKind } from '../lib/privy-owner';
+import type { Profile, SignInMethod, SignInMethodKind } from '../lib/privy-owner';
 
 /**
  * Privy 登入的畫面狀態（cre8-app#57）。
@@ -53,6 +53,8 @@ export type PrivyAuthState = {
   error: unknown;
   /** 帳號上已綁的登入方式。 */
   methods: SignInMethod[];
+  /** 用戶頁上方的名字與頭像（取自已綁的 X／Google／email）。 */
+  profile: Profile;
   /** 主人是不是 Privy 的嵌入式錢包。 */
   ownerEmbedded: boolean;
   /** 主人錢包現在能不能簽名：`checking` = 還在等 Privy 回報錢包。 */
@@ -71,6 +73,7 @@ export const PRIVY_INITIAL: PrivyAuthState = {
   phase: 'loading',
   error: null,
   methods: [],
+  profile: { name: null, handle: null, avatarUrl: null },
   ownerEmbedded: false,
   signer: 'checking',
   emailStep: 'initial',

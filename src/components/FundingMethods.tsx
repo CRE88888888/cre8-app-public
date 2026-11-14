@@ -12,10 +12,13 @@ import { LockedFeature } from './FeatureLock';
  * 測試網第一批的「領測試 USDT」與「交易所提幣地址」屬於現金帳戶那一批，做好後加在這個清單最前面。
  * 這個元件不送任何請求。
  */
-export function FundingMethods({ compact = false }: { compact?: boolean }): ReactNode {
+export function FundingMethods({ variant }: {
+  /** `ticket`＝基金頁 Buy 表單下方（有標題與分隔線）；`sheet`＝Add money 面板裡（面板自己有標題）。 */
+  variant: 'ticket' | 'sheet';
+}): ReactNode {
   return (
-    <section className={compact ? 'funding-methods funding-methods--compact' : 'funding-methods'} aria-label="Ways to add money">
-      <h3 className="funding-methods__title">Ways to add money</h3>
+    <section className={`funding-methods funding-methods--${variant}`} aria-label="Ways to add money">
+      {variant === 'ticket' && <h3 className="funding-methods__title">Ways to add money</h3>}
       <div className="feature-locked" data-state="on">
         <div className="feature-locked__row">
           <span className="feature-locked__text">

@@ -20,6 +20,12 @@ export type LinkedAccountLike = {
   walletClientType?: string | null;
   connectorType?: string | null;
   email?: string | null;
+  /** Google／X 的顯示名稱。 */
+  name?: string | null;
+  /** X 的帳號（不含 @）。 */
+  username?: string | null;
+  /** X 的頭像網址（Privy 給的是 48px 的 `_normal`）。 */
+  profilePictureUrl?: string | null;
   firstVerifiedAt?: Date | string | number | null;
 };
 
@@ -163,7 +169,7 @@ export function identityTokenWallets(token: string | null | undefined): string[]
   }
 }
 
-export type SignInMethodKind = 'email' | 'google' | 'apple' | 'wallet';
+export type SignInMethodKind = 'email' | 'google' | 'apple' | 'x' | 'wallet';
 
 export type SignInMethod = {
   kind: SignInMethodKind;
@@ -171,7 +177,7 @@ export type SignInMethod = {
   detail: string;
 };
 
-const METHOD_NAME: Record<SignInMethodKind, string> = { email: 'Email', google: 'Google', apple: 'Apple', wallet: 'Wallet' };
+const METHOD_NAME: Record<SignInMethodKind, string> = { email: 'Email', google: 'Google', apple: 'Apple', x: 'X', wallet: 'Wallet' };
 
 export function signInMethodName(kind: SignInMethodKind): string {
   return METHOD_NAME[kind];
@@ -190,6 +196,7 @@ export function signInMethods(accounts: readonly LinkedAccountLike[] | null | un
     if (account.type === 'email' && typeof account.address === 'string') methods.push({ kind: 'email', detail: account.address });
     if (account.type === 'google_oauth') methods.push({ kind: 'google', detail: account.email ?? '' });
     if (account.type === 'apple_oauth') methods.push({ kind: 'apple', detail: account.email ?? '' });
+    if (account.type === 'twitter_oauth') methods.push({ kind: 'x', detail: account.username ? `@${account.username}` : account.name ?? '' });
   }
   for (const wallet of evmWallets(accounts)) {
     if (!wallet.embedded) methods.push({ kind: 'wallet', detail: short(wallet.address) });
@@ -197,10 +204,66 @@ export function signInMethods(accounts: readonly LinkedAccountLike[] | null | un
   return methods;
 }
 
-/** 還可以加綁哪些。email／Google／Apple 各只能綁一個；錢包可以再綁。 */
+/** 對使用者來說是同一件事的三種登入方式：「我的信箱」。 */
+const EMAIL_KINDS: readonly SignInMethodKind[] = ['google', 'email', 'apple'];
+
+/**
+ * 帳號上的信箱（Google、email 驗證碼、Apple 三者擇一顯示，優先順序照這個順序）。沒有回 null。
+ *
+ * 使用者回饋（2026-11-14）：「email 跟 google 不是一樣的嗎？」——技術上是三種登入方式，
+ * 但畫面上只該有一列「Email」。
+ */
+export function emailIdentity(methods: readonly SignInMethod[]): SignInMethod | null {
+  for (const kind of EMAIL_KINDS) {
+    const found = methods.find((method) => method.kind === kind);
+    if (found !== undefined) return found;
+  }
+  return null;
+}
+
+/**
+ * 還可以加綁哪些：**信箱（用 Google）與 X，各一個**。
+ *
+ * - 已經有信箱（不論是 Google、email 驗證碼還是 Apple）就不再問要不要綁另一種信箱。
+ * - **不提供再綁錢包**：一個人只有一個錢包，就是註冊時決定的錢包主人（產品架構 P02）。
+ *   再綁一個錢包只會讓人以為自己有兩個錢包，也會讓「誰是主人」變得不明確。
+ */
 export function linkableMethods(methods: readonly SignInMethod[]): SignInMethodKind[] {
-  const linked = new Set(methods.map((method) => method.kind));
-  return (['email', 'google', 'apple', 'wallet'] as const).filter((kind) => kind === 'wallet' || !linked.has(kind));
+  const linkable: SignInMethodKind[] = [];
+  if (emailIdentity(methods) === null) linkable.push('google');
+  if (!methods.some((method) => method.kind === 'x')) linkable.push('x');
+  return linkable;
+}
+
+export type Profile = {
+  /** 顯示名稱。沒有任何來源時是 null（畫面改顯示主人地址）。 */
+  name: string | null;
+  /** X 的 @帳號。 */
+  handle: string | null;
+  /** 頭像網址（目前只有 X 有）。 */
+  avatarUrl: string | null;
+};
+
+/**
+ * 用戶頁上方的名字與頭像，全部取自已綁的帳號（cre8-app 用戶頁）。後端沒有用戶資料，這些只有本人看得到。
+ *
+ * 優先順序：X（有名字、@帳號、頭像）→ Google 的名字 → email 的 @ 前面那段 → 沒有。
+ */
+export function profileOf(accounts: readonly LinkedAccountLike[] | null | undefined): Profile {
+  const list = accounts ?? [];
+  const x = list.find((account) => account.type === 'twitter_oauth');
+  const google = list.find((account) => account.type === 'google_oauth');
+  const apple = list.find((account) => account.type === 'apple_oauth');
+  const email = list.find((account) => account.type === 'email');
+  const clean = (value: string | null | undefined) => (typeof value === 'string' && value.trim() !== '' ? value.trim() : null);
+  const localPart = (value: string | null | undefined) => clean(value?.split('@')[0]);
+  const handle = clean(x?.username);
+  const name = clean(x?.name) ?? clean(google?.name) ?? (handle === null ? null : handle)
+    ?? localPart(email?.address) ?? localPart(google?.email) ?? localPart(apple?.email);
+  // X 給的是 48px 的縮圖；換成 400px 的同一張（X 的網址規則：`_normal` → `_400x400`）。
+  const picture = clean(x?.profilePictureUrl);
+  const avatarUrl = picture === null || !/^https:\/\//.test(picture) ? null : picture.replace(/_normal(\.[a-z]+)$/i, '_400x400$1');
+  return { name, handle, avatarUrl };
 }
 
 /**

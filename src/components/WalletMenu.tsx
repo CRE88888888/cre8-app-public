@@ -265,7 +265,7 @@ function ClassicWalletMenu({ inline = false, showIcon = false, iconOnly = false 
               <p className="wallet-menu__addr mono">{shortAddress(wallet.address)}</p>
               <p className="wallet-menu__status">Signed in</p>
               <Link className="wallet-menu__item" to="/portfolios" onClick={() => setOpen(false)}>
-                Portfolio
+                Profile
               </Link>
               <button
                 type="button"

@@ -240,9 +240,10 @@ html body #root :is(.public-periods, .creator-periods, .seg) :is([aria-pressed="
   }
   :is(#root#root, body:not(#_):not(#__)) :is(.public-periods, .creator-periods, .seg) :is(button, a, label) { border-radius: 7px !important; }
   :is(#root#root, body:not(#_):not(#__)) :is(.card, .panel, .explore-filter-panel, .wallet-menu__panel, [data-sonner-toast], .fund-profile-card, .asset-preview-card, .signin-screen__card,
-      .feature-locked__row) {
+      .feature-locked__row, .profile-row) {
     border-radius: var(--r-lg) !important;
   }
+  :is(#root#root, body:not(#_):not(#__)) .profile-avatar { border-radius: 50% !important; }
   /* 手機：浮在內容上的分頁列、基金頁底部操作列、右上角圓鈕維持膠囊／圓形（它們是浮動的控制層）。 */
   @media (max-width: 719px) {
     :is(#root#root, body:not(#_):not(#__)) :is(.app-mobile-nav, .app-mobile-nav a, .public-mobile-cta, .public-mobile-cta .btn,

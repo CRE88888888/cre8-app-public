@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-export type AppTab = 'explore' | 'creators' | 'create' | 'manage' | 'portfolio';
+export type AppTab = 'explore' | 'creators' | 'create' | 'manage' | 'portfolio' | 'profile';
 export type AppIconName = AppTab | 'rebalance' | 'search' | 'filter' | 'left' | 'right' | 'down'
   | 'close' | 'share' | 'external' | 'info' | 'holdings' | 'activity' | 'deposit'
   | 'withdraw' | 'wallet' | 'check' | 'alert' | 'clock' | 'document' | 'network'
@@ -21,6 +21,12 @@ export function AppIcon({ name, active = false, size = 20 }: {
         <circle cx="9" cy="8" r="3" fill={active ? 'currentColor' : 'none'} />
         <path d="M3.3 19v-.75c0-2.62 2.3-4.25 5.7-4.25s5.7 1.63 5.7 4.25V19Z" fill={active ? 'currentColor' : 'none'} />
         <path d="M16 5.4a2.8 2.8 0 0 1 0 5.2m.55 3.6c2.54.32 4.15 1.81 4.15 4.03V19" />
+      </>;
+      break;
+    case 'profile':
+      symbol = <>
+        <circle cx="12" cy="8.2" r="3.6" fill={active ? 'currentColor' : 'none'} />
+        <path d="M5 19.6v-.8c0-3.05 2.85-5 7-5s7 1.95 7 5v.8Z" fill={active ? 'currentColor' : 'none'} />
       </>;
       break;
     case 'create':

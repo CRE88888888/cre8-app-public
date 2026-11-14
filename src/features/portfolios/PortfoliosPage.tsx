@@ -1,4 +1,5 @@
 import { useQueries, useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { AppIcon } from '../../components/AppIcon';
@@ -6,6 +7,9 @@ import { Badge, ErrorNote, Spinner } from '../../components/ui';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { WalletMenu } from '../../components/WalletMenu';
 import { FundingMethods } from '../../components/FundingMethods';
+import { LinkedAccounts, ProfileHeader, SignOutButton } from './ProfileCard';
+import { AppBottomSheet } from '../../components/AppBottomSheet';
+import { PRIVY_ENABLED } from '../../lib/privy-config';
 import { MOCK_FUNDS } from '../../data/mock-funds';
 import { TradeRoutes } from '../../components/TradeRoutes';
 import { getAssets, getPortfolioActivity, getPortfolioStatus, getPortfolios } from '../../lib/api';
@@ -61,6 +65,8 @@ export function PortfoliosPage(): ReactNode {
   const mobile = useMobile();
   const token = useConnectedSessionToken();
   const address = useAccountAddress();
+  /** 哪一個面板開著：帳號設定（齒輪）或入金方式（Add money）。 */
+  const [panel, setPanel] = useState<'settings' | 'funding' | null>(null);
   const portfolios = useQuery({
     queryKey: queryKeys.portfolios(token),
     queryFn: () => getPortfolios(token as string),
@@ -144,7 +150,7 @@ export function PortfoliosPage(): ReactNode {
   return (
     <main className="explore-wrap app-portfolio">
       <header className="explore-heading">
-        <h1>Portfolio<span>.</span></h1>
+        <h1>Profile<span>.</span></h1>
         {token !== null && !mobile && <Link className="btn ghost app-portfolio-create" to="/create">Create fund <AppIcon name="create" size={18} /></Link>}
       </header>
 
@@ -152,24 +158,26 @@ export function PortfoliosPage(): ReactNode {
         <section className="app-portfolio-summary app-portfolio-guest" aria-labelledby="portfolio-guest-title">
           {/* 未連錢包時只放一顆按鈕，使用者不知道連了之後會看到什麼；先說明這頁的用途再請他連線。 */}
           <span className="app-icon-tile app-portfolio-hero-icon"><AppIcon name="wallet" size={22} /></span>
-          <h2 id="portfolio-guest-title">See your funds in one place</h2>
-          <p>Connect your wallet to see each fund account you hold, its current value, and every rebalance.</p>
+          <h2 id="portfolio-guest-title">Your profile and funds in one place</h2>
+          <p>Sign in to see your linked accounts, each fund account you hold, its current value, and every rebalance.</p>
           <WalletMenu inline />
           <Link to="/vaults">Explore funds <AppIcon name="right" size={16} /></Link>
         </section>
       ) : (
         <>
+          {/* 用戶頁只放「我是誰、我有多少錢、我持有什麼」。綁定帳號在齒輪裡，入金方式在 Add money 裡。 */}
+          <ProfileHeader address={address} onSettings={() => setPanel('settings')} />
           <section className="app-portfolio-summary" aria-label="Portfolio summary">
             <p className="app-portfolio-kicker">Total portfolio value</p>
             <strong className="app-portfolio-value">{totalUsd}</strong>
             <div className="app-portfolio-meta">
               <span>{items.length} {items.length === 1 ? 'fund account' : 'fund accounts'}</span>
-              {!mobile && address !== null && <span className="mono" title={address}>{shortAddress(address)}</span>}
             </div>
             {!valueReady && <p role="status">{valueLoading ? 'Loading account values…' : 'Total unavailable. Some account values could not be verified.'}</p>}
+            <button type="button" className="btn sm app-portfolio-add" onClick={() => setPanel('funding')}>
+              <AppIcon name="deposit" size={18} /> Add money
+            </button>
           </section>
-          {/* 入金方式：現在能用的與主網才開放的（灰色）。見 lib/feature-flags.ts。 */}
-          <FundingMethods />
           <ErrorNote error={portfolios.error} />
           {!portfolios.isError && (
             <Tabs defaultValue="holdings" className="app-portfolio-tabs">
@@ -263,6 +271,20 @@ export function PortfoliosPage(): ReactNode {
               </TabsContent>
             </Tabs>
           )}
+          {/* 入金方式：現在能用的與主網才開放的（灰色）。見 lib/feature-flags.ts。 */}
+          <AppBottomSheet id="profile-funding" open={panel === 'funding'} onOpenChange={(open) => setPanel(open ? 'funding' : null)} title="Add money">
+            <FundingMethods variant="sheet" />
+          </AppBottomSheet>
+          <AppBottomSheet
+            open={panel === 'settings'}
+            onOpenChange={(open) => setPanel(open ? 'settings' : null)}
+            id="profile-account"
+            title="Account"
+            {...(PRIVY_ENABLED ? { description: 'Link more ways to sign in, export your wallet key, or sign out.' } : {})}
+          >
+            <LinkedAccounts address={address} />
+            <SignOutButton onDone={() => setPanel(null)} />
+          </AppBottomSheet>
         </>
       )}
     </main>

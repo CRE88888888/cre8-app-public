@@ -56,7 +56,7 @@ export function FundOverview({
       <div className="vault-top">
         <header className="vhead">
           <Link className="vault-back" to={backTo} viewTransition>
-            <AppIcon name="left" size={16} /> {fromPortfolio ? "Portfolio" : "All funds"}
+            <AppIcon name="left" size={16} /> {fromPortfolio ? "Profile" : "All funds"}
           </Link>
           <div className="vault-heading">
             <div className={`atp-fund-cover${meta?.cover.art === "hedcut" ? ` is-hedcut is-${meta.cover.subject ?? "person"}` : ""}`} id="atp-fund-cover" data-fund-cover>

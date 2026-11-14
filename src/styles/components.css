@@ -596,21 +596,14 @@
   color: var(--ink);
 }
 
-@media (min-width: 720px) {
-  .funding-methods:not(.funding-methods--compact) {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    align-items: start;
-  }
-
-  .funding-methods:not(.funding-methods--compact) .funding-methods__title {
-    grid-column: 1 / -1;
-  }
-}
-
-.funding-methods--compact {
+.funding-methods--ticket {
   margin: 16px 0 0;
   padding-top: 14px;
   border-top: 1px solid var(--hair, #d8e3ec);
+}
+
+.funding-methods--sheet {
+  margin: 0;
 }
 
 /*
@@ -764,5 +757,219 @@
 
   .signin-screen__head h2 {
     font-size: 30px;
+  }
+}
+
+/*
+ * 用戶頁（Profile，features/portfolios/ProfileCard.tsx）。
+ * 帳號列與入金方式的卡片同一個樣子（淺灰卡、圖示、名稱與說明），按鈕是既有的 .btn.ghost.sm，標記是 .badge。
+ */
+.profile-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 4px 0 20px;
+}
+
+.profile-avatar {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--app-grouped, #f6f7f8);
+}
+
+.profile-avatar--empty {
+  display: grid;
+  place-items: center;
+  color: var(--deep);
+  font: 600 28px/1 var(--sans);
+}
+
+.profile-head__text {
+  min-width: 0;
+}
+
+.profile-head__text h2 {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 24px/1.2 var(--sans);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.profile-head__text p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--steel);
+}
+
+.profile-head__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-head__name span {
+  min-width: 0;
+  /* 名字最長 24 個字：手機上放不下就折成兩行，不要截掉。 */
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.profile-head__text h2:has(.profile-head__name) {
+  white-space: normal;
+}
+
+/* 名字的輸入框用一般字體（.field input 預設是等寬，那是給數字與地址用的）。 */
+.profile-head__edit .field input {
+  font-family: var(--sans);
+  font-size: 16px;
+}
+
+.profile-head__name svg {
+  flex: none;
+  color: var(--steel);
+}
+
+.profile-head__name:hover svg {
+  color: var(--ink);
+}
+
+.profile-head__edit {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  max-width: 420px;
+}
+
+.profile-head__edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.profile-head__edit small {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--steel);
+}
+
+.profile-signout {
+  width: 100%;
+  margin-top: 16px;
+}
+
+.profile-head__settings {
+  flex: none;
+  margin-left: auto;
+}
+
+@media (max-width: 719px) {
+  .profile-head__settings {
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
+  }
+
+  .profile-head__settings span {
+    display: none;
+  }
+}
+
+.app-portfolio-add {
+  justify-self: start;
+  margin-top: 8px;
+}
+
+@media (max-width: 719px) {
+  .app-portfolio-add {
+    justify-self: center;
+  }
+}
+
+.profile-accounts {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-accounts__title {
+  margin: 0 0 2px;
+  font: 600 13px/1.4 var(--sans);
+  color: var(--ink);
+}
+
+.profile-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 64px;
+  padding: 12px 16px;
+  background: var(--app-grouped, #f6f7f8);
+}
+
+.profile-row__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: var(--ink);
+}
+
+.profile-row__text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.profile-row__text b {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.profile-row__text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--steel);
+}
+
+.profile-row .btn {
+  flex: none;
+}
+
+.profile-accounts__note {
+  margin: 2px 2px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--steel);
+}
+
+
+/* 用戶頁的兩個面板（Account、Add money）：手機是底部面板；桌機收窄置中，不要橫跨整個視窗。 */
+@media (min-width: 720px) {
+  :is(#profile-account, #profile-funding).app-bottom-sheet {
+    max-width: 520px;
+    margin-inline: auto;
+    border-bottom: 1px solid var(--hair);
+    bottom: 24px;
   }
 }

@@ -814,7 +814,7 @@ function FundPageBody(): ReactNode {
                   </form>
                 )}
                 {/* 入金方式的預告（刷卡、其他鏈：主網開放）。只在 Buy 分頁、還沒進到確認或收據時顯示。 */}
-                {tab === 'deposit' && progress === null && <FundingMethods compact />}
+                {tab === 'deposit' && progress === null && <FundingMethods variant="ticket" />}
                 </div>
               </Tabs>
             </section>

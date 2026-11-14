@@ -5,7 +5,9 @@ import {
   evmWallets,
   explainPrivyLoginFailure,
   identityTokenWallets,
+  emailIdentity,
   linkableMethods,
+  profileOf,
   readOnlyNotice,
   readRememberedOwner,
   rememberOwner,
@@ -128,9 +130,10 @@ test("lists how the account can sign in, and what can still be added", () => {
     { kind: "google", detail: "ada@gmail.com" },
     { kind: "wallet", detail: "0x90F7…b906" },
   ]);
-  expect(linkableMethods(methods)).toEqual(["apple", "wallet"]);
-  expect(linkableMethods(signInMethods([apple]))).toEqual(["email", "google", "wallet"]);
-  expect(linkableMethods([])).toEqual(["email", "google", "apple", "wallet"]);
+  // 已經有信箱（email 與 Google 都算），只剩 X 可以綁；錢包不提供再綁。
+  expect(linkableMethods(methods)).toEqual(["x"]);
+  expect(linkableMethods(signInMethods([apple]))).toEqual(["x"]);
+  expect(linkableMethods([])).toEqual(["google", "x"]);
 });
 
 test("every backend answer to /auth/privy has its own plain-English message", () => {
@@ -168,4 +171,46 @@ test("view-only notice: names the owner wallet, or says the embedded wallet is n
   expect(readOnlyNotice({ owner: METAMASK, ownerEmbedded: false, signer: "ready" })).toBeNull();
   expect(readOnlyNotice({ owner: METAMASK, ownerEmbedded: false, signer: "checking" })).toBeNull();
   expect(readOnlyNotice({ owner: null, ownerEmbedded: false, signer: "missing" })).toBeNull();
+});
+
+test("profile: name, handle and picture come from X first, then Google, then the email address", () => {
+  const x: LinkedAccountLike = { type: "twitter_oauth", username: "ada_l", name: "Ada L.", profilePictureUrl: "https://pbs.twimg.com/profile_images/1/abc_normal.jpg" };
+  expect(profileOf([email, embedded(), x, google])).toEqual({ name: "Ada L.", handle: "ada_l", avatarUrl: "https://pbs.twimg.com/profile_images/1/abc_400x400.jpg" });
+  // 沒有 X：Google 的名字；沒有頭像。
+  expect(profileOf([email, { ...google, name: "Ada Lovelace" }])).toEqual({ name: "Ada Lovelace", handle: null, avatarUrl: null });
+  // 只有 email：@ 前面那段。
+  expect(profileOf([email, embedded()])).toEqual({ name: "ada", handle: null, avatarUrl: null });
+  // X 沒有名字：用 @帳號。
+  expect(profileOf([{ type: "twitter_oauth", username: "ada_l", name: " " }]).name).toBe("ada_l");
+  // 只有錢包：沒有名字（畫面改顯示地址）。
+  expect(profileOf([external(METAMASK, "2026-11-14T08:00:00Z")])).toEqual({ name: null, handle: null, avatarUrl: null });
+  // 不是 https 的頭像網址不用。
+  expect(profileOf([{ ...x, profilePictureUrl: "http://example.com/a_normal.jpg" }]).avatarUrl).toBeNull();
+});
+
+test("X can be linked once and shows the @handle", () => {
+  const methods = signInMethods([email, embedded(), { type: "twitter_oauth", username: "ada_l", name: "Ada" }]);
+  expect(methods).toEqual([{ kind: "email", detail: "ada@example.com" }, { kind: "x", detail: "@ada_l" }]);
+  expect(linkableMethods(methods)).toEqual([]);
+  expect(linkableMethods([])).toContain("x");
+});
+
+test("email, Google and Apple are one thing to the user: a single email identity", () => {
+  // 使用者 2026-11-14：「email 跟 google 不是一樣的嗎？」
+  expect(emailIdentity(signInMethods([google]))).toEqual({ kind: "google", detail: "ada@gmail.com" });
+  expect(emailIdentity(signInMethods([email, embedded()]))).toEqual({ kind: "email", detail: "ada@example.com" });
+  expect(emailIdentity(signInMethods([apple]))).toEqual({ kind: "apple", detail: "ada@icloud.com" });
+  // 兩種都綁過：顯示 Google 的。
+  expect(emailIdentity(signInMethods([email, google]))?.kind).toBe("google");
+  // 用錢包註冊的人沒有信箱：可以綁 Google。
+  const walletOnly = signInMethods([external(METAMASK, "2026-11-14T08:00:00Z")]);
+  expect(emailIdentity(walletOnly)).toBeNull();
+  expect(linkableMethods(walletOnly)).toEqual(["google", "x"]);
+});
+
+test("a second wallet is never offered: one person, one wallet", () => {
+  // 使用者 2026-11-14：「為啥有兩個錢包，我們應該不是這樣設計的」。
+  for (const accounts of [[email, embedded()], [google], [external(METAMASK, "2026-11-14T08:00:00Z")], []]) {
+    expect(linkableMethods(signInMethods(accounts))).not.toContain("wallet");
+  }
 });

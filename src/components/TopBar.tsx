@@ -45,7 +45,7 @@ const destinations: Record<AppMode, Destination[]> = {
   invest: [
     { to: '/vaults', label: 'Funds', icon: 'explore', paths: ['/vaults', '/funds', '/vault', '/assets', '/asset'] },
     { to: '/leaderboard', label: 'Creators', icon: 'creators', paths: ['/leaderboard', '/creator'] },
-    { to: '/portfolios', label: 'Portfolio', icon: 'portfolio', paths: ['/portfolios', '/portfolio'] },
+    { to: '/portfolios', label: 'Profile', icon: 'profile', paths: ['/portfolios', '/portfolio'] },
   ],
   studio: [
     { to: '/studio', label: 'Today', icon: 'activity', paths: ['/studio'], exact: true },
@@ -68,8 +68,8 @@ const tabRootTitles: Record<string, string> = {
   '/': 'Funds',
   '/vaults': 'Funds',
   '/leaderboard': 'Creators',
-  '/portfolio': 'Portfolio',
-  '/portfolios': 'Portfolio',
+  '/portfolio': 'Profile',
+  '/portfolios': 'Profile',
   '/studio': 'Today',
   '/studio/funds': 'My funds',
   '/studio/earnings': 'Earnings',

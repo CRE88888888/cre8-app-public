@@ -27,6 +27,7 @@ import {
   PrivySetupError,
   evmWallets,
   identityTokenWallets,
+  profileOf,
   readRememberedOwner,
   rememberOwner,
   resolveOwner,
@@ -58,7 +59,7 @@ function localStorageOrNull(): Storage | null {
 const delay = (ms: number): Promise<void> => new Promise((resolve) => window.setTimeout(resolve, ms));
 
 function Bridge(): null {
-  const { ready, authenticated, user, error: initError, login, logout, connectWallet, linkEmail, linkGoogle, linkApple, linkWallet, exportWallet } = usePrivy();
+  const { ready, authenticated, user, error: initError, login, logout, connectWallet, linkEmail, linkGoogle, linkApple, linkTwitter, linkWallet, exportWallet } = usePrivy();
   const { wallets, ready: walletsReady } = useWallets();
   const { identityToken } = useIdentityToken();
   const { refreshUser } = useUser();
@@ -289,6 +290,7 @@ function Bridge(): null {
         if (kind === 'email') linkEmail();
         else if (kind === 'google') linkGoogle();
         else if (kind === 'apple') linkApple();
+        else if (kind === 'x') linkTwitter();
         else linkWallet();
       },
       connectOwnerWallet: () => connectWallet(),
@@ -297,7 +299,7 @@ function Bridge(): null {
         await exportWallet(address === null ? undefined : { address });
       },
     }),
-    [login, logout, createWallet, refreshUser, linkEmail, linkGoogle, linkApple, linkWallet, connectWallet, exportWallet, initOAuth, sendCode, loginWithCode],
+    [login, logout, createWallet, refreshUser, linkEmail, linkGoogle, linkApple, linkTwitter, linkWallet, connectWallet, exportWallet, initOAuth, sendCode, loginWithCode],
   );
 
   // ---- 同步到給畫面用的 store ------------------------------------------------------------------
@@ -315,12 +317,14 @@ function Bridge(): null {
             ? 'creating-wallet'
             : 'exchanging';
   const methods = useMemo(() => signInMethods(accounts), [accounts]);
+  const profile = useMemo(() => profileOf(accounts), [accounts]);
   const ownerEmbedded = owner !== null && accountWallets.some((wallet) => wallet.embedded && sameAddress(wallet.address, owner));
   useEffect(() => {
     usePrivyAuth.setState({
       phase,
       error: phase === 'unavailable' ? initError : failure,
       methods,
+      profile,
       ownerEmbedded,
       signer,
       emailStep: emailState.status,
@@ -328,7 +332,7 @@ function Bridge(): null {
       oauthError,
       actions,
     });
-  }, [phase, failure, initError, methods, ownerEmbedded, signer, emailState, oauthError, actions]);
+  }, [phase, failure, initError, methods, profile, ownerEmbedded, signer, emailState, oauthError, actions]);
   // 登入完成（Privy 那一側）就把登入頁收起來；後面換 CRE8 session 的進度在標頭的選單裡。
   useEffect(() => {
     if (authenticated) usePrivyAuth.setState({ signInOpen: false });

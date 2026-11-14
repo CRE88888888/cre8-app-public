@@ -211,14 +211,16 @@ export function PrivyWalletMenu({ inline = false, showIcon = false, iconOnly = f
                 </button>
               )}
               <Link className="wallet-menu__item" to="/portfolios" onClick={() => setOpen(false)}>
-                Portfolio
+                Profile
               </Link>
-              <button type="button" className="wallet-menu__item" role="menuitem" aria-expanded={adding} onClick={() => setAdding((current) => !current)}>
-                Add a sign-in method
-              </button>
+              {linkableMethods(methods).length > 0 && (
+                <button type="button" className="wallet-menu__item" role="menuitem" aria-expanded={adding} onClick={() => setAdding((current) => !current)}>
+                  Add a sign-in method
+                </button>
+              )}
               {adding && linkableMethods(methods).map((kind) => (
                 <button key={kind} type="button" className="wallet-menu__item" role="menuitem" onClick={() => actions?.link(kind)}>
-                  {kind === 'wallet' ? 'Another wallet' : signInMethodName(kind)}
+                  {signInMethodName(kind)}
                 </button>
               ))}
               {ownerEmbedded && (
