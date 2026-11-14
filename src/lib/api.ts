@@ -247,10 +247,14 @@ export function postSponsor(token: string, userOperation: PackedSponsorOperation
 }
 
 /**
- * 領測試 USDT（backend#69，`POST /faucet/usdt`，只在測試網）。`account` 是要收的地址。
- * ⚠ 這個端點寫前端時還沒合併：請求與回應的欄位是照 issue 預先對的，定案後以後端為準。
+ * 領測試 USDT（backend#72，`POST /faucet/usdt`，只在測試網）。
+ * `account` 是**已經 enroll 的基金帳戶**（不是使用者的錢包）。200＝已確認、202＝結果未知（`state: "unknown"`）；
+ * 502（交易被退回）會以 `ApiError` 丟出。介面見 `lib/faucet.ts`。
  */
-export function postFaucetUsdt(token: string, account: string): Promise<{ txHash?: string; amountWei?: string; amount?: string }> {
+export function postFaucetUsdt(
+  token: string,
+  account: string,
+): Promise<{ claimId?: string; state?: 'confirmed' | 'failed' | 'unknown'; txHash?: string; amountWei?: string }> {
   return request('/faucet/usdt', { method: 'POST', token, body: { account } });
 }
 

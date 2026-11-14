@@ -31,6 +31,11 @@ export type ChainProfile = {
   explorerUrl: string | null;
   /** true = 帳戶的 UserOp 由平台代付 gas（後端 `/paymaster/sponsor`），帳戶裡不需要原生代幣。 */
   sponsored: boolean;
+  /**
+   * true = 買入的錢由水龍頭直接打進基金帳戶（測試網），不從使用者的錢包轉。
+   * 那一筆轉帳是一般交易、要原生代幣付 gas，而 email 登入的人錢包裡沒有。
+   */
+  faucetFunded: boolean;
   /** 前端自己知道的合約地址（只有測試網有地址簿）。主網與本機 fork 一律由後端回報。 */
   contracts: ChainContracts | null;
 };
@@ -47,6 +52,7 @@ export function chainProfile(chainId: number, rpcOverride?: string): ChainProfil
       rpcUrl: isHttpUrl(rpcOverride) ? rpcOverride : 'https://bsc-dataseed.binance.org',
       explorerUrl: 'https://bscscan.com',
       sponsored: false,
+      faucetFunded: false,
       contracts: null,
     };
   }
@@ -61,6 +67,7 @@ export function chainProfile(chainId: number, rpcOverride?: string): ChainProfil
       rpcUrl: isHttpUrl(rpcOverride) ? rpcOverride : 'https://bsc-testnet.publicnode.com',
       explorerUrl: 'https://testnet.bscscan.com',
       sponsored: true,
+      faucetFunded: true,
       contracts: { registry, executor, usdt, paymaster, entryPoint },
     };
   }
@@ -72,6 +79,7 @@ export function chainProfile(chainId: number, rpcOverride?: string): ChainProfil
     rpcUrl: isHttpUrl(rpcOverride) ? rpcOverride : 'http://127.0.0.1:8545',
     explorerUrl: null,
     sponsored: false,
+    faucetFunded: false,
     contracts: null,
   };
 }
@@ -93,12 +101,13 @@ export function walletChainParams(profile: ChainProfile): {
 
 /** 後端回報的地址與地址簿不一致。前端停下，不拿這個地址去組交易。 */
 export class AddressBookMismatch extends Error {
+  /** 給 `ErrorNote` 用：標題與可展開的細節（兩個地址放細節，主要訊息只講發生什麼）。 */
+  readonly title = 'Network setup problem';
+  readonly technical: string;
   constructor(kind: keyof ChainContracts, reported: string, expected: string) {
-    super(
-      `The server reported a ${kind} contract (${reported}) that is not the one deployed for this network (${expected}). ` +
-        'Nothing was sent. Please try again later.',
-    );
+    super('CRE8’s servers are pointing at the wrong contract for this network, so nothing was sent. This is on our side. Please try again later.');
     this.name = 'AddressBookMismatch';
+    this.technical = `${kind}: server reported ${reported}, address book has ${expected}`;
   }
 }
 

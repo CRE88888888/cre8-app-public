@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { decodeAbiParameters } from "viem";
 import { ApiError } from "../src/lib/api";
 import { AddressBookMismatch, chainProfile, checkedContract, isWrongNetwork, walletChainParams } from "../src/lib/chain-config";
-import { faucetFailure, faucetSuccess, formatTestUsdt } from "../src/lib/faucet";
+import { FAUCET_UNCONFIRMED, FaucetError, faucetFailure, faucetSuccess, formatTestUsdt } from "../src/lib/faucet";
 import { SponsorshipError, explainSponsorFailure, packForSponsorship, sponsorshipFromResponse, stubPaymasterData } from "../src/lib/paymaster";
 import { TESTNET_97 } from "../src/lib/testnet-97";
 
@@ -45,6 +45,7 @@ test("chain 56 is unchanged: mainnet name, RPC, explorer, no sponsorship, no add
     rpcUrl: "https://bsc-dataseed.binance.org",
     explorerUrl: "https://bscscan.com",
     sponsored: false,
+    faucetFunded: false,
     contracts: null,
   });
   // 加到錢包的參數與原本寫死的那一組相同。
@@ -84,7 +85,13 @@ test("on the testnet a server-reported contract must match the address book", ()
   // 後端指到別的 executor（例如主網的）：停下。
   const other = "0x1111111111111111111111111111111111111111";
   expect(() => checkedContract(testnet, "executor", other)).toThrow(AddressBookMismatch);
-  expect(() => checkedContract(testnet, "registry", executor)).toThrow("Nothing was sent");
+  expect(() => checkedContract(testnet, "registry", executor)).toThrow("nothing was sent");
+  // 畫面上：白話的一句，兩個地址收在細節裡。
+  let caught: unknown;
+  try { checkedContract(testnet, "executor", other); } catch (error) { caught = error; }
+  expect((caught as AddressBookMismatch).title).toBe("Network setup problem");
+  expect((caught as AddressBookMismatch).message).not.toContain("0x");
+  expect((caught as AddressBookMismatch).technical).toBe(`executor: server reported ${other}, address book has ${executor}`);
   // 主網與本機 fork 沒有地址簿：照舊放行。
   expect(checkedContract(chainProfile(56), "executor", other)).toBe(other);
   expect(checkedContract(chainProfile(1337), "executor", other)).toBe(other);
@@ -210,38 +217,112 @@ test("a sponsor rejection becomes an error the page can show, with the raw answe
 
 // ---- 領測試 USDT ----
 
-test("claiming test USDT: the four outcomes each have their own sentence", () => {
-  expect(formatTestUsdt("10000000000000000000000")).toBe("10,000");
+test("claiming test USDT: the outcomes match the backend's implementation (backend#72)", () => {
+  expect(formatTestUsdt("1000000000000000000000")).toBe("1,000");
   expect(formatTestUsdt("500000000000000000000")).toBe("500");
   expect(formatTestUsdt(undefined)).toBeNull();
   expect(formatTestUsdt("1e21")).toBeNull();
 
-  expect(faucetSuccess({ amountWei: "10000000000000000000000", txHash: "0xabc" })).toEqual({
+  // 200：回應帶 state、amountWei、txHash；錢進的是基金帳戶，不是錢包。
+  expect(faucetSuccess({ state: "confirmed", amountWei: "1000000000000000000000", txHash: "0xabc" })).toEqual({
     kind: "claimed",
-    message: "10,000 test USDT is on its way to your wallet. Test tokens have no value.",
+    amount: "1,000 test USDT",
+    message: "1,000 test USDT is on its way to this fund’s account. Test tokens have no value.",
+    settled: true,
     txHash: "0xabc",
   });
-  // 後端沒說金額也不會壞。
-  expect(faucetSuccess({})).toMatchObject({ kind: "claimed", message: "Test USDT is on its way to your wallet. Test tokens have no value.", txHash: null });
+  expect(faucetSuccess({})).toMatchObject({ kind: "claimed", amount: "Test USDT", settled: true, txHash: null });
+  // 202：結果未知。不能當成已經到帳。
+  const unknown = faucetSuccess({ state: "unknown", amountWei: "1000000000000000000000", txHash: "0xabc" });
+  expect(unknown).toMatchObject({ kind: "claimed", settled: false, txHash: "0xabc" });
+  expect(unknown.message).toContain("has not confirmed it yet");
+  expect(unknown.message).not.toContain("on its way");
 
-  // 今天已領過。
-  for (const error of [new ApiError(429, "FAUCET_ALREADY_CLAIMED", "x"), new ApiError(429, "FAUCET_DAILY_LIMIT", "x"), new ApiError(409, "CONFLICT", "x")]) {
-    expect(faucetFailure(error)).toMatchObject({ kind: "already" });
-    expect(faucetFailure(error).message).toContain("already claimed test USDT today");
+  // 後端實作的錯誤代碼。
+  expect(faucetFailure(new ApiError(429, "FAUCET_QUOTA_EXCEEDED", "x"))).toEqual({
+    kind: "quota",
+    message: "No test USDT for you right now: you can claim once a day, and there is a daily total for everyone. Try again after 00:00 UTC.",
+  });
+  expect(faucetFailure(new ApiError(429, "FAUCET_RECIPIENT_LIMIT", "x"))).toEqual({
+    kind: "limit",
+    message: "This fund’s account has received as much test USDT as it can in 24 hours. Try again later.",
+  });
+  expect(faucetFailure(new ApiError(403, "FAUCET_ACCOUNT_FORBIDDEN", "x"))).toEqual({
+    kind: "forbidden",
+    message: "Test USDT can only go to a fund account you have joined. Reload the page, then try again.",
+  });
+  for (const code of ["FAUCET_DISABLED", "FAUCET_CHAIN_MISMATCH"]) {
+    expect(faucetFailure(new ApiError(503, code, "x"))).toEqual({
+      kind: "unavailable",
+      message: "Test USDT is not set up on this network. Please let the team know.",
+    });
   }
-  expect(faucetFailure(new ApiError(429, "FAUCET_ALREADY_CLAIMED", "x"), { nextClaimAt: 1794614400 }).message).toContain("again after");
-  // 全站額度用完（代碼裡同時有 LIMIT 也算全站）。
-  for (const code of ["FAUCET_SITE_LIMIT", "FAUCET_TOTAL_EXHAUSTED", "FAUCET_GLOBAL_DAILY_LIMIT", "FAUCET_BUDGET_EXCEEDED"]) {
-    expect([code, faucetFailure(new ApiError(429, code, "x")).kind]).toEqual([code, "exhausted"]);
+  for (const code of ["FAUCET_STORAGE_UNAVAILABLE", "FAUCET_OPERATOR_UNAVAILABLE", "FAUCET_PREPARE_UNAVAILABLE"]) {
+    expect(faucetFailure(new ApiError(503, code, "x"))).toEqual({
+      kind: "unavailable",
+      message: "Test USDT is not available right now. Please try again later.",
+    });
   }
-  expect(faucetFailure(new ApiError(503, "FAUCET_SITE_LIMIT", "x")).message).toContain("all been handed out");
-  // 暫時不能領、沒登入、斷線。
-  expect(faucetFailure(new ApiError(503, "FAUCET_UNAVAILABLE", "x"))).toMatchObject({ kind: "unavailable" });
+  expect(faucetFailure(new ApiError(503, "RELAYER_BUSY", "x"))).toMatchObject({ kind: "unavailable", message: expect.stringContaining("busy") });
+  // 502：`state: "failed"` 的結果沒有 error.code，`request` 給的是 HTTP_502。
+  expect(faucetFailure(new ApiError(502, "HTTP_502", "Bad Gateway"))).toEqual({
+    kind: "failed",
+    message: "The test USDT transfer did not go through. Please try again.",
+  });
+
+  // 後端之後多了別的代碼也不會變成看不懂的錯誤。
+  expect(faucetFailure(new ApiError(409, "CONFLICT", "x")).kind).toBe("quota");
+  expect(faucetFailure(new ApiError(429, "FAUCET_ALREADY_CLAIMED", "x")).kind).toBe("quota");
+  expect(faucetFailure(new ApiError(429, "RATE_LIMITED", "x"))).toMatchObject({ kind: "unavailable", message: expect.stringContaining("Too many requests") });
+  expect(faucetFailure(new ApiError(400, "FAUCET_INVALID_REQUEST", "x"))).toMatchObject({ kind: "unavailable" });
   expect(faucetFailure(new ApiError(404, "NOT_FOUND", "x"))).toMatchObject({ kind: "unavailable" });
   expect(faucetFailure(new ApiError(401, "UNAUTHORIZED", "x"))).toMatchObject({ kind: "signed-out" });
   expect(faucetFailure(new Error("offline"))).toMatchObject({ kind: "unavailable" });
-  // 訊息裡不帶代碼。
-  expect(faucetFailure(new ApiError(429, "FAUCET_SITE_LIMIT", "x")).message).not.toMatch(/FAUCET|[A-Z]{3,}_[A-Z]/);
+  // 給使用者看的話裡沒有代碼。
+  for (const [status, code] of [[429, "FAUCET_QUOTA_EXCEEDED"], [429, "FAUCET_RECIPIENT_LIMIT"], [403, "FAUCET_ACCOUNT_FORBIDDEN"], [503, "FAUCET_DISABLED"], [502, "HTTP_502"]] as const) {
+    expect(faucetFailure(new ApiError(status, code, "x")).message).not.toMatch(/FAUCET|HTTP_|[A-Z]{3,}_[A-Z]/);
+  }
+  expect(FAUCET_UNCONFIRMED.message).not.toMatch(/FAUCET|[A-Z]{3,}_[A-Z]/);
+});
+
+test("a failed claim becomes an error the page can show, with the raw answer kept aside", () => {
+  const cause = new ApiError(429, "FAUCET_QUOTA_EXCEEDED", "one claim per owner per UTC day; site daily cap also applies");
+  const error = new FaucetError(faucetFailure(cause), cause);
+  expect(error).toBeInstanceOf(Error);
+  expect(error.title).toBe("Test USDT not claimed");
+  expect(error.kind).toBe("quota");
+  expect(error.message).toContain("you can claim once a day");
+  expect(error.technical).toBe("429 · FAUCET_QUOTA_EXCEEDED\none claim per owner per UTC day; site daily cap also applies");
+  expect(new FaucetError(faucetFailure(new Error("x"))).technical).toBe("");
+});
+
+test("a claim whose result is unknown is waited for, and never treated as money in the account", () => {
+  const fund = fs.readFileSync("src/features/fund/FundPage.tsx", "utf8");
+  expect(fund).toContain("claimSettled = claimed.settled;");
+  // 沒等到上鏈就停下（return），在要求簽授權之前。
+  const stop = fund.indexOf("title: FAUCET_UNCONFIRMED.title");
+  expect(stop).toBeGreaterThan(fund.indexOf("await waitForConfirmations(wallet, hash, 2)"));
+  expect(stop).toBeLessThan(fund.indexOf("title: 'Preparing fund allocation'"));
+  expect(fund.slice(stop, fund.indexOf("if (transferState === 'reverted')", stop))).toContain("return;");
+});
+
+test("on the testnet a buy is funded by the faucet, into the fund account, never by a wallet transfer", () => {
+  expect(chainProfile(97).faucetFunded).toBe(true);
+  expect(chainProfile(56).faucetFunded).toBe(false);
+  expect(chainProfile(1337).faucetFunded).toBe(false);
+  const fund = fs.readFileSync("src/features/fund/FundPage.tsx", "utf8");
+  // 送給水龍頭的是基金帳戶（`account`），不是錢包地址。
+  expect(fund).toContain("faucetSuccess(await postFaucetUsdt(token, account as string))");
+  expect(fund).not.toMatch(/postFaucetUsdt\(token, (wallet|walletAddress|connectedAddress)/);
+  // 錢包轉 USDT 只在非測試網的分支裡。
+  const transfer = fund.indexOf("hash = await sendUsdt(");
+  expect(fund.lastIndexOf("} else {", transfer)).toBeGreaterThan(fund.indexOf("if (faucetBuy) {"));
+  expect(fund.match(/sendUsdt\(wallet,/g)?.length).toBe(1);
+  // 入金方式清單不再有第二顆領取按鈕。
+  const list = fs.readFileSync("src/components/FundingMethods.tsx", "utf8");
+  expect(list).toContain("CHAIN.faucetFunded ?");
+  expect(list).not.toMatch(/postFaucetUsdt|onClick/);
+  expect(fs.existsSync("src/components/ClaimTestUsdt.tsx")).toBe(false);
 });
 
 // ---- 原始碼守住的幾件事 ----
@@ -257,12 +338,11 @@ test("nothing outside the chain config hard-codes mainnet for the wallet, the ch
   expect(fs.readFileSync("src/lib/use-wallet-diagnostics.ts", "utf8")).toContain("const EXPECTED_CHAIN_ID = CHAIN_ID;");
 });
 
-test("the testnet banner, the wrong-network notice and the faucet only show on the testnet", () => {
+test("the testnet banner and the wrong-network notice only show on the testnet", () => {
   const banners = fs.readFileSync("src/components/NetworkBanners.tsx", "utf8");
   expect(banners).toContain("if (!CHAIN.testnet) return null;");
   expect(banners).toContain("have no value");
   expect(banners).toContain("if (!CHAIN.testnet || provider === null || !isWrongNetwork(CHAIN, walletChainId)) return null;");
-  expect(fs.readFileSync("src/components/FundingMethods.tsx", "utf8")).toContain("{CHAIN.testnet && <ClaimTestUsdt />}");
   const app = fs.readFileSync("src/App.tsx", "utf8");
   expect(app).toContain("<TestnetBanner />");
   expect(app).toContain("<WrongNetworkNotice />");

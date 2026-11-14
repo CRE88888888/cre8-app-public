@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import { AppIcon } from './AppIcon';
 import { LockedFeature } from './FeatureLock';
-import { ClaimTestUsdt } from './ClaimTestUsdt';
 import { CHAIN } from '../lib/kernel';
 
 /**
@@ -21,17 +20,30 @@ export function FundingMethods({ variant }: {
   return (
     <section className={`funding-methods funding-methods--${variant}`} aria-label="Ways to add money">
       {variant === 'ticket' && <h3 className="funding-methods__title">Ways to add money</h3>}
-      <div className="feature-locked" data-state="on">
-        <div className="feature-locked__row">
-          <span className="feature-locked__text">
-            <span className="feature-locked__title"><b>USDT from your wallet</b><span className="badge badge--ok feature-badge">Available</span></span>
-            <small>On BNB Chain. Choose a fund and press Buy.</small>
-          </span>
-          <span className="feature-locked__icon" aria-hidden="true"><AppIcon name="wallet" size={22} /></span>
+      {CHAIN.faucetFunded ? variant === 'ticket' ? null : (
+        // 測試網：錢由水龍頭直接打進基金帳戶，領取就在基金頁的 Buy 按鈕上（cre8-app#62）。
+        // 這裡只說明，不放第二顆按鈕；也不列「從錢包轉 USDT」，測試網不走那條路。
+        // 基金頁（ticket）上面就是那顆按鈕與同一句說明，所以不重複。
+        <div className="feature-locked" data-state="on" data-entry="faucet">
+          <div className="feature-locked__row">
+            <span className="feature-locked__text">
+              <span className="feature-locked__title"><b>Test USDT</b><span className="badge badge--ok feature-badge">Free</span></span>
+              <small>Open a fund and press Buy. Once a day, straight into the fund. No value.</small>
+            </span>
+            <span className="feature-locked__icon" aria-hidden="true"><AppIcon name="wallet" size={22} /></span>
+          </div>
         </div>
-      </div>
-      {/* 測試網：領測試 USDT（cre8-app#62）。 */}
-      {CHAIN.testnet && <ClaimTestUsdt />}
+      ) : (
+        <div className="feature-locked" data-state="on">
+          <div className="feature-locked__row">
+            <span className="feature-locked__text">
+              <span className="feature-locked__title"><b>USDT from your wallet</b><span className="badge badge--ok feature-badge">Available</span></span>
+              <small>On BNB Chain. Choose a fund and press Buy.</small>
+            </span>
+            <span className="feature-locked__icon" aria-hidden="true"><AppIcon name="wallet" size={22} /></span>
+          </div>
+        </div>
+      )}
       <LockedFeature feature="depositCard" icon={<AppIcon name="deposit" size={22} />} description="Visa, Mastercard or Apple Pay" />
       <LockedFeature feature="depositCrossChain" icon={<AppIcon name="network" size={22} />} description="USDC or USDT on other networks" />
     </section>
