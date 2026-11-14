@@ -33,6 +33,7 @@ import { MAX_SELL_BATCHES, SellBatchError, SellUnfinished, afterSellRun, formatR
 import { cashUsdOf, sellTargetUsd, totalUsdOf, withdrawShortfallNote } from '../../lib/withdraw-plan';
 import { TradeFailureError, explainTradeFailure } from '../../lib/trade-failure';
 import { FAUCET_UNCONFIRMED, FaucetError, faucetFailure, faucetSuccess } from '../../lib/faucet';
+import { usePrivyAuth } from '../../store/privy';
 import { AccountControls } from './AccountControls';
 import { accountOnchainKey, loadAccountOnchain, useAccountOnchain } from './use-account-onchain';
 import { useWallet } from '../../store/wallet';
@@ -226,6 +227,25 @@ function FundPageBody(): ReactNode {
   const mobile=useMobile();
   const ticketToast = useRef<ToastId | null>(null);
   const [mobileTicket,setMobileTicket]=useState(search.get('ticket')==='1'||search.get('tab')==='withdraw');
+  /**
+   * 手機：登入頁開著時先把下單面板收起來，登入完（或按了「Not now」）再自己回來。
+   * 面板是 modal（Radix 會讓面板以外的東西點不到、focus 也被鎖在面板裡），登入頁疊在它上面時按鈕全都按不到。
+   * 只改「顯示不顯示」，`mobileTicket` 與網址上的 `?ticket=1` 不動——Google 登入整頁轉出去再回來時，面板也會照網址重新打開。
+   */
+  const signInOpen = usePrivyAuth((state) => state.signInOpen);
+  /**
+   * 登入頁關掉後晚一點（200ms）才把面板放回來：登入頁上那一下點擊與隨後的 focus 移動還沒結束時就打開面板，
+   * Radix 會把它們當成「點了面板外面」而立刻關掉面板、連網址上的 `?ticket=1` 一起拿掉（實測）。
+   */
+  const [ticketHidden, setTicketHidden] = useState(false);
+  useEffect(() => {
+    if (signInOpen) {
+      setTicketHidden(true);
+      return;
+    }
+    const timer = window.setTimeout(() => setTicketHidden(false), 200);
+    return () => window.clearTimeout(timer);
+  }, [signInOpen]);
   function dismissTicketToast() {
     if (ticketToast.current === null) return;
     toast.dismiss(ticketToast.current);
@@ -634,7 +654,7 @@ function FundPageBody(): ReactNode {
                         ) : <span className="swap-sub">USDT → {walletAddress === null ? 'your wallet' : shortAddress(walletAddress)}</span>}
                       </div>
                       {whitelistOnly ? (
-                        connectedAddress === null ? <WalletMenu inline /> : (
+                        connectedAddress === null ? <WalletMenu inline signInFor={{ purpose: 'sell', subject: fund.name }} /> : (
                           <>
                             <button type="submit" className="btn primary block" disabled={!withdrawValid}>
                               {mobile ? 'Review order' : 'Sell for USDT'}
@@ -642,7 +662,7 @@ function FundPageBody(): ReactNode {
                             {whitelistNotice === 'withdraw' && <WhitelistNote action="withdraw" />}
                           </>
                         )
-                      ) : token === null ? <WalletMenu inline /> : (
+                      ) : token === null ? <WalletMenu inline signInFor={{ purpose: 'sell', subject: fund.name }} /> : (
                         <>
                           {!mobile && <p className="fine">
                             Cash {formatUsd(cashUsd())} · positions {formatUsd(Math.max(0, totalUsd() - cashUsd()))} · total{' '}
@@ -799,7 +819,7 @@ function FundPageBody(): ReactNode {
                     )}
                     </>)}
                     {whitelistOnly ? (
-                      connectedAddress === null ? <WalletMenu inline /> : (
+                      connectedAddress === null ? <WalletMenu inline signInFor={{ purpose: 'buy', subject: fund.name }} /> : (
                         <>
                           <button type="submit" className="btn primary block" disabled={!gatedDepositValid}>
                             {mobile ? 'Review order' : 'Buy'}
@@ -807,7 +827,7 @@ function FundPageBody(): ReactNode {
                           {whitelistNotice === 'deposit' && <WhitelistNote action="deposit" />}
                         </>
                       )
-                    ) : token === null ? <WalletMenu inline /> : (
+                    ) : token === null ? <WalletMenu inline signInFor={{ purpose: 'buy', subject: fund.name }} /> : (
                       <button type="submit" className="btn primary block" disabled={ticketBusy || wallet === null || usdt === undefined || (!faucetBuy && (depositTooLarge || (mobile && depositUnits <= 0n)))}>
                         {faucetBuy ? (busy ? 'Working…' : 'Claim test USDT and invest') : busy ? 'Sending…' : mobile ? 'Review order' : 'Buy'}
                       </button>
@@ -853,7 +873,7 @@ function FundPageBody(): ReactNode {
 
           {mobile ? (
             <AppBottomSheet
-              open={mobileTicket}
+              open={mobileTicket && !signInOpen && !ticketHidden}
               onOpenChange={(open) => {
                 if (!open) setReviewKey(null);
                 setTicketOpen(open);

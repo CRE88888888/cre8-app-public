@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Profile, SignInMethod, SignInMethodKind } from '../lib/privy-owner';
+import type { SignInReason } from '../lib/sign-in-reason';
 
 /**
  * Privy 登入的畫面狀態（cre8-app#57）。
@@ -66,6 +67,11 @@ export type PrivyAuthState = {
   oauthError: unknown;
   /** 登入頁開著沒有。在這裡而不是元件裡：標頭、頁面內的按鈕都要能打開同一頁。 */
   signInOpen: boolean;
+  /**
+   * 為了什麼而登入（要買、要賣、要建立基金）。有值時登入頁是**整頁**並寫明原因；
+   * 沒有（使用者自己按標頭的 Sign in）就是原本置中的卡片。
+   */
+  signInFor: SignInReason | null;
   actions: PrivyActions | null;
 };
 
@@ -80,15 +86,16 @@ export const PRIVY_INITIAL: PrivyAuthState = {
   emailError: null,
   oauthError: null,
   signInOpen: false,
+  signInFor: null,
   actions: null,
 };
 
-export function openSignIn(): void {
-  usePrivyAuth.setState({ signInOpen: true });
+export function openSignIn(reason: SignInReason | null = null): void {
+  usePrivyAuth.setState({ signInOpen: true, signInFor: reason });
 }
 
 export function closeSignIn(): void {
-  usePrivyAuth.setState({ signInOpen: false });
+  usePrivyAuth.setState({ signInOpen: false, signInFor: null });
 }
 
 export const usePrivyAuth = create<PrivyAuthState>()(() => PRIVY_INITIAL);

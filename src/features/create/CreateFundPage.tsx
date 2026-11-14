@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError, createStrategy, enrollPortfolio, getAssets, getPortfolioStatus, publishVersion } from '../../lib/api';
@@ -11,7 +11,10 @@ import { queryKeys } from '../../lib/query';
 import { useBodyClass } from '../../lib/use-body-class';
 import {savedActivationDesign} from '../../lib/activation-design';
 import { useSession } from '../../store/session';
-import { SignInButton } from '../../components/WalletMenu';
+import { SignInButton, openWalletMenu } from '../../components/WalletMenu';
+import { PRIVY_ENABLED } from '../../lib/privy-config';
+import { signInCopy } from '../../lib/sign-in-reason';
+import { openSignIn, usePrivyAuth } from '../../store/privy';
 import { ErrorNote, Note, Spinner } from '../../components/ui';
 import { AssetLogo } from '../../components/AssetLogo';
 import { assetBySymbol } from '../../lib/public-funds';
@@ -66,6 +69,18 @@ export function ActivateFundPage(): ReactNode {
         : null;
 
   const [draft] = useState(savedActivationDesign);
+  /**
+   * 設計好基金、按了建立才到這一頁，卻還沒登入：這就是「要建立的那一刻」，直接給整頁的登入頁
+   * （Privy 模式）。只自動出現一次；按了「Not now」就留在下面那一頁，可以再按一次或回去改設計。
+   * 等 Privy 確定沒有人登入才開：剛從 Google 轉回來時 token 還在換，那時不該再跳一次登入頁。
+   */
+  const privyPhase = usePrivyAuth((state) => state.phase);
+  const askedToSignIn = useRef(false);
+  useEffect(() => {
+    if (!PRIVY_ENABLED || token !== null || draft === null || privyPhase !== 'signed-out' || askedToSignIn.current) return;
+    askedToSignIn.current = true;
+    openSignIn({ purpose: 'create' });
+  }, [token, draft, privyPhase]);
   const [allocationAgreed,setAllocationAgreed]=useState(false);
   const [name, setName] = useState(draft?.name||'');
   const [description, setDescription] = useState('');
@@ -192,6 +207,25 @@ export function ActivateFundPage(): ReactNode {
       inFlight.current = false;
     }
   };
+
+  if (token === null && draft !== null) {
+    return (
+      // 已經設計好了，只差登入：不要再叫人「先去設計」。
+      <main className="explore-wrap app-portfolio app-studio">
+        <section className="app-portfolio-summary app-portfolio-guest create-guest" aria-labelledby="create-guest-title">
+          <h2 id="create-guest-title">Your fund is ready to create</h2>
+          <p>
+            {draft.name ? <><b>{draft.name}</b> is saved on this device. </> : 'Your design is saved on this device. '}
+            Sign in to create it: that step creates the strategy and a smart account under your wallet.
+          </p>
+          <button type="button" className="btn primary" onClick={() => openWalletMenu({ purpose: 'create' })}>
+            {signInCopy({ purpose: 'create' }).button}
+          </button>
+          <span className="create-guest-alt"><Link className="link-button" to="/create">Back to the design</Link></span>
+        </section>
+      </main>
+    );
+  }
 
   if (token === null) {
     return (

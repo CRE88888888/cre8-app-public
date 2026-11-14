@@ -18,6 +18,7 @@ import { AppIcon } from './AppIcon';
 import { WalletConnectPairing } from './WalletConnectPairing';
 import { PRIVY_ENABLED } from '../lib/privy-config';
 import { PrivyWalletMenu } from './PrivyWalletMenu';
+import type { SignInReason } from '../lib/sign-in-reason';
 
 /**
  * dev 私鑰登入（cre8-app#19）：只在 dev build 載入。
@@ -30,11 +31,18 @@ const DevKeyLogin = import.meta.env.DEV ? lazy(() => import('./DevKeyLogin')) : 
 /** 任何地方都可以叫出錢包選單。 */
 export const OPEN_WALLET_MENU = 'cre8:open-wallet-menu';
 
-export function openWalletMenu(): void {
-  window.dispatchEvent(new Event(OPEN_WALLET_MENU));
+/** `reason`：為了什麼而登入（Privy 模式的登入頁會整頁顯示並寫明原因）。原本的錢包登入不看它。 */
+export function openWalletMenu(reason?: SignInReason): void {
+  window.dispatchEvent(new CustomEvent<SignInReason | undefined>(OPEN_WALLET_MENU, { detail: reason }));
 }
 
-type WalletMenuProps = { inline?: boolean; showIcon?: boolean; iconOnly?: boolean };
+type WalletMenuProps = {
+  inline?: boolean;
+  showIcon?: boolean;
+  iconOnly?: boolean;
+  /** 頁面內的按鈕是為了什麼而登入：按鈕寫「Sign in to buy」，登入頁整頁顯示。只在 Privy 模式有作用。 */
+  signInFor?: SignInReason;
+};
 
 /**
  * 標頭與頁面內共用的登入入口。
@@ -43,12 +51,14 @@ type WalletMenuProps = { inline?: boolean; showIcon?: boolean; iconOnly?: boolea
  * 沒設定 → 原本的錢包登入（瀏覽器錢包／WalletConnect＋SIWE），一行都沒變。
  * `PRIVY_ENABLED` 是 build 時的常數，所以同一個 build 裡永遠是同一個分支。
  */
-export function WalletMenu(props: WalletMenuProps): ReactNode {
-  return PRIVY_ENABLED ? <PrivyWalletMenu {...props} openEvent={OPEN_WALLET_MENU} /> : <ClassicWalletMenu {...props} />;
+export function WalletMenu({ signInFor, ...props }: WalletMenuProps): ReactNode {
+  return PRIVY_ENABLED
+    ? <PrivyWalletMenu {...props} {...(signInFor === undefined ? {} : { signInFor })} openEvent={OPEN_WALLET_MENU} />
+    : <ClassicWalletMenu {...props} />;
 }
 
 /** 原本的錢包選擇及驗證流程（瀏覽器錢包／WalletConnect＋SIWE）。 */
-function ClassicWalletMenu({ inline = false, showIcon = false, iconOnly = false }: WalletMenuProps): ReactNode {
+function ClassicWalletMenu({ inline = false, showIcon = false, iconOnly = false }: Omit<WalletMenuProps, 'signInFor'>): ReactNode {
   const wallet = useWallet();
   const mobile = useMobile();
   const token = useConnectedSessionToken();

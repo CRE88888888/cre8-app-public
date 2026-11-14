@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
+import { signInCopy } from '../lib/sign-in-reason';
 import { closeSignIn, usePrivyAuth } from '../store/privy';
 import { AppIcon } from './AppIcon';
 
@@ -13,9 +14,14 @@ import { AppIcon } from './AppIcon';
  * 錢包打開 Privy 的選錢包視窗。Privy 那一側登入完成後這一頁自己關掉，後面的進度在標頭的選單裡。
  *
  * 這個元件不 import Privy SDK：動作來自 `usePrivyAuth`。
+ *
+ * 兩種樣子：
+ *   - 使用者要買、要賣、要建立基金時（`signInFor` 有值）：**整頁**，標題寫明為了什麼，後面不透出 app，
+ *     沒有右上角的關閉鈕，最下面是「Not now」回到原本的地方。逛的時候不用登入，到這一步才出現。
+ *   - 使用者自己按標頭的 Sign in：置中的卡片，有關閉鈕。
  */
 export function SignInScreen(): ReactNode {
-  const { signInOpen, phase, actions, emailStep, emailError, oauthError } = usePrivyAuth();
+  const { signInOpen, signInFor, phase, actions, emailStep, emailError, oauthError } = usePrivyAuth();
   const [step, setStep] = useState<'choose' | 'email' | 'code'>('choose');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -59,6 +65,9 @@ export function SignInScreen(): ReactNode {
 
   if (!signInOpen) return null;
 
+  const page = signInFor !== null;
+  const copy = signInCopy(signInFor);
+
   const ready = actions !== null && phase === 'signed-out';
   const sending = emailStep === 'sending-code';
   const checking = emailStep === 'submitting-code';
@@ -91,17 +100,20 @@ export function SignInScreen(): ReactNode {
   }
 
   return (
-    <div className="signin-screen" role="dialog" aria-modal="true" aria-labelledby="signin-title">
-      <div className="signin-screen__backdrop" aria-hidden="true" onClick={closeSignIn} />
+    <div className="signin-screen" data-page={page ? 'true' : undefined} role="dialog" aria-modal="true" aria-labelledby="signin-title">
+      {/* 整頁的那一種點旁邊不會關；要回去按下面的「Not now」。 */}
+      <div className="signin-screen__backdrop" aria-hidden="true" onClick={page ? undefined : closeSignIn} />
       <div className="signin-screen__card">
-        <button type="button" className="signin-screen__close" aria-label="Close" onClick={closeSignIn}>
-          <AppIcon name="close" size={20} />
-        </button>
+        {!page && (
+          <button type="button" className="signin-screen__close" aria-label="Close" onClick={closeSignIn}>
+            <AppIcon name="close" size={20} />
+          </button>
+        )}
 
         <header className="signin-screen__head">
           <img src="/logos/cre8-icon.svg" alt="" width={64} height={64} />
-          <h2 id="signin-title">Sign in to CRE8</h2>
-          <p>Follow the funds you believe in, from one account.</p>
+          <h2 id="signin-title">{copy.title}</h2>
+          <p>{copy.body}</p>
         </header>
 
         {step === 'choose' ? (
@@ -130,6 +142,11 @@ export function SignInScreen(): ReactNode {
               <p className="signin-screen__error" role="alert">That sign-in could not be started. Please try again.</p>
             )}
             {!ready && <p className="signin-screen__hint" role="status">Getting sign-in ready…</p>}
+            {page && (
+              <button type="button" className="wallet-menu__link signin-screen__skip" onClick={closeSignIn}>
+                Not now
+              </button>
+            )}
           </div>
         ) : step === 'email' ? (
           <form className="signin-screen__options" onSubmit={sendEmail}>

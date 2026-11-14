@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom';
 import { shortAddress } from '../lib/format';
 import { explainPrivyLoginFailure, linkableMethods, readOnlyNotice, signInMethodName } from '../lib/privy-owner';
 import { useConnectedSessionToken } from '../lib/use-connected-session';
+import { signInCopy, signInReasonOf } from '../lib/sign-in-reason';
+import type { SignInReason } from '../lib/sign-in-reason';
 import { openSignIn, usePrivyAuth } from '../store/privy';
 import { useSession } from '../store/session';
 import { AppIcon } from './AppIcon';
@@ -24,10 +26,12 @@ import { Note, TechnicalDetails } from './ui';
  * 「Add a sign-in method」跟原選單的「Browser wallets」一樣，點了才在下面展開選項；
  * 主要按鈕是 `.btn.sm`，次要的是底線文字 `.wallet-menu__link`。
  */
-export function PrivyWalletMenu({ inline = false, showIcon = false, iconOnly = false, openEvent }: {
+export function PrivyWalletMenu({ inline = false, showIcon = false, iconOnly = false, openEvent, signInFor }: {
   inline?: boolean;
   showIcon?: boolean;
   iconOnly?: boolean;
+  /** 這顆按鈕是為了什麼而登入（頁面內的「Sign in to buy」）。 */
+  signInFor?: SignInReason;
   /** 別的元件叫出登入用的事件名（`OPEN_WALLET_MENU`）。 */
   openEvent: string;
 }): ReactNode {
@@ -46,13 +50,19 @@ export function PrivyWalletMenu({ inline = false, showIcon = false, iconOnly = f
   const [adding, setAdding] = useState(false);
   /** SDK 還沒載完就按了登入：記下來，好了就打開。 */
   const [wantLogin, setWantLogin] = useState(false);
+  /** 這一次登入是為了什麼：SDK 還沒好時先記著，好了打開登入頁時帶上。 */
+  const reasonRef = useRef<SignInReason | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   const hasPanel = signedIn || busy || failed || unavailable;
 
   function start(): void {
-    if (hasPanel) setOpen((current) => !current);
-    else if (phase === 'signed-out') openSignIn();
+    if (hasPanel) {
+      setOpen((current) => !current);
+      return;
+    }
+    reasonRef.current = signInFor ?? null;
+    if (phase === 'signed-out') openSignIn(reasonRef.current);
     else setWantLogin(true);
   }
 
@@ -76,7 +86,7 @@ export function PrivyWalletMenu({ inline = false, showIcon = false, iconOnly = f
   useEffect(() => {
     if (!wantLogin || phase === 'loading' || phase === 'unavailable' || actions === null) return;
     setWantLogin(false);
-    if (phase === 'signed-out') openSignIn();
+    if (phase === 'signed-out') openSignIn(reasonRef.current);
     else setOpen(true);
   }, [wantLogin, phase, actions]);
 
@@ -104,9 +114,10 @@ export function PrivyWalletMenu({ inline = false, showIcon = false, iconOnly = f
   // `/#wallet` 深連結與頁面上的「Sign in」連結：只由標頭那一個處理，頁面內的不重複反應。
   useEffect(() => {
     if (inline) return;
-    const onOpen = (): void => {
+    const onOpen = (event?: Event): void => {
       const current = usePrivyAuth.getState();
-      if (current.phase === 'signed-out') openSignIn();
+      reasonRef.current = event instanceof CustomEvent ? signInReasonOf(event.detail) : null;
+      if (current.phase === 'signed-out') openSignIn(reasonRef.current);
       else if (current.phase === 'loading') setWantLogin(true);
       else setOpen(true);
     };
@@ -124,7 +135,7 @@ export function PrivyWalletMenu({ inline = false, showIcon = false, iconOnly = f
   const inlineConnect = inline && signedIn && canConnectOwner;
   const label = signedIn
     ? inlineConnect ? `Connect wallet ${shortAddress(owner)}` : shortAddress(owner)
-    : busy || wantLogin ? 'Signing in…' : 'Sign in';
+    : busy || wantLogin ? 'Signing in…' : signInFor === undefined ? 'Sign in' : signInCopy(signInFor).button;
 
   return (
     <div className={inline ? 'wallet-menu wallet-menu--inline' : 'wallet-menu'} ref={rootRef}>
@@ -182,7 +193,7 @@ export function PrivyWalletMenu({ inline = false, showIcon = false, iconOnly = f
                 </button>
               )}
               {failure.action === 'sign-in-again' && (
-                <button type="button" className="btn sm" onClick={() => void actions?.logout().then(openSignIn)}>
+                <button type="button" className="btn sm" onClick={() => void actions?.logout().then(() => openSignIn())}>
                   Sign in again
                 </button>
               )}
