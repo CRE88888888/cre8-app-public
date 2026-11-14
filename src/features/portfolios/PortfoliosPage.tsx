@@ -15,11 +15,10 @@ import type { RenewalWallet } from '../../lib/kernel';
 import { REFERENCE_METADATA } from '../../lib/public-funds';
 import { queryKeys } from '../../lib/query';
 import { useBodyClass } from '../../lib/use-body-class';
-import { useConnectedSessionToken } from '../../lib/use-connected-session';
+import { useAccountAddress, useConnectedSessionToken } from '../../lib/use-connected-session';
 import { useMobile } from '../../lib/use-mobile';
 import { useOwnerWallet } from '../../lib/use-owner-wallet';
 import { decodeRebalanceSteps, hasVenue } from '../../lib/venues';
-import { useWallet } from '../../store/wallet';
 
 function holdingState(status: PortfolioStatus | undefined) {
   if (status === undefined || !status.complete) return <Badge tone="warn">Value unavailable</Badge>;
@@ -60,7 +59,7 @@ export function PortfoliosPage(): ReactNode {
   useBodyClass('portfolio-page', 'fund-explore');
   const mobile = useMobile();
   const token = useConnectedSessionToken();
-  const address = useWallet((state) => state.address);
+  const address = useAccountAddress();
   const portfolios = useQuery({
     queryKey: queryKeys.portfolios(token),
     queryFn: () => getPortfolios(token as string),

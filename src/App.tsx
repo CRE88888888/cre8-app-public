@@ -11,6 +11,9 @@ function StrategyRedirect(): ReactNode {
 import { Toaster } from './components/Toast';
 import { TopBar } from './components/TopBar';
 import { PlatformPauseBanner } from './components/PlatformPauseBanner';
+import { OwnerWalletNotice } from './components/PrivyWalletMenu';
+import { PrivyBoundary } from './features/auth/PrivyBoundary';
+import { PRIVY_ENABLED } from './lib/privy-config';
 import { useAutoConnect } from './lib/use-auto-connect';
 import { useAccountWatch } from './lib/use-account-watch';
 import { FundPage } from './features/fund/FundPage';
@@ -25,6 +28,14 @@ import { VaultsPage } from './features/vaults/VaultsPage';
 import { StudioEarningsPage, StudioFundsPage, StudioTodayPage } from './features/studio/StudioPages';
 import { MODE_HOME, lastMode } from './lib/app-mode';
 
+/**
+ * Privy 登入（cre8-app#57）：只在有設定 `VITE_PRIVY_APP_ID` 時載入。
+ *
+ * 條件寫在 `lazy` 外面是刻意的：沒設定時這個動態 import 不存在於執行路徑上，Privy SDK 那一包
+ * 不會被下載。不要改成靜態 import。它不包住 app（見 `PrivyRoot.tsx` 檔頭），所以放在旁邊就好。
+ */
+const PrivyRoot = PRIVY_ENABLED ? lazy(() => import('./features/auth/PrivyRoot')) : null;
+
 export function App(): ReactNode {
   useSyncExternalStore(subscribeReference,referenceRevision,referenceRevision);
   useEffect(()=>{void refreshReferenceData();},[]);
@@ -34,8 +45,16 @@ export function App(): ReactNode {
   return (
     <>
       <Toaster />
+      {PrivyRoot !== null && (
+        <PrivyBoundary>
+          <Suspense fallback={null}>
+            <PrivyRoot />
+          </Suspense>
+        </PrivyBoundary>
+      )}
       <TopBar />
       <PlatformPauseBanner />
+      {PRIVY_ENABLED && <OwnerWalletNotice />}
       <Suspense fallback={<main className="page"><p role="status">Loading page…</p></main>}>
       <Routes>
         {/* 登入改由標頭的錢包選單處理；舊連結仍然可用，只是把使用者帶回目錄。 */}

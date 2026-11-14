@@ -9,10 +9,9 @@ import type { Portfolio, PortfolioStatus, StrategySummary } from '../../lib/api'
 import { formatUsdE8 } from '../../lib/format';
 import { queryKeys } from '../../lib/query';
 import { useBodyClass } from '../../lib/use-body-class';
-import { useConnectedSessionToken } from '../../lib/use-connected-session';
+import { useAccountAddress, useConnectedSessionToken } from '../../lib/use-connected-session';
 import { useMobile } from '../../lib/use-mobile';
 import { RENEW_SOON_DAYS } from '../../lib/trading-permission';
-import { useWallet } from '../../store/wallet';
 
 type Tone = 'ok' | 'warn' | 'bad';
 type Flag = { label: string; tone: Tone; detail: string; action?: { label: string; to: string } };
@@ -62,7 +61,7 @@ function fundFlags(portfolio: Portfolio | undefined, status: PortfolioStatus | u
 /** Studio 三頁共用的資料：我建立的策略（provider = 我的錢包）＋我在這些策略上的帳戶狀態。 */
 function useStudioFunds() {
   const token = useConnectedSessionToken();
-  const address = useWallet((state) => state.address);
+  const address = useAccountAddress();
   // 與基金頁共用同一個 query key，切換頁面不重抓。
   const strategies = useQuery({
     queryKey: ['strategies', token],

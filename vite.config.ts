@@ -28,6 +28,12 @@ export default defineConfig({
        * 不明確指路徑就仍有被外部化的風險。
        */
       events: fileURLToPath(new URL('./node_modules/events/events.js', import.meta.url)),
+      /**
+       * Privy SDK 的 Solana 畫面要一個我們沒有裝的選用 peer dependency（cre8-app#57）。
+       * 沒有這一條，build 會以 `"getTransferSolInstruction" is not exported` 失敗。
+       * 指到一個只會丟錯的替身：這個 app 只用 EVM。
+       */
+      '@solana-program/system': fileURLToPath(new URL('./src/lib/privy-solana-stub.ts', import.meta.url)),
     },
   },
   server: {

@@ -64,6 +64,24 @@ bun run build
 瀏覽器裡）。所以重新整理後會是「已登入、錢包未連」——TopBar 會顯示 `錢包未連`，續期卡與登入頁都提供
 就地重連（`components/WalletConnect.tsx`）。**不用登出重來。**
 
+### Privy 登入（email／Google／Apple／錢包）
+
+設了 `VITE_PRIVY_APP_ID`（公開值，不寫進 repo）就改用 Privy；沒設就是上面那條錢包登入，完全不變。
+
+1. 按 Sign in → Privy 的視窗（email、Google、Apple、錢包）。沒有錢包的人由 Privy 建一個嵌入式錢包
+   （`createOnLogin: 'users-without-wallets'`）；用錢包登入的人不會多一個。
+2. 拿 Privy 的 identity token 打 `POST /api/auth/privy` 換 CRE8 session（與 SIWE 同一種 token）。
+3. 後端在**第一次**換 session 時把帳號上唯一的 EVM 錢包記成永久的錢包主人。所以在拿到 CRE8 session 之前，
+   畫面不提供加綁其他登入方式；之後才可以在選單裡加綁。
+4. 用錢包註冊、後來改用 Google 等登入的人**只能看**：需要主人簽名的按鈕停用，全站橫幅請他連回原本的錢包。
+5. email／Google／Apple 註冊的人可以在選單裡匯出嵌入式錢包的私鑰（Privy 的視窗，app 讀不到）。
+
+要一起設定的：後端的 `PRIVY_APP_ID`、`PRIVY_VERIFICATION_KEY`；Privy Dashboard 要打開這四種登入方式與
+**identity tokens**。Privy 的預設鏈跟著 `VITE_CHAIN_ID`（56 主網、97 測試網、其他為本機 fork）。
+
+程式位置：`features/auth/PrivyRoot.tsx`（唯一 import SDK 的檔案，動態載入）、`lib/privy-owner.ts`（純邏輯）、
+`components/PrivyWalletMenu.tsx`（選單與橫幅）。
+
 ## 這一版做到哪裡
 
 已完成的兩條線：

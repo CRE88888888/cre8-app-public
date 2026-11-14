@@ -15,6 +15,8 @@ import { pairWalletConnect, rememberWalletConnectApp, WALLETCONNECT_RDNS, wallet
 import { ErrorNote } from './ui';
 import { AppIcon } from './AppIcon';
 import { WalletConnectPairing } from './WalletConnectPairing';
+import { PRIVY_ENABLED } from '../lib/privy-config';
+import { PrivyWalletMenu } from './PrivyWalletMenu';
 
 /**
  * dev 私鑰登入（cre8-app#19）：只在 dev build 載入。
@@ -31,8 +33,21 @@ export function openWalletMenu(): void {
   window.dispatchEvent(new Event(OPEN_WALLET_MENU));
 }
 
-/** 標頭與頁面內共用錢包選擇及驗證流程。 */
-export function WalletMenu({ inline = false, showIcon = false, iconOnly = false }: { inline?: boolean; showIcon?: boolean; iconOnly?: boolean }): ReactNode {
+type WalletMenuProps = { inline?: boolean; showIcon?: boolean; iconOnly?: boolean };
+
+/**
+ * 標頭與頁面內共用的登入入口。
+ *
+ * `VITE_PRIVY_APP_ID` 有設定 → Privy 登入（email／Google／Apple／錢包，cre8-app#57）；
+ * 沒設定 → 原本的錢包登入（瀏覽器錢包／WalletConnect＋SIWE），一行都沒變。
+ * `PRIVY_ENABLED` 是 build 時的常數，所以同一個 build 裡永遠是同一個分支。
+ */
+export function WalletMenu(props: WalletMenuProps): ReactNode {
+  return PRIVY_ENABLED ? <PrivyWalletMenu {...props} openEvent={OPEN_WALLET_MENU} /> : <ClassicWalletMenu {...props} />;
+}
+
+/** 原本的錢包選擇及驗證流程（瀏覽器錢包／WalletConnect＋SIWE）。 */
+function ClassicWalletMenu({ inline = false, showIcon = false, iconOnly = false }: WalletMenuProps): ReactNode {
   const wallet = useWallet();
   const mobile = useMobile();
   const token = useConnectedSessionToken();

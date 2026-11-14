@@ -2,13 +2,16 @@ import { useEffect } from 'react';
 import { useSession } from '../store/session';
 import { useWallet } from '../store/wallet';
 import { WALLETCONNECT_RDNS } from './wallet-connect';
+import { PRIVY_ENABLED } from './privy-config';
 
 /** 連線後即開始監聽。切換或鎖定帳戶時，舊 session 不再用於目前的錢包。 */
 export function useAccountWatch(): void {
   const provider = useWallet((state) => state.provider);
 
   useEffect(() => {
-    if (provider === null) return;
+    // Privy 模式下錢包狀態由 Privy 的 `useWallets` 決定（`features/auth/PrivyRoot.tsx` 同步進 store），
+    // session 也不跟「現在連著哪個帳號」綁在一起，所以這裡不監聽（cre8-app#57）。
+    if (PRIVY_ENABLED || provider === null) return;
     let disposed = false;
     let receivedEvent = false;
 

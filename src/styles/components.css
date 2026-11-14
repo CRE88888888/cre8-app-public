@@ -441,6 +441,60 @@
   cursor: pointer;
 }
 
+/* Privy 登入（cre8-app#57）：已綁的登入方式、加綁的按鈕列。 */
+.wallet-menu__methods {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted, #5a7286);
+}
+
+.wallet-menu__methods li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wallet-menu__method-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.wallet-menu__links {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.wallet-menu__links .wallet-menu__item {
+  justify-content: center;
+}
+
+.wallet-menu .wallet-warning {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* 已登入但主人錢包沒連著（只能看）。沿用全站橫幅的樣子，多一顆按鈕。 */
+.owner-wallet-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.owner-wallet-banner .btn {
+  flex: none;
+}
+
 /* 頁面上的「Sign in」：長得像連結，但動作是叫出標頭的選單。 */
 .link-button {
   padding: 0;

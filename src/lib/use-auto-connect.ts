@@ -4,6 +4,7 @@ import { discoverProviders } from './wallet';
 import { restoreWalletConnect, WALLETCONNECT_RDNS } from './wallet-connect';
 import { useSession } from '../store/session';
 import { useWallet } from '../store/wallet';
+import { PRIVY_ENABLED } from './privy-config';
 
 /**
  * 重新整理後自動接回錢包。
@@ -52,6 +53,8 @@ function persist(): () => void {
 
 export function useAutoConnect(): void {
   useEffect(() => {
+    // Privy 模式下由 Privy 自己接回登入狀態與錢包（cre8-app#57）；這裡再接一次只會連到不相干的錢包。
+    if (PRIVY_ENABLED) return;
     const unsubscribe = persist();
     if (useWallet.getState().address !== null) return unsubscribe;
 

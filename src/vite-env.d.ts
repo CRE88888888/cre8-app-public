@@ -7,6 +7,11 @@ interface ImportMetaEnv {
   readonly VITE_RPC_URL?: string;
   /** 真的開放存入／提領的基金 slug（逗號分隔）。其餘基金為 whitelist-only，見 `lib/live-funds.ts`。 */
   readonly VITE_LIVE_FUNDS?: string;
+  /**
+   * Privy 的 App ID（公開值）。有設 → 登入改用 Privy（email／Google／Apple／錢包）；
+   * 沒設或空字串 → 維持原本的錢包登入。見 `lib/privy-config.ts`。
+   */
+  readonly VITE_PRIVY_APP_ID?: string;
 }
 
 interface ImportMeta {

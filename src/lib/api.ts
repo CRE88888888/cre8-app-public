@@ -224,6 +224,19 @@ export function postLogin(message: string, signature: string): Promise<SessionCr
 }
 
 /**
+ * 用 Privy 的 identity token 換 CRE8 session（backend#65，`POST /auth/privy`）。
+ *
+ * 回應與 SIWE 相同（`{ token, expiresAt }`）。**目前沒有主人地址**：`address` 是預留的 ——
+ * 後端哪天帶了就以它為準，沒有就由前端從 Privy 帳號推回去（`lib/privy-owner.ts` 的 `resolveOwner`）。
+ *
+ * 會回的錯誤：401（token 無效或過期）、409 `PRIVY_NO_WALLET`／`PRIVY_OWNER_AMBIGUOUS`
+ * （首次登入時帳號上不是恰好一個 EVM 錢包）、503 `PRIVY_UNAVAILABLE`（後端沒設定 Privy）。
+ */
+export function postPrivyLogin(identityToken: string): Promise<SessionCredentials & { address?: string }> {
+  return request<SessionCredentials & { address?: string }>('/auth/privy', { method: 'POST', body: { identityToken } });
+}
+
+/**
  * ⚠ `GET /portfolios` 回的是 **`{ portfolios: [...] }`**，不是裸陣列。
  *
  * 這一行是踩過的坑：型別寫成 `Portfolio[]` 時 TypeScript 不會有任何意見（`request<T>` 是斷言），

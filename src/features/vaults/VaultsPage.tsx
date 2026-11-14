@@ -18,7 +18,7 @@ import { useMemo } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { getStrategy, listStrategies } from "../../lib/api";
 import { shortAddress } from "../../lib/format";
-import { useWallet } from "../../store/wallet";
+import { useAccountAddress } from "../../lib/use-connected-session";
 
 const hiddenCommunityStrategies = new Map<number, string>([
   [1, "Elon Universe"],
@@ -89,7 +89,7 @@ export function VaultsPage() {
     queryFn: () => listStrategies(""),
     select: (data) => data.items,
   });
-  const wallet = useWallet((state) => state.address);
+  const wallet = useAccountAddress();
   const strategySearch = filters.q.trim().toLowerCase();
   const live = filters.category === "all"
     ? (strategies.data ?? []).filter(
