@@ -41,6 +41,7 @@ import { Badge, ErrorNote, Note, Spinner, TechnicalDetails } from '../../compone
 import { AssetLogo } from '../../components/AssetLogo';
 import { toast, type ToastId } from '../../components/Toast';
 import { TradeRoutes } from '../../components/TradeRoutes';
+import { FundingMethods } from '../../components/FundingMethods';
 import type { RoutedStep } from '../../lib/venues';
 
 /** 賣出／清倉因為交易權限失效而失敗時，接在錯誤後面的那句話。 */
@@ -812,6 +813,8 @@ function FundPageBody(): ReactNode {
                     <ErrorNote error={error} />
                   </form>
                 )}
+                {/* 入金方式的預告（刷卡、其他鏈：主網開放）。只在 Buy 分頁、還沒進到確認或收據時顯示。 */}
+                {tab === 'deposit' && progress === null && <FundingMethods compact />}
                 </div>
               </Tabs>
             </section>

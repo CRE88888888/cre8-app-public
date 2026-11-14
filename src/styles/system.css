@@ -231,7 +231,8 @@ html body #root :is(.public-periods, .creator-periods, .seg) :is([aria-pressed="
   :is(#root#root, body:not(#_):not(#__)) :is(.btn, [data-slot="button"], .header-wallet, .app-mode-switch, .wallet-menu__item,
       .explore-search, .creator-search, .app-filter-trigger, .creator-filter-trigger, .explore-filter > summary,
       .public-periods, .creator-periods, .seg, .atp-facts-trigger, .fund-introduction-trigger,
-      .field input, .field textarea, .field select, .explore-filter-field select, .creator-filter-form select, .app-bottom-sheet select) {
+      .field input, .field textarea, .field select, .explore-filter-field select, .creator-filter-form select, .app-bottom-sheet select,
+      .feature-locked__row) {
     border-radius: var(--r-ctl) !important;
   }
   :is(#root#root, body:not(#_):not(#__)) :is(.masthead .nav a, .explore-filter-option, .app-icon-tile, .activity-filter-select, .app-mode-label,

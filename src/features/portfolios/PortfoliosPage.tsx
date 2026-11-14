@@ -5,6 +5,7 @@ import { AppIcon } from '../../components/AppIcon';
 import { Badge, ErrorNote, Spinner } from '../../components/ui';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { WalletMenu } from '../../components/WalletMenu';
+import { FundingMethods } from '../../components/FundingMethods';
 import { MOCK_FUNDS } from '../../data/mock-funds';
 import { TradeRoutes } from '../../components/TradeRoutes';
 import { getAssets, getPortfolioActivity, getPortfolioStatus, getPortfolios } from '../../lib/api';
@@ -167,6 +168,8 @@ export function PortfoliosPage(): ReactNode {
             </div>
             {!valueReady && <p role="status">{valueLoading ? 'Loading account values…' : 'Total unavailable. Some account values could not be verified.'}</p>}
           </section>
+          {/* 入金方式：現在能用的與主網才開放的（灰色）。見 lib/feature-flags.ts。 */}
+          <FundingMethods />
           <ErrorNote error={portfolios.error} />
           {!portfolios.isError && (
             <Tabs defaultValue="holdings" className="app-portfolio-tabs">

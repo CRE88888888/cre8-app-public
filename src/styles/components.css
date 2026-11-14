@@ -525,3 +525,101 @@
   .wallet-menu__panel { max-width: calc(100vw - 32px); }
   .wallet-menu__item { min-height: 44px; }
 }
+
+/*
+ * 還沒開放的功能（cre8-app#58）。開關在 src/lib/feature-flags.ts。
+ *
+ * 樣式沿用既有的三樣東西，不另外發明：
+ *   - 標記：`.badge`（小圓點＋文字）。
+ *   - 可用的列：與 `.wallet-menu__item` 相同的細線框。
+ *   - 不能用的列：與停用的 `.btn` 相同（淺灰底、灰字、沒有邊框）。
+ */
+.feature-badge {
+  flex: none;
+}
+
+.feature-locked__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 14px;
+  border: 1px solid var(--hair, #d8e3ec);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+}
+
+.feature-locked:not([data-state='on']) .feature-locked__row {
+  border-color: transparent;
+  background: var(--snow);
+  color: var(--slate);
+  cursor: not-allowed;
+}
+
+.feature-locked__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+}
+
+.feature-locked__text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.feature-locked__text b {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.feature-locked__text small {
+  font-size: 12px;
+  color: var(--steel, #5a7286);
+}
+
+.feature-locked:not([data-state='on']) .feature-locked__text small {
+  color: inherit;
+}
+
+.feature-locked__note {
+  margin: 6px 2px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted, #5a7286);
+}
+
+.funding-methods {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.funding-methods__title {
+  margin: 0 0 2px;
+  font: 600 13px/1.4 var(--sans);
+  color: var(--ink);
+}
+
+@media (min-width: 720px) {
+  .funding-methods:not(.funding-methods--compact) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .funding-methods:not(.funding-methods--compact) .funding-methods__title {
+    grid-column: 1 / -1;
+  }
+}
+
+.funding-methods--compact {
+  margin: 16px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--hair, #d8e3ec);
+}

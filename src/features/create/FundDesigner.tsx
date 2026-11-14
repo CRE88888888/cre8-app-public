@@ -18,6 +18,8 @@ import FundSourceEditor, { XProfilePreview } from "../../reference/components/x-
 import { normalizeXHandle, X_MODEL_DISCLAIMER } from "../../reference/lib/x-profile";
 import { underlyingSlug } from "../../reference/lib/asset-navigation";
 import { LAUNCH_COPY, POPULAR_ASSET_KEYS, isLaunchAsset } from "../../lib/launch-admission";
+import { featureLock, playLock } from "../../lib/feature-flags";
+import { FeatureBadge } from "../../components/FeatureLock";
 
 const base = "";
 const app = "";
@@ -30,6 +32,12 @@ const assetSrc = (key: string) => base + B.logoPath(key === B.CASH.key ? { categ
 // 不存在、B.canPickAsset 不放行、或上線時還不能上架的會在 render 時濾掉，不會出現壞掉的 chip。
 // 上線時能不能上架（cre8-app#51）：只看 lib/launch-admission.ts 的清單。testnet 模式有自己的 offered 名單，不套這個。
 const opensAtLaunch = (asset: B.Asset) => isLaunchAsset(asset.token);
+// 還不能加的資產標什麼（cre8-app#58）：Ondo 的冷門股是「主網開放」，其餘沿用「After launch」。
+// 開關在 lib/feature-flags.ts 的 `ondoStocks`。
+function laterCopy(asset: B.Asset): { short: string; long: string } {
+  const ondo = asset.issuer === "ondo" ? featureLock("ondoStocks") : null;
+  return ondo ? { short: ondo.label, long: ondo.note } : { short: LAUNCH_COPY.assetLater, long: LAUNCH_COPY.assetLaterLong };
+}
 const venueSrc = (venue: string) => `${base}/logos/${venue === "stake" ? "lista" : venue}.webp`;
 
 // The saved draft is read once on the client; the server and the first client render both see none.
@@ -246,6 +254,10 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
   // 舊草稿裡可能已經有上線時還不能上架的資產（清單出來之前選的）：先講清楚，不要等到啟用才被擋。
   const laterNames = testnet ? [] : [...new Set(state.rows.map((row) => B.assetOf(row.key)).filter((asset) => !opensAtLaunch(asset)).map((asset) => B.displayAssetSymbol(asset.symbol)))];
   const launchNotice = laterNames.length === 0 ? "" : `${laterNames.join(", ")} ${laterNames.length === 1 ? "opens" : "open"} after launch. Remove ${laterNames.length === 1 ? "it" : "them"} to activate this fund now.`;
+  // 舊草稿裡也可能有還沒開放的策略（cre8-app#58）：同樣先講清楚。
+  const lockedPlays = testnet ? [] : [...new Set(state.rows.filter((row) => playLock(row.play) !== null).map((row) => B.PLAYS[row.play].name))];
+  const previewNotice = lockedPlays.length === 0 ? "" : `${lockedPlays.join(", ")} ${lockedPlays.length === 1 ? "is" : "are"} not available yet. Switch ${lockedPlays.length === 1 ? "it" : "them"} to Buy & hold to activate this fund now.`;
+  const feeLock = testnet ? null : featureLock("performanceFee"), delayLock = testnet ? null : featureLock("settingsDelay");
   const cashName = testnet ? testnet.cash : B.CASH.symbol;
   const symbol = symbolText || (testnet ? testnet.symbolFor(state.name) : "");
   const symbolValid = /^[A-Z0-9]{1,16}$/.test(symbol);
@@ -432,10 +444,12 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
               <div><dt title="Every deposit has to fit in one BNB Chain transaction, which limits how many positions a fund runs.">Capacity used</dt><dd>{state.rows.length ? `${roomUsed}% · ${room.positions} of ${limits.positions} positions` : "—"}</dd></div>
               <div><dt>Deposit fee</dt><dd>{B.FEE.depositPct}% · to CRE8</dd></div>
               <div><dt>Performance fee</dt><dd>CRE8 {B.FEE.platform}% + yours</dd></div>
+              {!testnet && <div data-locked={delayLock?.state} title={delayLock?.note}><dt>Changes to a live fund</dt><dd>24-hour notice{delayLock && <> <FeatureBadge lock={delayLock} className={styles.beta} /></>}</dd></div>}
             </dl>
             {(issue || sourceIssue) && <p className={styles.issue} role="status">{issue || sourceIssue}</p>}
             {notice && <p className={styles.note} role="status">{notice}</p>}
             {launchNotice && <p className={styles.notice} role="status">{launchNotice}</p>}
+            {previewNotice && <p className={styles.notice} role="status">{previewNotice}</p>}
             <button className={cx("btn", styles.wide)} type="button" disabled={!state.rows.length || !!issue || !!sourceIssue} onClick={openReview}>Review fund</button>
             {!state.rows.length && <p className={styles.note}>Add at least one asset to review.</p>}
           </div>
@@ -467,9 +481,9 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
                 <span className={styles.note}>{symbolValid ? "Holders' shares carry this ticker." : "Up to 16 capital letters or digits."}</span>
               </label>
             )}
-            <div className={styles.field}><span className={styles.label}>Your performance fee</span>
-              <div className={styles.feeLine}><input type="range" min={B.FEE.min} max={B.FEE.max} step={1} value={fee} aria-label="Your performance fee" onChange={(event) => setFee(Number(event.target.value))} /><b>{fee}%</b></div>
-              <span className={styles.note}>CRE8 adds {B.FEE.platform}%, so holders pay {fee + B.FEE.platform}% of their realized profit when they withdraw.</span>
+            <div className={styles.field} data-locked={feeLock?.state}><span className={styles.label}>Your performance fee{feeLock && <> <FeatureBadge lock={feeLock} className={styles.beta} /></>}</span>
+              <div className={styles.feeLine}><input type="range" min={B.FEE.min} max={B.FEE.max} step={1} value={fee} aria-label="Your performance fee" disabled={!!feeLock} title={feeLock?.note} onChange={(event) => { if (!feeLock) setFee(Number(event.target.value)); }} /><b>{fee}%</b></div>
+              <span className={styles.note}>{feeLock ? feeLock.note : `CRE8 adds ${B.FEE.platform}%, so holders pay ${fee + B.FEE.platform}% of their realized profit when they withdraw.`}</span>
             </div>
             <label className={styles.field}><span className={styles.label}>Your stake · {cashName}</span>
               <input className={styles.bigInput} type="number" min={B.STAKE.min} step={B.STAKE.step} value={stakeText} onChange={(event) => setStakeText(event.target.value)} />
@@ -515,8 +529,9 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
             </> : <>
               <button className={cx("btn", styles.wide)} type="button" disabled={!state.name.trim() || !stakeValid || !!sourceIssue} onClick={download}>Download design</button>
               {(!state.name.trim() || !stakeValid) && <span className={styles.note}>{!state.name.trim() ? "Give your fund a name to continue." : `Set a stake of at least ${B.STAKE.min} USDT.`}</span>}
-              {previews.length === 0 && !B.problem(state) && !launchNotice && <a className={styles.textLink} href={testnetCreate}>Activate a target-weight strategy →</a>}
+              {previews.length === 0 && !B.problem(state) && !launchNotice && !previewNotice && <a className={styles.textLink} href={testnetCreate}>Activate a target-weight strategy →</a>}
               {launchNotice && <span className={styles.note}>{launchNotice}</span>}
+              {previewNotice && <span className={styles.note}>{previewNotice}</span>}
             </>}
             <div className={styles.field}><span className={styles.label}>At launch</span>
               <ol className={styles.steps}>
@@ -575,6 +590,7 @@ function AddAsset({ state, query, setQuery, tab, setTab, pick, close }: { state:
     ["RWA", "", openFirst(open.filter((asset) => B.classifyAsset(asset).assetClass === "rwa").sort((a, b) => B.rwaPickerOrder(a) - B.rwaPickerOrder(b) || a.name.localeCompare(b.name)))],
   ];
   const laterCount = testnet ? 0 : available.filter((asset) => !openNow(asset)).length;
+  const laterLabels = testnet ? [] : [...new Set(available.filter((asset) => !openNow(asset)).map((asset) => laterCopy(asset).short))];
   const mode: B.BuilderMode = testnet ? "execution" : "demo", limits = B.builderLimits(mode);
   const full = have.size >= limits.assets, positions = B.positionsFull(state, mode);
   return (
@@ -593,7 +609,7 @@ function AddAsset({ state, query, setQuery, tab, setTab, pick, close }: { state:
           }}>{title}<small>{open.filter(asset => B.classifyAsset(asset).assetClass === key && openNow(asset)).length}</small></button>)}
         </div>
         <input className={styles.search} type="search" placeholder="Search name or symbol" aria-label="Search assets" value={query} onChange={(event) => search(event.target.value)} autoFocus />
-        {laterCount > 0 && <p className={styles.note}>{available.length - laterCount} assets can be added now. The ones marked “{LAUNCH_COPY.assetLater}” open later.</p>}
+        {laterCount > 0 && <p className={styles.note}>{available.length - laterCount} assets can be added now. {laterLabels.map((label) => `“${label}”`).join(" and ")} {laterLabels.length === 1 ? "marks" : "mark"} the ones that open later.</p>}
         {ASSET_TABS.map(([key]) => <div key={key} id={`${tabsId}-${key}-panel`} role="tabpanel" aria-labelledby={`${tabsId}-${key}-tab`} hidden={tab !== key} tabIndex={0}>
         {tab === key && groups.filter(([, , items]) => items.length > 0 && B.classifyAsset(items[0]).assetClass === key).map(([title, line, items]) => (
           <div key={title}>
@@ -603,9 +619,9 @@ function AddAsset({ state, query, setQuery, tab, setTab, pick, close }: { state:
                 const venues = testnet ? testnet.venues(asset.key).filter((v): v is B.LendVenue => v !== "hold" && v !== "stake") : B.venuesOf(asset), added = have.has(asset.key);
                 const later = !openNow(asset) && !added;
                 return (
-                  <div className={styles.assetChoice} key={asset.key} data-later={later || undefined}><button type="button" title={later ? `${B.displayAssetSymbol(asset.symbol)} · ${LAUNCH_COPY.assetLaterLong}` : undefined} disabled={later || positions || (full && !added) || (!!testnet && added && B.isPlanningOnly(asset))} onClick={() => pick(asset.key)} aria-label={`${B.assetPickerName(asset)}, ${B.displayAssetSymbol(asset.symbol)}${B.assetPickerName(asset) !== asset.name ? `, ${asset.name}` : ""}${asset.issuer === "ondo" ? ", Ondo" : ""}${later ? `, ${LAUNCH_COPY.assetLaterLong.toLowerCase()}` : ""}${added ? ", already in the fund: add another strategy" : ""}${venues.length ? `, earns on ${venues.map((venue) => B.VENUE_NAME[venue]).join(", ")}` : ""}${asset.status === "history" ? ", price history pending" : ""}`}>
+                  <div className={styles.assetChoice} key={asset.key} data-later={later || undefined}><button type="button" title={later ? `${B.displayAssetSymbol(asset.symbol)} · ${laterCopy(asset).long}` : undefined} disabled={later || positions || (full && !added) || (!!testnet && added && B.isPlanningOnly(asset))} onClick={() => pick(asset.key)} aria-label={`${B.assetPickerName(asset)}, ${B.displayAssetSymbol(asset.symbol)}${B.assetPickerName(asset) !== asset.name ? `, ${asset.name}` : ""}${asset.issuer === "ondo" ? ", Ondo" : ""}${later ? `, ${laterCopy(asset).long}` : ""}${added ? ", already in the fund: add another strategy" : ""}${venues.length ? `, earns on ${venues.map((venue) => B.VENUE_NAME[venue]).join(", ")}` : ""}${asset.status === "history" ? ", price history pending" : ""}`}>
                     <Logo src={assetSrc(asset.key)} size={28} className={styles.logo28} />
-                    <span><b title={asset.name}>{B.assetPickerName(asset)}</b><small>{added ? `${B.displayAssetSymbol(asset.symbol)} · Added` : later ? LAUNCH_COPY.assetLater : asset.status === "history" ? `${B.displayAssetSymbol(asset.symbol)} · pending` : B.displayAssetSymbol(asset.symbol)}</small></span>
+                    <span><b title={asset.name}>{B.assetPickerName(asset)}</b><small>{added ? `${B.displayAssetSymbol(asset.symbol)} · Added` : later ? laterCopy(asset).short : asset.status === "history" ? `${B.displayAssetSymbol(asset.symbol)} · pending` : B.displayAssetSymbol(asset.symbol)}</small></span>
                     {!testnet && !later && B.classifyAsset(asset).assetClass === "stock" && <span className={styles.liquidityDot} data-verified={asset.issuer !== "ondo" && B.hasStockLiquidity(asset)} title={`${B.hasStockLiquidity(asset) ? "Liquidity checked" : "Liquidity data pending"} · ${B.STOCK_LIQUIDITY_CHECKED_AT.slice(0, 10)}`} aria-hidden="true" />}
                     {venues.length > 0 && !later && <span className={styles.venueLogos} title={`Earns on ${venues.map((venue) => B.VENUE_NAME[venue]).join(", ")}`}>{venues.map((venue) => <Logo key={venue} src={venueSrc(venue)} size={18} className={styles.logo18} />)}</span>}
                   </button><a className={styles.assetChoiceInfo} href={`${app}/asset/${underlyingSlug(asset)}/?returnTo=${encodeURIComponent(`${base}/create/`)}`} target="_blank" rel="noopener noreferrer" aria-label={`About ${asset.name} (opens a new tab)`}>ⓘ</a></div>
@@ -637,6 +653,8 @@ function EditRow({ row, state, update, close, split }: { row: B.Row; state: B.Bu
   const recommendation = sources.length > 1 ? B.stockSourceRecommendation(asset) : null;
   // Cards sit two to a row; the chosen strategy's settings open right under its row, pointing at its card.
   const chosen = B.PLAY_ORDER.indexOf(row.play), rowEnd = Math.min(B.PLAY_ORDER.length - 1, chosen | 1);
+  /** 點了哪一個還沒開放的策略：那一張卡片改顯示說明。 */
+  const [hint, setHint] = useState<B.Play | null>(null);
   function choose(play: B.Play) {
     update((s) => {
       const next = B.setPlay(s, row.id, play, testnet ? "execution" : "demo");
@@ -668,12 +686,14 @@ function EditRow({ row, state, update, close, split }: { row: B.Row; state: B.Bu
             {B.PLAY_ORDER.map((play, index) => {
               const block = (testnet?.playBlock(play, asset.key) ?? null) || B.playBlock(play, asset, testnet ? "execution" : "demo");
               const preview = { ...row, play, p: B.defaults(play) } as B.Row;
+              // 還沒開放的策略（cre8-app#58）：看得到、灰色、點了只顯示說明，不會改設計。開關在 lib/feature-flags.ts。
+              const lock = testnet ? null : playLock(play);
               return (
                 <Fragment key={play}>
-                  <button type="button" className={styles.play} aria-pressed={row.play === play} disabled={!!block} onClick={() => choose(play)}>
+                  <button type="button" className={styles.play} aria-pressed={row.play === play} disabled={!lock && !!block} aria-disabled={lock ? true : undefined} data-locked={lock?.state} title={lock?.note} onClick={() => { if (lock) setHint(hint === play ? null : play); else choose(play); }}>
                     <Chart kind={play} w={220} h={84} />
-                    <b>{B.PLAYS[play].name}{B.rowBeta(preview) && <Beta />}</b>
-                    <small>{block ?? B.PLAYS[play].line}</small>
+                    <b>{B.PLAYS[play].name}{lock ? <FeatureBadge lock={lock} className={styles.beta} /> : B.rowBeta(preview) && <Beta />}</b>
+                    <small role={lock && hint === play ? "status" : undefined}>{lock ? (hint === play ? lock.note : B.PLAYS[play].line) : block ?? B.PLAYS[play].line}</small>
                   </button>
                   {index === rowEnd && (
                     <div className={styles.settings} data-side={chosen % 2 ? "right" : "left"} ref={settingsRef} role="region" aria-label={`${B.PLAYS[row.play].name} settings`}>
@@ -1143,11 +1163,13 @@ function Rules({ state, update }: { state: B.Builder; update: Update }) {
       {list.map(([key, chart, title, line, controls]) => {
         const enabled = rules[key].on, needsTwo = (key === "pair" || key === "rotate") && keys.length < 2;
         // On testnet: idle lending the catalog does not admit now, or a rule testnet funds cannot run yet.
-        const closed = !testnet ? "" : key === "idle" && !testnet.idle ? "Not open on testnet right now." : testnet.ruleBlock(key) ?? "";
+        // 閒置 USDT 生息還沒開放（cre8-app#58，lib/feature-flags.ts 的 `idleYield`）：灰色、開不起來，說明就寫在那一行。
+        const lock = !testnet && key === "idle" ? featureLock("idleYield") : null;
+        const closed = lock ? lock.note : !testnet ? "" : key === "idle" && !testnet.idle ? "Not open on testnet right now." : testnet.ruleBlock(key) ?? "";
         return (
-          <div key={key} className={styles.rule}>
+          <div key={key} className={styles.rule} data-locked={lock?.state}>
             <Chart kind={chart} w={78} h={32} mini />
-            <div><b>{title}{!B.FORK_VERIFIED_TOOLS.has(B.RULE_TOOLS[key]) && <Beta />}</b><small>{needsTwo ? "Needs at least two assets." : closed || line}</small></div>
+            <div><b>{title}{lock ? <FeatureBadge lock={lock} className={styles.beta} /> : !B.FORK_VERIFIED_TOOLS.has(B.RULE_TOOLS[key]) && <Beta />}</b><small>{needsTwo ? "Needs at least two assets." : closed || line}</small></div>
             <Seg label={title} value={enabled} options={[[false, "Off"], [true, "On"]]} onChange={(value) => { if ((!needsTwo && !closed) || !value) toggle(key, value); }} />
             {enabled && <div className={styles.ruleSet}>{controls}</div>}
           </div>

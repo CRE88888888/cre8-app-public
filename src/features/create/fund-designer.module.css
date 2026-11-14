@@ -395,3 +395,20 @@
 .assetChoice[data-later] > button:disabled { opacity: 1; cursor: default; background: var(--paper); }
 .assetChoice[data-later] > button:disabled img { opacity: .4; filter: grayscale(1); }
 .assetChoice[data-later] > button:disabled b { color: var(--steel); font-weight: 500; }
+
+/*
+ * 還沒開放的功能（cre8-app#58）。開關在 src/lib/feature-flags.ts。
+ * 樣子跟這個檔案裡「上線後才開放的資產」（.assetChoice[data-later]）一樣：淺底、圖變灰、字變淡，不用虛線。
+ */
+.play[data-locked] { cursor: not-allowed; background: var(--paper); }
+.play[data-locked]:hover { border-color: var(--hair); }
+.play[data-locked] .chart { opacity: .4; filter: grayscale(1); }
+.play[data-locked] b { color: var(--steel); font-weight: 500; }
+.play[data-locked] small { color: var(--steel); }
+.play[data-locked] small[role="status"] { color: var(--ink); }
+.rule[data-locked] > :first-child { opacity: .4; filter: grayscale(1); }
+.rule[data-locked] > :nth-child(3) { opacity: .45; }
+.rule[data-locked] b { color: var(--steel); font-weight: 500; }
+.field[data-locked] .feeLine { opacity: .45; }
+.field[data-locked] .label { display: inline-flex; align-items: center; gap: 8px; }
+.kv > div[data-locked] dd { display: inline-flex; align-items: center; gap: 8px; color: var(--steel); }
