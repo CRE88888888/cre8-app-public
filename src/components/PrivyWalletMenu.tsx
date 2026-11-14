@@ -3,19 +3,11 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { shortAddress } from '../lib/format';
 import { explainPrivyLoginFailure, linkableMethods, readOnlyNotice, signInMethodName } from '../lib/privy-owner';
-import type { SignInMethodKind } from '../lib/privy-owner';
 import { useConnectedSessionToken } from '../lib/use-connected-session';
-import { usePrivyAuth } from '../store/privy';
+import { openSignIn, usePrivyAuth } from '../store/privy';
 import { useSession } from '../store/session';
 import { AppIcon } from './AppIcon';
 import { Note, TechnicalDetails } from './ui';
-
-const LINK_LABEL: Record<SignInMethodKind, string> = {
-  email: 'Add email',
-  google: 'Add Google',
-  apple: 'Add Apple',
-  wallet: 'Add a wallet',
-};
 
 /**
  * Privy 模式的登入選單（cre8-app#57）。`VITE_PRIVY_APP_ID` 有設定時取代原本的錢包選單，
@@ -23,10 +15,14 @@ const LINK_LABEL: Record<SignInMethodKind, string> = {
  *
  * 這個元件不 import Privy SDK：狀態與動作來自 `usePrivyAuth`（由 `PrivyRoot` 同步）。
  *
- * - 還沒登入：按鈕直接打開 Privy 的登入視窗（email／Google／Apple／錢包），不先開自己的選單。
+ * - 還沒登入：按鈕打開我們自己的登入頁（`SignInScreen`：Google／Apple／email／錢包）。
  * - 登入中、換 session 失敗、已登入：按鈕打開選單。
  * - 已登入的選單：主人地址、已綁的登入方式、加綁、匯出私鑰（嵌入式錢包）、登出。
  *   **加綁只在已經有 CRE8 session 時出現**：首次登入前綁了別的錢包，後端就認不出誰是主人（backend#63）。
+ *
+ * 樣式與互動都沿用原本的錢包選單，不另外發明：每個動作是一整列靠左的 `.wallet-menu__item`；
+ * 「Add a sign-in method」跟原選單的「Browser wallets」一樣，點了才在下面展開選項；
+ * 主要按鈕是 `.btn.sm`，次要的是底線文字 `.wallet-menu__link`。
  */
 export function PrivyWalletMenu({ inline = false, showIcon = false, iconOnly = false, openEvent }: {
   inline?: boolean;
@@ -46,6 +42,8 @@ export function PrivyWalletMenu({ inline = false, showIcon = false, iconOnly = f
   const unavailable = !signedIn && (phase === 'unavailable' || (stalled && phase === 'loading'));
 
   const [open, setOpen] = useState(false);
+  /** 「Add a sign-in method」有沒有展開（與原選單的「Browser wallets」同一種互動）。 */
+  const [adding, setAdding] = useState(false);
   /** SDK 還沒載完就按了登入：記下來，好了就打開。 */
   const [wantLogin, setWantLogin] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -54,7 +52,7 @@ export function PrivyWalletMenu({ inline = false, showIcon = false, iconOnly = f
 
   function start(): void {
     if (hasPanel) setOpen((current) => !current);
-    else if (phase === 'signed-out' && actions !== null) actions.login();
+    else if (phase === 'signed-out') openSignIn();
     else setWantLogin(true);
   }
 
@@ -78,7 +76,7 @@ export function PrivyWalletMenu({ inline = false, showIcon = false, iconOnly = f
   useEffect(() => {
     if (!wantLogin || phase === 'loading' || phase === 'unavailable' || actions === null) return;
     setWantLogin(false);
-    if (phase === 'signed-out') actions.login();
+    if (phase === 'signed-out') openSignIn();
     else setOpen(true);
   }, [wantLogin, phase, actions]);
 
@@ -108,7 +106,7 @@ export function PrivyWalletMenu({ inline = false, showIcon = false, iconOnly = f
     if (inline) return;
     const onOpen = (): void => {
       const current = usePrivyAuth.getState();
-      if (current.phase === 'signed-out' && current.actions !== null) current.actions.login();
+      if (current.phase === 'signed-out') openSignIn();
       else if (current.phase === 'loading') setWantLogin(true);
       else setOpen(true);
     };
@@ -184,7 +182,7 @@ export function PrivyWalletMenu({ inline = false, showIcon = false, iconOnly = f
                 </button>
               )}
               {failure.action === 'sign-in-again' && (
-                <button type="button" className="btn sm" onClick={() => void actions?.logout().then(() => actions.login())}>
+                <button type="button" className="btn sm" onClick={() => void actions?.logout().then(openSignIn)}>
                   Sign in again
                 </button>
               )}
@@ -215,14 +213,14 @@ export function PrivyWalletMenu({ inline = false, showIcon = false, iconOnly = f
               <Link className="wallet-menu__item" to="/portfolios" onClick={() => setOpen(false)}>
                 Portfolio
               </Link>
-              <p className="wallet-menu__title">Add another way to sign in</p>
-              <div className="wallet-menu__links">
-                {linkableMethods(methods).map((kind) => (
-                  <button key={kind} type="button" className="wallet-menu__item" role="menuitem" onClick={() => actions?.link(kind)}>
-                    {LINK_LABEL[kind]}
-                  </button>
-                ))}
-              </div>
+              <button type="button" className="wallet-menu__item" role="menuitem" aria-expanded={adding} onClick={() => setAdding((current) => !current)}>
+                Add a sign-in method
+              </button>
+              {adding && linkableMethods(methods).map((kind) => (
+                <button key={kind} type="button" className="wallet-menu__item" role="menuitem" onClick={() => actions?.link(kind)}>
+                  {kind === 'wallet' ? 'Another wallet' : signInMethodName(kind)}
+                </button>
+              ))}
               {ownerEmbedded && (
                 <>
                   <button type="button" className="wallet-menu__item" role="menuitem" onClick={() => void actions?.exportWallet()}>
@@ -265,11 +263,15 @@ export function OwnerWalletNotice(): ReactNode {
   if (notice === null) return null;
   return (
     <div className="platform-banner owner-wallet-banner" role="status">
-      <span><strong>View only.</strong> {notice}</span>
+      <strong>View only.</strong> {notice}
+      {/* 提示裡的動作沿用既有寫法：底線文字的 `.link-button`（跟基金頁的「Open My position」一樣），不放實心按鈕。 */}
       {!ownerEmbedded && (
-        <button type="button" className="btn sm" onClick={() => actions?.connectOwnerWallet()}>
-          Connect wallet
-        </button>
+        <>
+          {' '}
+          <button type="button" className="link-button" onClick={() => actions?.connectOwnerWallet()}>
+            Connect wallet
+          </button>
+        </>
       )}
     </div>
   );

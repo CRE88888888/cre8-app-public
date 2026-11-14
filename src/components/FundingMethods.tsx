@@ -18,16 +18,15 @@ export function FundingMethods({ compact = false }: { compact?: boolean }): Reac
       <h3 className="funding-methods__title">Ways to add money</h3>
       <div className="feature-locked" data-state="on">
         <div className="feature-locked__row">
-          <span className="feature-locked__icon" aria-hidden="true"><AppIcon name="wallet" size={18} /></span>
           <span className="feature-locked__text">
-            <b>USDT from your wallet</b>
+            <span className="feature-locked__title"><b>USDT from your wallet</b><span className="badge badge--ok feature-badge">Available</span></span>
             <small>On BNB Chain. Choose a fund and press Buy.</small>
           </span>
-          <span className="badge badge--ok feature-badge">Available</span>
+          <span className="feature-locked__icon" aria-hidden="true"><AppIcon name="wallet" size={22} /></span>
         </div>
       </div>
-      <LockedFeature feature="depositCard" icon={<AppIcon name="deposit" size={18} />} description="Visa, Mastercard or Apple Pay" />
-      <LockedFeature feature="depositCrossChain" icon={<AppIcon name="network" size={18} />} description="USDC or USDT on other networks" />
+      <LockedFeature feature="depositCard" icon={<AppIcon name="deposit" size={22} />} description="Visa, Mastercard or Apple Pay" />
+      <LockedFeature feature="depositCrossChain" icon={<AppIcon name="network" size={22} />} description="USDC or USDT on other networks" />
     </section>
   );
 }

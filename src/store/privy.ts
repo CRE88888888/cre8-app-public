@@ -24,9 +24,18 @@ export type PrivyPhase =
   /** SDK 載不下來或初始化失敗（斷線、App ID 不對）。登入不能用，其餘頁面照常。 */
   | 'unavailable';
 
+/** email 驗證碼登入走到哪一步（Privy `useLoginWithEmail` 的 `state.status`）。 */
+export type EmailStep = 'initial' | 'sending-code' | 'awaiting-code-input' | 'submitting-code' | 'done' | 'error';
+
 export type PrivyActions = {
-  /** 打開 Privy 的登入視窗。 */
-  login: () => void;
+  /** 用 Google／Apple 登入：轉到對方的登入頁，回來後由 Privy 完成（headless，不開 Privy 的視窗）。 */
+  loginWithOAuth: (provider: 'google' | 'apple') => Promise<void>;
+  /** 寄 email 驗證碼。 */
+  sendEmailCode: (email: string) => Promise<void>;
+  /** 用收到的驗證碼登入。 */
+  submitEmailCode: (code: string) => Promise<void>;
+  /** 用錢包登入：只開 Privy 的選錢包視窗。 */
+  loginWithWallet: () => void;
   /** 登出 Privy 並清掉 CRE8 session。 */
   logout: () => Promise<void>;
   /** 換 session 失敗後再試一次。 */
@@ -48,6 +57,13 @@ export type PrivyAuthState = {
   ownerEmbedded: boolean;
   /** 主人錢包現在能不能簽名：`checking` = 還在等 Privy 回報錢包。 */
   signer: 'checking' | 'ready' | 'missing';
+  /** email 登入的進度與錯誤（給登入頁用）。 */
+  emailStep: EmailStep;
+  emailError: unknown;
+  /** Google／Apple 登入的錯誤（轉址前就失敗時）。 */
+  oauthError: unknown;
+  /** 登入頁開著沒有。在這裡而不是元件裡：標頭、頁面內的按鈕都要能打開同一頁。 */
+  signInOpen: boolean;
   actions: PrivyActions | null;
 };
 
@@ -57,7 +73,19 @@ export const PRIVY_INITIAL: PrivyAuthState = {
   methods: [],
   ownerEmbedded: false,
   signer: 'checking',
+  emailStep: 'initial',
+  emailError: null,
+  oauthError: null,
+  signInOpen: false,
   actions: null,
 };
+
+export function openSignIn(): void {
+  usePrivyAuth.setState({ signInOpen: true });
+}
+
+export function closeSignIn(): void {
+  usePrivyAuth.setState({ signInOpen: false });
+}
 
 export const usePrivyAuth = create<PrivyAuthState>()(() => PRIVY_INITIAL);

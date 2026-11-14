@@ -441,7 +441,7 @@
   cursor: pointer;
 }
 
-/* Privy 登入（cre8-app#57）：已綁的登入方式、加綁的按鈕列。 */
+/* Privy 登入（cre8-app#57）：已綁的登入方式。其餘都用上面既有的 .wallet-menu__* 樣式。 */
 .wallet-menu__methods {
   margin: 0;
   padding: 0;
@@ -467,32 +467,15 @@
   color: var(--ink);
 }
 
-.wallet-menu__links {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.wallet-menu__links .wallet-menu__item {
-  justify-content: center;
-}
-
 .wallet-menu .wallet-warning {
   margin: 0;
   font-size: 12px;
   line-height: 1.5;
 }
 
-/* 已登入但主人錢包沒連著（只能看）。沿用全站橫幅的樣子，多一顆按鈕。 */
-.owner-wallet-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.owner-wallet-banner .btn {
-  flex: none;
+/* 已登入但主人錢包沒連著（只能看）：就是全站橫幅（.platform-banner），裡面的動作是 .link-button。 */
+.owner-wallet-banner .link-button {
+  font-weight: 600;
 }
 
 /* 頁面上的「Sign in」：長得像連結，但動作是叫出標頭的選單。 */
@@ -541,55 +524,61 @@
 .feature-locked__row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   width: 100%;
-  min-height: 52px;
-  padding: 10px 14px;
-  border: 1px solid var(--hair, #d8e3ec);
-  background: transparent;
+  min-height: 76px;
+  padding: 16px 18px;
+  border: 0;
+  background: var(--app-grouped, #f6f7f8);
   color: var(--ink);
   font: inherit;
   text-align: left;
 }
 
+/* 還不能用的：同一張卡片，字與圖示變淡，標記保持清楚。 */
 .feature-locked:not([data-state='on']) .feature-locked__row {
-  border-color: transparent;
-  background: var(--snow);
-  color: var(--slate);
   cursor: not-allowed;
 }
 
-.feature-locked__icon {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
+.feature-locked:not([data-state='on']) :is(.feature-locked__title b, .feature-locked__text small, .feature-locked__icon) {
+  opacity: 0.5;
 }
 
 .feature-locked__text {
   flex: 1;
   min-width: 0;
   display: grid;
-  gap: 2px;
+  gap: 4px;
 }
 
-.feature-locked__text b {
-  font-size: 14px;
+.feature-locked__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.feature-locked__title b {
+  font-size: 16px;
   font-weight: 600;
 }
 
 .feature-locked__text small {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--steel, #5a7286);
 }
 
-.feature-locked:not([data-state='on']) .feature-locked__text small {
-  color: inherit;
+.feature-locked__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: var(--ink);
 }
 
 .feature-locked__note {
-  margin: 6px 2px 0;
+  margin: 8px 4px 0;
   font-size: 12px;
   line-height: 1.5;
   color: var(--muted, #5a7286);
@@ -597,7 +586,7 @@
 
 .funding-methods {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   margin: 16px 0;
 }
 
@@ -622,4 +611,158 @@
   margin: 16px 0 0;
   padding-top: 14px;
   border-top: 1px solid var(--hair, #d8e3ec);
+}
+
+/*
+ * 登入頁（Privy 模式，components/SignInScreen.tsx）。
+ * 手機：整頁，品牌在上、按鈕排在下面（參考使用者給的登入畫面）。桌機：置中的卡片。
+ * 按鈕就是既有的 .btn（實心）與 .btn.ghost（淺色），只放大高度與字級。
+ */
+.signin-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+}
+
+.signin-screen__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(12, 23, 34, 0.42);
+}
+
+.signin-screen__card {
+  position: relative;
+  width: min(420px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 40px 28px 28px;
+  border: 1px solid var(--hair, #d8e3ec);
+  background: var(--white, #fff);
+  box-shadow: 0 24px 60px rgba(22, 34, 45, 0.18);
+}
+
+.signin-screen__close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  /* 跟底部面板的關閉鈕（.app-sheet-close）一樣：淺灰圓底。 */
+  background: var(--app-grouped, #f6f7f8);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.signin-screen__head {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.signin-screen__head img {
+  width: 64px;
+  height: 64px;
+}
+
+.signin-screen__head h2 {
+  margin: 6px 0 0;
+  font: 600 26px/1.15 var(--sans);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.signin-screen__head p {
+  margin: 0;
+  font-size: 15px;
+  color: var(--steel);
+}
+
+.signin-screen__options {
+  display: grid;
+  gap: 12px;
+}
+
+.signin-screen .btn {
+  min-height: 54px;
+  gap: 10px;
+  font-size: 16px;
+}
+
+.signin-screen .field input {
+  height: 52px;
+  font-size: 16px;
+}
+
+.signin-screen__code {
+  letter-spacing: 0.4em;
+  font-family: var(--mono) !important;
+  text-align: center;
+}
+
+.signin-mark {
+  flex: none;
+}
+
+.signin-screen__hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--steel);
+  text-align: center;
+}
+
+.signin-screen__error {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--neg);
+}
+
+.signin-screen__links {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+@media (max-width: 719px) {
+  .signin-screen {
+    place-items: stretch;
+  }
+
+  .signin-screen__backdrop {
+    display: none;
+  }
+
+  .signin-screen__card {
+    width: 100%;
+    min-height: 100%;
+    justify-content: space-between;
+    padding: calc(56px + env(safe-area-inset-top)) 20px calc(28px + env(safe-area-inset-bottom));
+    border: 0;
+    box-shadow: none;
+  }
+
+  .signin-screen__close {
+    top: calc(10px + env(safe-area-inset-top));
+  }
+
+  .signin-screen__head {
+    margin-top: 12vh;
+  }
+
+  .signin-screen__head img {
+    width: 88px;
+    height: 88px;
+  }
+
+  .signin-screen__head h2 {
+    font-size: 30px;
+  }
 }

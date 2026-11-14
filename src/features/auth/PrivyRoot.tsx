@@ -8,7 +8,16 @@
  *   3. 把狀態與動作同步到 `usePrivyAuth`，給標頭選單與頁面上的登入按鈕用。
  * Privy 自己的視窗（登入、連錢包、匯出私鑰）是 portal，不需要在它底下。
  */
-import { PrivyProvider, useCreateWallet, useIdentityToken, usePrivy, useUser, useWallets } from '@privy-io/react-auth';
+import {
+  PrivyProvider,
+  useCreateWallet,
+  useIdentityToken,
+  useLoginWithEmail,
+  useLoginWithOAuth,
+  usePrivy,
+  useUser,
+  useWallets,
+} from '@privy-io/react-auth';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ApiError, postPrivyLogin } from '../../lib/api';
@@ -54,6 +63,11 @@ function Bridge(): null {
   const { identityToken } = useIdentityToken();
   const { refreshUser } = useUser();
   const { createWallet } = useCreateWallet();
+  // 登入頁是我們自己畫的（components/SignInScreen.tsx），用 Privy 的 headless 登入。
+  // OAuth 的 hook 掛在這裡（一直存在），從 Google／Apple 轉回來的任何一頁都能完成登入。
+  const { sendCode, loginWithCode, state: emailState } = useLoginWithEmail();
+  const { initOAuth } = useLoginWithOAuth();
+  const [oauthError, setOauthError] = useState<unknown>(null);
   const session = useSession();
 
   const [failure, setFailure] = useState<unknown>(null);
@@ -145,6 +159,22 @@ function Bridge(): null {
     })();
   }, [ready, authenticated, userId, privySession, otherSession, failure, accountWallets, identityToken, attempt, refreshUser]);
 
+  // ---- 嵌入式錢包沒有自動建：自己建 ------------------------------------------------------------
+  // `createOnLogin` 在 Privy 的視窗登入時一定會建；用 headless 登入時文件沒有明說，所以登入後
+  // 5 秒帳號上還沒有任何 EVM 錢包，就明確叫一次 createWallet()（每個使用者只叫一次）。
+  // 只在「一個錢包都沒有」時做：用錢包登入的人帳號上本來就有錢包，不會多出第二個。
+  const createdFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ready || !authenticated || userId === null || privySession || failure !== null) return;
+    if (accountWallets.length > 0 || createdFor.current === userId) return;
+    const timer = window.setTimeout(() => {
+      if (latest.current.accountWallets.length > 0 || createdFor.current === userId) return;
+      createdFor.current = userId;
+      void createWallet().catch(() => undefined);
+    }, 5_000);
+    return () => window.clearTimeout(timer);
+  }, [ready, authenticated, userId, privySession, failure, accountWallets.length, createWallet]);
+
   // ---- 等太久：講清楚卡在哪裡，給「再試一次」 --------------------------------------------------
   const waitingFor = !ready || !authenticated || privySession || otherSession || failure !== null
     ? null
@@ -223,7 +253,21 @@ function Bridge(): null {
   // ---- 動作 ------------------------------------------------------------------------------------
   const actions = useMemo<PrivyActions>(
     () => ({
-      login: () => login(),
+      loginWithOAuth: async (provider) => {
+        setOauthError(null);
+        try {
+          await initOAuth({ provider });
+        } catch (cause) {
+          setOauthError(cause);
+        }
+      },
+      sendEmailCode: async (email) => {
+        await sendCode({ email }).catch(() => undefined); // 錯誤由 emailState 帶出
+      },
+      submitEmailCode: async (code) => {
+        await loginWithCode({ code }).catch(() => undefined);
+      },
+      loginWithWallet: () => login({ loginMethods: ['wallet'] }),
       logout: async () => {
         useSession.getState().clear();
         const wallet = useWallet.getState();
@@ -253,7 +297,7 @@ function Bridge(): null {
         await exportWallet(address === null ? undefined : { address });
       },
     }),
-    [login, logout, createWallet, refreshUser, linkEmail, linkGoogle, linkApple, linkWallet, connectWallet, exportWallet],
+    [login, logout, createWallet, refreshUser, linkEmail, linkGoogle, linkApple, linkWallet, connectWallet, exportWallet, initOAuth, sendCode, loginWithCode],
   );
 
   // ---- 同步到給畫面用的 store ------------------------------------------------------------------
@@ -273,8 +317,22 @@ function Bridge(): null {
   const methods = useMemo(() => signInMethods(accounts), [accounts]);
   const ownerEmbedded = owner !== null && accountWallets.some((wallet) => wallet.embedded && sameAddress(wallet.address, owner));
   useEffect(() => {
-    usePrivyAuth.setState({ phase, error: phase === 'unavailable' ? initError : failure, methods, ownerEmbedded, signer, actions });
-  }, [phase, failure, initError, methods, ownerEmbedded, signer, actions]);
+    usePrivyAuth.setState({
+      phase,
+      error: phase === 'unavailable' ? initError : failure,
+      methods,
+      ownerEmbedded,
+      signer,
+      emailStep: emailState.status,
+      emailError: emailState.status === 'error' ? emailState.error : null,
+      oauthError,
+      actions,
+    });
+  }, [phase, failure, initError, methods, ownerEmbedded, signer, emailState, oauthError, actions]);
+  // 登入完成（Privy 那一側）就把登入頁收起來；後面換 CRE8 session 的進度在標頭的選單裡。
+  useEffect(() => {
+    if (authenticated) usePrivyAuth.setState({ signInOpen: false });
+  }, [authenticated]);
   useEffect(() => () => usePrivyAuth.setState(PRIVY_INITIAL), []);
 
   return null;

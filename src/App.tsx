@@ -12,6 +12,7 @@ import { Toaster } from './components/Toast';
 import { TopBar } from './components/TopBar';
 import { PlatformPauseBanner } from './components/PlatformPauseBanner';
 import { OwnerWalletNotice } from './components/PrivyWalletMenu';
+import { SignInScreen } from './components/SignInScreen';
 import { PrivyBoundary } from './features/auth/PrivyBoundary';
 import { PRIVY_ENABLED } from './lib/privy-config';
 import { useAutoConnect } from './lib/use-auto-connect';
@@ -55,6 +56,7 @@ export function App(): ReactNode {
       <TopBar />
       <PlatformPauseBanner />
       {PRIVY_ENABLED && <OwnerWalletNotice />}
+      {PRIVY_ENABLED && <SignInScreen />}
       <Suspense fallback={<main className="page"><p role="status">Loading page…</p></main>}>
       <Routes>
         {/* 登入改由標頭的錢包選單處理；舊連結仍然可用，只是把使用者帶回目錄。 */}

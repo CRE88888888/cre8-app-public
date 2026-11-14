@@ -99,3 +99,14 @@ test("linking is refused until there is a CRE8 session, and the config matches t
   const menu = fs.readFileSync("src/components/PrivyWalletMenu.tsx", "utf8");
   expect(menu.indexOf("actions?.link(kind)")).toBeGreaterThan(menu.indexOf("Signed in</p>"));
 });
+
+test("our own sign-in screen does not load the Privy SDK and offers the four ways in", () => {
+  const screen = fs.readFileSync("src/components/SignInScreen.tsx", "utf8");
+  expect(screen).not.toMatch(/@privy-io\//);
+  for (const label of ["Continue with Google", "Continue with Apple", "Continue with email", "Connect a wallet"]) expect(screen).toContain(label);
+  // Google／Apple 走 headless 轉址；錢包只開 Privy 的選錢包視窗。
+  const root = fs.readFileSync("src/features/auth/PrivyRoot.tsx", "utf8");
+  expect(root).toContain("useLoginWithOAuth");
+  expect(root).toContain("useLoginWithEmail");
+  expect(root).toContain("login({ loginMethods: ['wallet'] })");
+});

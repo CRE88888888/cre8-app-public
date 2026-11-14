@@ -41,11 +41,11 @@ export function LockedFeature({ feature, icon, description, children }: {
     return children ?? (
       <div className="feature-locked" data-state="on">
         <div className="feature-locked__row">
-          {icon !== undefined && <span className="feature-locked__icon" aria-hidden="true">{icon}</span>}
           <span className="feature-locked__text">
             <b>{FEATURES[feature].name}</b>
             {description !== undefined && <small>{description}</small>}
           </span>
+          {icon !== undefined && <span className="feature-locked__icon" aria-hidden="true">{icon}</span>}
         </div>
       </div>
     );
@@ -62,12 +62,12 @@ export function LockedFeature({ feature, icon, description, children }: {
         data-feature={feature}
         onClick={() => setShown((current) => !current)}
       >
-        {icon !== undefined && <span className="feature-locked__icon" aria-hidden="true">{icon}</span>}
+        {/* 版面跟入金方式的卡片一樣：名稱與標記在第一行，說明在下面，圖示靠右。 */}
         <span className="feature-locked__text">
-          <b>{lock.name}</b>
+          <span className="feature-locked__title"><b>{lock.name}</b><FeatureBadge lock={lock} /></span>
           {description !== undefined && <small>{description}</small>}
         </span>
-        <FeatureBadge lock={lock} />
+        {icon !== undefined && <span className="feature-locked__icon" aria-hidden="true">{icon}</span>}
       </button>
       {/* 一直在 DOM 裡（報讀器讀得到按鈕為什麼不能用），點了才顯示。 */}
       <p id={noteId} className="feature-locked__note" role="status" hidden={!shown}>{lock.note}</p>

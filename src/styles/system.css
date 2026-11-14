@@ -231,16 +231,16 @@ html body #root :is(.public-periods, .creator-periods, .seg) :is([aria-pressed="
   :is(#root#root, body:not(#_):not(#__)) :is(.btn, [data-slot="button"], .header-wallet, .app-mode-switch, .wallet-menu__item,
       .explore-search, .creator-search, .app-filter-trigger, .creator-filter-trigger, .explore-filter > summary,
       .public-periods, .creator-periods, .seg, .atp-facts-trigger, .fund-introduction-trigger,
-      .field input, .field textarea, .field select, .explore-filter-field select, .creator-filter-form select, .app-bottom-sheet select,
-      .feature-locked__row) {
+      .field input, .field textarea, .field select, .explore-filter-field select, .creator-filter-form select, .app-bottom-sheet select) {
     border-radius: var(--r-ctl) !important;
   }
   :is(#root#root, body:not(#_):not(#__)) :is(.masthead .nav a, .explore-filter-option, .app-icon-tile, .activity-filter-select, .app-mode-label,
-      .app-ticket-presets button, [data-slot="sheet-close"]) {
+      .app-ticket-presets button, [data-slot="sheet-close"], .signin-screen__close) {
     border-radius: var(--r-sm) !important;
   }
   :is(#root#root, body:not(#_):not(#__)) :is(.public-periods, .creator-periods, .seg) :is(button, a, label) { border-radius: 7px !important; }
-  :is(#root#root, body:not(#_):not(#__)) :is(.card, .panel, .explore-filter-panel, .wallet-menu__panel, [data-sonner-toast], .fund-profile-card, .asset-preview-card) {
+  :is(#root#root, body:not(#_):not(#__)) :is(.card, .panel, .explore-filter-panel, .wallet-menu__panel, [data-sonner-toast], .fund-profile-card, .asset-preview-card, .signin-screen__card,
+      .feature-locked__row) {
     border-radius: var(--r-lg) !important;
   }
   /* 手機：浮在內容上的分頁列、基金頁底部操作列、右上角圓鈕維持膠囊／圓形（它們是浮動的控制層）。 */
@@ -248,6 +248,8 @@ html body #root :is(.public-periods, .creator-periods, .seg) :is([aria-pressed="
     :is(#root#root, body:not(#_):not(#__)) :is(.app-mobile-nav, .app-mobile-nav a, .public-mobile-cta, .public-mobile-cta .btn,
         .app-nav-bar .header-wallet, .app-nav-bar .app-mode-switch, .masthead .app-mode-switch,
         .masthead .header-wallet.app-wallet-toolbar, .app-fund-toolbar > :is(a, button)) { border-radius: var(--r-pill) !important; }
+    /* 登入頁在手機上是整頁，不是浮起來的卡片。 */
+    :is(#root#root, body:not(#_):not(#__)) .signin-screen__card { border-radius: 0 !important; }
   }
 }
 
