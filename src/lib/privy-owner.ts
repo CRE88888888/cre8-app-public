@@ -283,8 +283,10 @@ export type PrivyLoginFailure = {
   message: string;
   /** `retry` = 再試一次有機會成功；`sign-in-again` = 要重新登入；`none` = 使用者自己解決不了。 */
   action: 'retry' | 'sign-in-again' | 'none';
-  /** 可展開的原始資訊（狀態碼、代碼、後端訊息）。 */
+  /** 可展開的原始資訊（狀態碼、代碼、後端訊息）。空字串就不顯示「Technical details」。 */
   technical: string;
+  /** 臨時預覽網址（A 段）：`/api` 還沒接後端，登入不可能完成。畫面用中性的「Preview only」，不當成錯誤。 */
+  preview?: true;
 };
 
 /** 換 CRE8 session 失敗時要說什麼。對應 backend#65 的 401／409／503 與前端自己的兩種情況。 */
@@ -299,6 +301,16 @@ export function explainPrivyLoginFailure(error: unknown): PrivyLoginFailure {
         };
   }
   if (error instanceof ApiError) {
+    // A 段臨時網址：Worker 對 `/api/*` 一律回 PREVIEW_ONLY（public/_worker.js）。Privy 那一側登入得了，
+    // 但換不到 CRE8 session。這不是使用者能處理的錯誤，只說明現況，不顯示技術細節、不給「再試一次」。
+    if (error.code === 'PREVIEW_ONLY') {
+      return {
+        message: 'This preview isn’t connected to CRE8’s servers yet. What you can do after signing in opens on the testnet.',
+        action: 'none',
+        technical: '',
+        preview: true,
+      };
+    }
     const technical = `${error.status === 0 ? 'NETWORK' : `${error.status} · ${error.code}`}\n${error.message}`;
     if (error.code === 'PRIVY_NO_WALLET') {
       return { message: 'Your wallet is still being set up. Try again in a moment.', action: 'retry', technical };

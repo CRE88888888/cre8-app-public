@@ -193,8 +193,8 @@ export function PrivyWalletMenu({ inline = false, showIcon = false, iconOnly = f
             </>
           ) : failure !== null ? (
             <>
-              <Note tone="bad">
-                <strong>Sign-in not completed</strong>
+              <Note tone={failure.preview ? 'neutral' : 'bad'}>
+                <strong>{failure.preview ? 'Preview only' : 'Sign-in not completed'}</strong>
                 <div style={{ marginTop: 6 }}>{failure.message}</div>
                 <TechnicalDetails text={failure.technical} />
               </Note>
