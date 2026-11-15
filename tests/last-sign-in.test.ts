@@ -81,6 +81,9 @@ test("popups and secondary actions follow the iOS language: grouped rows and tex
   expect(shapes).toContain(":is(.signin-screen, .app-bottom-sheet, .wallet-menu__panel) .btn { border-radius: var(--r-pill) !important; }");
   // 手機上是從下面滑上來的面板。
   expect(shapes).toContain(".signin-screen__card { border-radius: 28px 28px 0 0 !important; }");
+  // Privy 自己的選錢包視窗也套同一套圓角（全站 0 圓角會把它壓成直角，實測）。
+  expect(shapes).toContain("#privy-modal-content { border-radius: 28px !important; }");
+  expect(shapes).toContain("#privy-modal-content { border-radius: 28px 28px 0 0 !important; }");
   // 登入頁不再借用選單的連結樣式。
   expect(fs.readFileSync("src/components/SignInScreen.tsx", "utf8")).not.toContain("wallet-menu__link");
 });

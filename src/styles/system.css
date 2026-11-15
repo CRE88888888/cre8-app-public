@@ -250,6 +250,17 @@ html body #root :is(.public-periods, .creator-periods, .seg) :is([aria-pressed="
    */
   :is(#root#root, body:not(#_):not(#__)) :is(.signin-screen, .app-bottom-sheet, .wallet-menu__panel) .btn { border-radius: var(--r-pill) !important; }
   :is(#root#root, body:not(#_):not(#__)) .signin-last { border-radius: var(--r-pill) !important; }
+  /*
+   * Privy 自己的視窗（選錢包、匯出私鑰）也畫在這一頁裡，會被設計稿全站的 0 圓角壓成直角：
+   * 補回跟我們登入面板同一套圓角（視窗 28px、裡面的列與按鈕 14px、錢包圖示 8px）。
+   */
+  :is(#root#root, body:not(#_):not(#__)) #privy-modal-content { border-radius: 28px !important; }
+  :is(#root#root, body:not(#_):not(#__)) #privy-modal-content :is(button, a, input) { border-radius: 14px !important; }
+  :is(#root#root, body:not(#_):not(#__)) #privy-modal-content img { border-radius: 8px !important; }
+  /* Privy 在 440px 以下自己變成底部面板：只有上面兩個角是圓的（跟我們的登入面板一樣）。 */
+  @media (max-width: 440px) {
+    :is(#root#root, body:not(#_):not(#__)) #privy-modal-content { border-radius: 28px 28px 0 0 !important; }
+  }
   :is(#root#root, body:not(#_):not(#__)) .signin-screen__card { border-radius: 28px !important; }
   :is(#root#root, body:not(#_):not(#__)) .wallet-menu__panel { border-radius: 18px !important; }
   :is(#root#root, body:not(#_):not(#__)) :is(.wallet-menu__panel .wallet-menu__item, .signin-screen .field input) { border-radius: 14px !important; }
