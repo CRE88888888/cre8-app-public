@@ -4,7 +4,7 @@ import { AppBottomSheet } from "../../components/AppBottomSheet";
 import { useMobile } from "../../lib/use-mobile";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useBodyClass } from "../../lib/use-body-class";
-import { REFERENCE_FUNDS } from "../../lib/public-funds";
+import { LISTED_FUNDS } from "../../lib/public-funds";
 import type { ReferenceFund } from "../../lib/public-funds";
 import { symbolOf, synthesizeCommunityFund } from "../../lib/community-fund";
 import {
@@ -64,7 +64,7 @@ export function VaultsPage() {
     filters.assets = [params.get("asset")!];
   if (params.get("sort") === "name") filters.sort = "name";
   const visible = selectFunds(
-    REFERENCE_FUNDS,
+    LISTED_FUNDS,
     filters.q,
     filters.category,
     filters.sort,
@@ -151,7 +151,7 @@ export function VaultsPage() {
   const controls = mobile && draft ? draft : filters;
   const countFilters = (value: ExploreFilters) => value.assets.length + Number(value.period !== "1Y") + Number(value.sort !== "perf");
   const resultCount = draft
-    ? selectFunds(REFERENCE_FUNDS, draft.q, draft.category, draft.sort, draft.period, draft.assets as ("stocks" | "crypto" | "rwa")[]).length
+    ? selectFunds(LISTED_FUNDS, draft.q, draft.category, draft.sort, draft.period, draft.assets as ("stocks" | "crypto" | "rwa")[]).length
     : visible.length;
   const applyFilters = () => {
     if (!draft) return;
@@ -176,7 +176,7 @@ export function VaultsPage() {
     if (!list || !card) return;
     list.scrollBy({ left: direction * (card.getBoundingClientRect().width + 16), behavior: "smooth" });
   };
-  const fullDays = longestHistory(REFERENCE_FUNDS, filters.period);
+  const fullDays = longestHistory(LISTED_FUNDS, filters.period);
   // 主打 = 目前分類裡報酬最高的六檔（一副可以左右滑的牌）。只有在「沒搜尋、沒篩資產、依報酬排序」時才成立，
   // 否則上面三檔和下面的榜會講兩件不同的事。榜不到十檔時也不放：七檔裡挑六檔「主打」沒有意義。
   const featured = filters.q.trim() === "" && filters.assets.length === 0 && filters.sort === "perf" && visible.length >= 10

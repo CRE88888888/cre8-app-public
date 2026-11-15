@@ -1,4 +1,5 @@
 import payload from "../reference/data/funds.json";
+import { listedFunds } from "./testnet-catalogue";
 import metadata from "../reference/data/fund-metadata.json";
 import assetData from "../reference/data/asset-index.json";
 import type { ExploreFund } from "../reference/lib/fund-explore";
@@ -61,6 +62,11 @@ export type ReferenceMetadata = {
   holdings: HoldingView[];
 };
 export const REFERENCE_FUNDS = payload.funds as unknown as ReferenceFund[];
+/**
+ * 畫面上要列出來的基金（目錄、排行、創作者頁）。主網全部列；測試網只列 16 檔（cre8-app#86，見 `testnet-catalogue.ts`）。
+ * 與 `REFERENCE_FUNDS` 是同一批物件：參考資料更新時就地改寫，這裡跟著變。用網址直接打開的基金頁仍查 `REFERENCE_FUNDS`。
+ */
+export const LISTED_FUNDS: ReferenceFund[] = listedFunds(REFERENCE_FUNDS);
 /**
  * 點畫封面（hedcut）：2026-11-13 起，30 檔參考基金的封面統一成同一種畫法 ——
  * 純白底、黑色墨點與線條（規格見 DESIGN.md「封面」）。圖在 `public/fund-covers/hedcut/`，

@@ -18,6 +18,7 @@ import FundSourceEditor, { XProfilePreview } from "../../reference/components/x-
 import { normalizeXHandle, X_MODEL_DISCLAIMER } from "../../reference/lib/x-profile";
 import { underlyingSlug } from "../../reference/lib/asset-navigation";
 import { LAUNCH_COPY, POPULAR_ASSET_KEYS, isLaunchAsset } from "../../lib/launch-admission";
+import { IS_TESTNET, isTestnetSymbol } from "../../lib/testnet-catalogue";
 import { featureLock, playLock } from "../../lib/feature-flags";
 import { FeatureBadge } from "../../components/FeatureLock";
 
@@ -30,8 +31,10 @@ const cx = (...names: (string | false | null | undefined)[]) => names.filter(Boo
 const assetSrc = (key: string) => base + B.logoPath(key === B.CASH.key ? { category: "crypto", key, symbol: key } : B.assetOf(key));
 // 「Popular」快速加入列：新手最常選的幾個資產，名單在 lib/launch-admission.ts（POPULAR_ASSET_KEYS）。
 // 不存在、B.canPickAsset 不放行、或上線時還不能上架的會在 render 時濾掉，不會出現壞掉的 chip。
-// 上線時能不能上架（cre8-app#51）：只看 lib/launch-admission.ts 的清單。testnet 模式有自己的 offered 名單，不套這個。
-const opensAtLaunch = (asset: B.Asset) => isLaunchAsset(asset.token);
+// 上線時能不能上架（cre8-app#51）：主網只看 lib/launch-admission.ts 的 38 個。
+// 部署在 BSC 測試網（VITE_CHAIN_ID=97）時改看測試網的 92 個（cre8-app#86，lib/testnet-catalogue.ts），用鏈上符號比對。
+// 下面的 `testnet` prop 是參考設計的另一種測試網模式（offered 名單），app 沒有用到，不套這個。
+const opensAtLaunch = (asset: B.Asset) => IS_TESTNET ? isTestnetSymbol(asset.symbol) : isLaunchAsset(asset.token);
 // 還不能加的資產標什麼（cre8-app#58）：Ondo 的冷門股是「主網開放」，其餘沿用「After launch」。
 // 開關在 lib/feature-flags.ts 的 `ondoStocks`。
 function laterCopy(asset: B.Asset): { short: string; long: string } {

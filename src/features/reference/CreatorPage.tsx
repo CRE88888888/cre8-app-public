@@ -1,6 +1,6 @@
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { useBodyClass } from '../../lib/use-body-class';
-import { REFERENCE_FUNDS } from '../../lib/public-funds';
+import { LISTED_FUNDS } from '../../lib/public-funds';
 import { creatorId, rankCreators } from '../../lib/creators';
 import { periodMetrics, selectFunds } from '../../reference/lib/fund-explore';
 import { performancePeriod } from '../../reference/lib/fund-navigation';
@@ -14,7 +14,7 @@ export function CreatorPage() {
   const [params, setParams] = useSearchParams();
   const location = useLocation();
   const period = performancePeriod(params.get('period'));
-  const creator = rankCreators(REFERENCE_FUNDS, period).find(entry => entry.id === creatorId(id));
+  const creator = rankCreators(LISTED_FUNDS, period).find(entry => entry.id === creatorId(id));
   const backTo = safePublicReturn(params.get('returnTo') ?? '/leaderboard', window.location.origin);
   if (!creator) return <main className="page"><h1>Creator not found</h1><Link to="/leaderboard">All creators</Link></main>;
   const filters = creatorFilters(params);
@@ -22,7 +22,7 @@ export function CreatorPage() {
     filters.asset ? [filters.asset] : [],
   ).filter((fund) => matchesReturn(periodMetrics(fund, period).returnPct, filters.direction));
   if (filters.order === 'name') funds.sort((a, b) => a.name.localeCompare(b.name));
-  const fullDays = longestHistory(REFERENCE_FUNDS, period);
+  const fullDays = longestHistory(LISTED_FUNDS, period);
   return (
     <main className="explore-wrap" id="fund-explore">
       <Link className="vault-back" to={backTo}>← Back</Link>

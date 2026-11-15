@@ -1,6 +1,6 @@
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useBodyClass } from '../../lib/use-body-class';
-import { REFERENCE_FUNDS, pct } from '../../lib/public-funds';
+import { LISTED_FUNDS, pct } from '../../lib/public-funds';
 import { CRE8_CREATOR, creatorPath, rankCreators } from '../../lib/creators';
 import { performancePeriod } from '../../reference/lib/fund-navigation';
 import { assetClassesOf } from '../../reference/lib/fund-explore';
@@ -12,7 +12,7 @@ export function Leaderboard() {
   const period = performancePeriod(params.get('period'));
   const query = params.get('q') ?? '';
   const filters = creatorFilters(params);
-  const ranked = rankCreators(REFERENCE_FUNDS, period);
+  const ranked = rankCreators(LISTED_FUNDS, period);
   if (filters.order === 'funds') ranked.sort((a, b) => b.funds.length - a.funds.length);
   if (filters.order === 'name') ranked.sort((a, b) => a.name.localeCompare(b.name));
   const creators = ranked.map((creator, index) => ({ ...creator, rank: index + 1 })).filter((creator) =>

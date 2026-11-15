@@ -11,6 +11,7 @@
  */
 import { MOCK_FUNDS } from '../data/mock-funds';
 import { LAUNCH_COPY, notOpenSymbols } from './launch-admission';
+import { IS_TESTNET, isListedFund, isTestnetSymbol } from './testnet-catalogue';
 
 export type FundLaunchStatus = {
   /** `open` = 成分全部可上架；`preview` = 展示中，尚未開放投資。 */
@@ -19,6 +20,7 @@ export type FundLaunchStatus = {
   missing: string[];
 };
 
+/** 主網：成分全部在 38 個准入資產裡才可投資。 */
 const STATUS_BY_SLUG: ReadonlyMap<string, FundLaunchStatus> = new Map(
   MOCK_FUNDS.map((fund) => {
     const missing = notOpenSymbols(fund.holdings);
@@ -29,17 +31,32 @@ const STATUS_BY_SLUG: ReadonlyMap<string, FundLaunchStatus> = new Map(
 );
 
 /**
+ * 測試網（cre8-app#86）：只有列出來的 16 檔、而且成分全部在 92 個測試網資產裡才可投資。
+ * 沒列出來的 14 檔一律是 preview（直接打網址進去也不能買）。
+ */
+const TESTNET_STATUS_BY_SLUG: ReadonlyMap<string, FundLaunchStatus> = new Map(
+  MOCK_FUNDS.map((fund) => {
+    const missing = [...new Set(fund.holdings.map((holding) => holding.symbol).filter((symbol) => !isTestnetSymbol(symbol)))];
+    const open = isListedFund(fund.slug, true) && fund.holdings.length > 0 && missing.length === 0;
+    return [fund.slug, { status: open ? 'open' : 'preview', missing }];
+  }),
+);
+
+/**
  * 這檔展示基金的上線狀態。
  * 不是目錄裡的展示基金（例如 Community 策略 `/funds/strategy/:id`）回 null：那些是真的上鏈的策略，不套這個標示。
  */
-export function fundLaunchStatus(slug: string | null | undefined): FundLaunchStatus | null {
-  return (typeof slug === 'string' && STATUS_BY_SLUG.get(slug)) || null;
+export function fundLaunchStatus(slug: string | null | undefined, testnet: boolean = IS_TESTNET): FundLaunchStatus | null {
+  return (typeof slug === 'string' && (testnet ? TESTNET_STATUS_BY_SLUG : STATUS_BY_SLUG).get(slug)) || null;
 }
 
-/** 上線時可投資的展示基金 slug（照目錄順序）。 */
-export const INVESTABLE_FUND_SLUGS: readonly string[] = MOCK_FUNDS
-  .filter((fund) => STATUS_BY_SLUG.get(fund.slug)?.status === 'open')
-  .map((fund) => fund.slug);
+/** 可投資的展示基金 slug（照目錄順序）。 */
+export function investableFundSlugs(testnet: boolean = IS_TESTNET): string[] {
+  return MOCK_FUNDS.filter((fund) => fundLaunchStatus(fund.slug, testnet)?.status === 'open').map((fund) => fund.slug);
+}
+
+/** 上線（主網）時可投資的展示基金 slug。 */
+export const INVESTABLE_FUND_SLUGS: readonly string[] = investableFundSlugs(false);
 
 /**
  * 基金頁上的一句說明。`label` 把鏈上符號換成給人看的代號（`NVDAB` → `NVDA`）。
