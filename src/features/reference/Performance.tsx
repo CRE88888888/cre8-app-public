@@ -130,7 +130,7 @@ export function Performance({
           className={`chart public-chart ${positive ? "pos" : "neg"}`}
           tabIndex={0}
           role="group"
-          aria-label="Share price history. Use arrow keys to explore."
+          aria-label="Return history. Use arrow keys to explore."
           onPointerMove={(e) => {
             const rect = e.currentTarget
               .querySelector("svg")
@@ -232,8 +232,7 @@ export function Performance({
           {hover !== null && points[hover] && first && (
             <span className="public-chart-readout" role="status">
               {date(points[hover].t)} ·{" "}
-              {pct((points[hover].v / first.v - 1) * 100)} ·{" "}
-              {points[hover].v.toFixed(4)} USDT
+              {pct((points[hover].v / first.v - 1) * 100)}
             </span>
           )}
         </div>
@@ -244,13 +243,8 @@ export function Performance({
           <dt>Max drawdown</dt>
           <dd>{pct(metrics.maxDrawdown)}</dd>
         </div>
-        <div>
-          <dt>Share price</dt>
-          <dd>
-            {fund.sharePrice.toFixed(4)}
-            <small> USDT</small>
-          </dd>
-        </div>
+        {/* 不顯示 share price：資產放在每個人自己的 smart account，沒有份額，也就沒有每份價格。
+            走勢圖的值是「1 塊錢照這個配置跑」的模型指數，只拿來算報酬，不當成價格顯示。 */}
         {/* Sharpe 與波動原本藏在「Performance details」裡，要多點一次才看得到。 */}
         <div>
           <dt>Sharpe ratio</dt>

@@ -68,7 +68,7 @@
 - 形狀系統（2026-11-11 使用者決定，取代原本的直角按鈕）：會按的東西一律膠囊（只有圖示時為正圓）；文字框與下拉選單為 12px 圓角矩形；卡片、抽屜、封面沿用各自較大的圓角；圖片縮圖維持既有比例。規則集中在 `mobile-app.css` 的 app-shapes layer 末段。
 - 不用外框卡片堆版面：摘要區不加灰底外框與頂部粗線，只用底部細線；清單是連續列表、列間細線；狀態標籤為「色點＋文字」，不用外框等寬字小方塊；不放重複的裝飾圖示。
 - 桌面頁首：未連錢包時 Connect wallet 為深色主要按鈕，連上後為淺色帳戶膠囊；Studio／Investing 為次要文字按鈕。桌面主要按鈕一律深色（ink）。
-- 基金頁（桌面）：報酬標籤在數字上方（「Model return · 期間」），Max drawdown 與 Share price 並排；交易面板內的輸入區不再是框中框。
+- 基金頁（桌面）：報酬標籤在數字上方（「Model return · 期間」），關鍵數字是 Max drawdown、Sharpe ratio、Volatility 三個（沒有 Share price：資產在每個人自己的 smart account，沒有份額）；交易面板內的輸入區不再是框中框。
 - Demo 期間，Community 策略（`/funds/strategy/:id`）與 `VITE_LIVE_FUNDS` 列出的範例基金走真實存入／提領；其餘範例基金可操作到送出，送出時顯示 whitelist 提示，不簽名、不送交易。
 - 少讓使用者做決定：同一畫面只放一個 Connect wallet／Create fund；項目少時不顯示搜尋與篩選（Creators 9 位以上才顯示，網址已帶篩選時仍顯示以便清除）；Funds 桌面的篩選收成一顆 Filters（與手機一致），有套用時顯示數量。空狀態在桌面置中。
 - 模式切換按鈕寫出動作：投資模式為「＋ Creator Studio」（品牌藍灰淡色底），Studio 內為「← Exit Studio」（中性文字按鈕），並附 title 說明。

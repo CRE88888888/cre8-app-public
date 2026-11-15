@@ -43,10 +43,10 @@
   body.atp-formal-fund #root .performance-dates { color: var(--steel); font: 400 13px/1 var(--mono); }
   body.atp-formal-fund #root .performance-return { margin: 0; font: 600 56px/1 var(--sans); letter-spacing: -2.2px; }
 
-  /* 四個關鍵數字：一列，用直線分隔，不做成小方塊。 */
+  /* 三個關鍵數字：一列，用直線分隔，不做成小方塊。 */
   body.atp-formal-fund #root #keyfig.public-kpis {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0;
     margin: 24px 0 0;
     padding: 0;
@@ -211,17 +211,19 @@
   }
 }
 
-/* 手機：四個關鍵數字排成 2×2。 */
+/* 手機：三個關鍵數字排成一列。 */
 @media (max-width: 719px) {
   body.atp-formal-fund #root #keyfig.public-kpis {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 14px 16px;
   }
   body.atp-formal-fund #root #keyfig.public-kpis > div {
     display: grid;
     grid-column: auto !important;
     gap: 4px;
+    /* 窄螢幕「Max drawdown」會換行：數字一律靠底，三欄才對齊。 */
+    align-content: space-between;
     justify-items: start;
     width: auto;
     margin: 0 !important;
