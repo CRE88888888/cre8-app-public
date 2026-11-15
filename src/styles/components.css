@@ -743,10 +743,10 @@ html body #root .signin-screen .btn.btn {
   font-weight: 600;
   font-size: 17px;
   line-height: 1;
-  transition: background-color 0.12s ease, transform 0.12s ease;
+  transition: background-color 0.12s ease, transform 0.32s var(--spring);
 }
 
-html body #root .signin-screen .btn.btn:active:not(:disabled) { transform: scale(0.98); }
+html body #root .signin-screen .btn.btn:active:not(:disabled) { transform: scale(var(--press-scale)); transition-duration: var(--press-in); }
 
 /* 主要動作（Send code、Sign in）與 X：實心。X 依它的品牌規範用純黑。 */
 html body #root .signin-screen .btn.btn:not(.ghost) { background: var(--ink); color: var(--white); }

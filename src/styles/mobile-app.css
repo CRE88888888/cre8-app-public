@@ -1233,7 +1233,8 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
   :root {
     --glass-fill: rgb(255 255 255 / 58%);
     --glass-edge: rgb(255 255 255 / 75%);
-    --glass-blur: blur(18px) saturate(190%) brightness(1.06);
+    /* 30px：後面的內容要糊到只剩顏色，看得到「有東西在下面」但讀不到字（第三支影片「Blur, don't block」）。 */
+    --glass-blur: blur(30px) saturate(190%) brightness(1.06);
     --glass-shadow:
       0 12px 32px rgb(22 34 45 / 13%),
       0 2px 6px rgb(22 34 45 / 7%),
@@ -1263,8 +1264,8 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
     z-index: -1;
     inset: 0 0 -18px;
     background: linear-gradient(rgb(255 255 255 / 90%) 0%, rgb(255 255 255 / 72%) 62%, rgb(255 255 255 / 0%) 100%);
-    -webkit-backdrop-filter: blur(10px) saturate(160%);
-    backdrop-filter: blur(10px) saturate(160%);
+    -webkit-backdrop-filter: blur(30px) saturate(160%);
+    backdrop-filter: blur(30px) saturate(160%);
     -webkit-mask-image: linear-gradient(#000 60%, transparent);
     mask-image: linear-gradient(#000 60%, transparent);
     opacity: 0;
@@ -1397,8 +1398,8 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
   /* 點擊回饋 */
   #root :is(.fund-row, .creator-table tbody tr, .app-portfolio-ledger > li) { transition: background-color .12s ease; }
   #root :is(.fund-row, .creator-table tbody tr, .app-portfolio-ledger > li):active { background: var(--app-grouped); }
-  #root :is(.btn, [data-slot="button"], .header-wallet) { transition: transform .12s ease, background-color .15s ease; }
-  #root :is(.btn, [data-slot="button"], .header-wallet):not(:disabled):active { transform: scale(.97); }
+  #root :is(.btn, [data-slot="button"], .header-wallet) { transition: transform .32s var(--spring), background-color .15s ease; }
+  #root :is(.btn, [data-slot="button"], .header-wallet):not(:disabled):active { transform: scale(var(--press-scale)); transition-duration: var(--press-in); }
 
   /* 「人名 · 機構」→ 兩行 */
   #root .fund-row .fund-name-sep { display: none; }
@@ -1571,13 +1572,14 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
   animation: cre8-settle .22s var(--ease) .16s both;
 }
 /* Secondary action：成功的打勾彈一下。從「處理中」換成「成功」時圖示是新的元素，會在那一刻播。 */
-[data-sonner-toast][data-type="success"] [data-icon] > svg,
-.app-ticket-result[data-tone="confirmed"] .app-ticket-result-icon > svg {
+[data-sonner-toast][data-type="success"] [data-icon] > svg {
   animation: cre8-pop .32s cubic-bezier(.34, 1.56, .64, 1) .08s both;
 }
-.app-ticket-result[data-tone="confirmed"] .app-ticket-result-icon {
-  animation: cre8-ring .45s ease-out .12s;
-}
+/* 下單結果的成功（components/SuccessTick.tsx）：先畫圓 280ms，再畫勾 190ms，共 470ms。 */
+.success-tick { stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.success-tick :is(.success-tick__circle, .success-tick__check) { stroke-dasharray: 1; }
+.success-tick__circle { animation: cre8-draw .28s cubic-bezier(.65, 0, .35, 1) both; }
+.success-tick__check { animation: cre8-draw .19s cubic-bezier(.22, 1, .36, 1) .28s both; }
 .app-ticket-result[data-tone="confirmed"] :is(strong, .app-ticket-receipt-amount, p) {
   animation: cre8-settle .22s var(--ease) .1s both;
 }
@@ -1596,10 +1598,7 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
   60% { opacity: 1; transform: scale(1.15); }
   100% { transform: scale(1); }
 }
-@keyframes cre8-ring {
-  from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pos) 40%, transparent); }
-  to { box-shadow: 0 0 0 10px color-mix(in srgb, var(--pos) 0%, transparent); }
-}
+@keyframes cre8-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 @keyframes cre8-shake {
   20% { transform: translateX(-6px); }
   40% { transform: translateX(5px); }
@@ -1609,6 +1608,34 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
 @media (prefers-reduced-motion: reduce) {
   [data-sonner-toast] :is([data-icon], [data-content]),
   [data-sonner-toast] [data-icon] > svg,
-  .app-ticket-result :is(.app-ticket-result-icon, .app-ticket-result-icon > svg, strong, .app-ticket-receipt-amount, p),
+  .app-ticket-result :is(.app-ticket-result-icon, strong, .app-ticket-receipt-amount, p),
+  .success-tick :is(.success-tick__circle, .success-tick__check),
   #deposit-amount, .signin-screen input { animation: none; }
+}
+
+/* 卡片與側欄展開（Performance details、策略設定）：原本沿用 shadcn 的 500ms ease-in-out。
+   改成 350ms、先快後慢（第二支影片「Fast, then slow」）；收起 200ms。手機下單的底部彈窗另有規則。 */
+[data-slot="sheet-content"][data-state="open"]:not(.app-bottom-sheet) {
+  animation-duration: .35s;
+  animation-timing-function: cubic-bezier(.22, 1, .36, 1);
+}
+[data-slot="sheet-content"][data-state="closed"]:not(.app-bottom-sheet) {
+  animation-duration: .2s;
+  animation-timing-function: cubic-bezier(.4, 0, 1, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="sheet-content"] { animation: none; }
+}
+
+/* 手機的通知從底部膠囊「長出來」（第三支影片「Morph, don't pop」，iPhone 的動態島）：
+   先是一顆窄膠囊，再撐開成整張卡。用 clip-path 做，不碰 sonner 自己控制堆疊的 transform。 */
+@media (max-width: 719px) {
+  [data-sonner-toast] { animation: cre8-island .38s cubic-bezier(.32, .72, 0, 1); }
+}
+@keyframes cre8-island {
+  from { clip-path: inset(30% 32% 0 32% round 999px); }
+  to { clip-path: inset(0 0 0 0 round 14px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-sonner-toast] { animation: none; }
 }

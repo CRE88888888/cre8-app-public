@@ -15,6 +15,7 @@ import { TradeRoutes } from '../../components/TradeRoutes';
 import { getAssets, getPortfolioActivity, getPortfolioStatus, getPortfolios } from '../../lib/api';
 import type { PortfolioStatus } from '../../lib/api';
 import { formatUsdE8, shortAddress } from '../../lib/format';
+import { RollingNumber } from '../../components/RollingNumber';
 import { CHAIN_ID, publicClientFor } from '../../lib/kernel';
 import type { RenewalWallet } from '../../lib/kernel';
 import { REFERENCE_METADATA } from '../../lib/public-funds';
@@ -169,7 +170,7 @@ export function PortfoliosPage(): ReactNode {
           <ProfileHeader address={address} onSettings={() => setPanel('settings')} />
           <section className="app-portfolio-summary" aria-label="Portfolio summary">
             <p className="app-portfolio-kicker">Total portfolio value</p>
-            <strong className="app-portfolio-value">{totalUsd}</strong>
+            <strong className="app-portfolio-value"><RollingNumber key={totalUsd} value={totalUsd} /></strong>
             <div className="app-portfolio-meta">
               <span>{items.length} {items.length === 1 ? 'fund account' : 'fund accounts'}</span>
             </div>

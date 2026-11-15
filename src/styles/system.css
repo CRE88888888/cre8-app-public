@@ -61,6 +61,10 @@
   --app-card-line: var(--hair);
   --shadow-pop: 0 12px 32px rgba(12, 23, 34, .12), 0 2px 6px rgba(12, 23, 34, .06);
   --ease: cubic-bezier(.2, .7, .2, 1);
+  /* 按鈕「先沉、再彈回」：按下 80ms 沉到 95%，放開時用會超過一點的曲線彈回。 */
+  --press-scale: .95;
+  --press-in: 80ms;
+  --spring: cubic-bezier(.34, 1.56, .64, 1);
 }
 /* 手機殼層自己重設了一份舊色票，跟著換。 */
 #root :is(.app-masthead, .app-mobile-nav),
@@ -125,7 +129,7 @@ html body .btn {
   border: 1px solid transparent;
   font: 600 15px/1 var(--sans);
   letter-spacing: -.1px;
-  transition: background-color .15s var(--ease), border-color .15s var(--ease), color .15s var(--ease), transform .12s var(--ease);
+  transition: background-color .15s var(--ease), border-color .15s var(--ease), color .15s var(--ease), transform .32s var(--spring);
 }
 html body #root .btn:not(.ghost, .light, .btn--ghost, :disabled),
 html body .btn:not(.ghost, .light, .btn--ghost, :disabled) { border-color: var(--ink); background: var(--ink); color: var(--white); }
@@ -139,7 +143,7 @@ html body .btn:is(.ghost, .light, .btn--ghost):not(:disabled):hover { border-col
 html body #root .btn:is(.sm, .btn--sm),
 html body .btn:is(.sm, .btn--sm) { min-height: var(--h-sm); padding: 0 14px; font-size: 14px; font-weight: 500; }
 html body #root .btn:active:not(:disabled),
-html body .btn:active:not(:disabled) { transform: scale(.98); }
+html body .btn:active:not(:disabled) { transform: scale(var(--press-scale)); transition-duration: var(--press-in); }
 html body #root .btn:disabled,
 html body .btn:disabled { border-color: transparent; background: var(--snow); color: var(--slate); }
 @media (pointer: coarse) {
@@ -300,8 +304,9 @@ html body #root :is(.public-periods, .creator-periods, .seg) :is([aria-pressed="
 .roll-reel {
   display: block;
   transform: translateY(calc(var(--roll-to) * -1.1em));
-  /* 0.3 秒、每位數只錯開 25ms：切期間時每次都會重播，太長會讓人等。 */
-  animation: roll-in .3s cubic-bezier(.2, .75, .2, 1) calc(var(--roll-order) * 25ms) both;
+  /* 每位數 0.3 秒、彼此錯開 100ms（使用者分享的第二支影片「Roll, don't jump」）：
+     一位一位落定，看得出是在滾，不是整串跳成新值。 */
+  animation: roll-in .3s cubic-bezier(.2, .75, .2, 1) calc(var(--roll-order) * 100ms) both;
   will-change: transform;
 }
 .roll-reel i { display: block; height: 1.1em; font-style: normal; line-height: 1.1em; text-align: center; }

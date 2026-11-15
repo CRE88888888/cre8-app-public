@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { AppIcon } from '../../components/AppIcon';
+import { SuccessTick } from '../../components/SuccessTick';
 import { Link } from 'react-router-dom';
 import { Spinner, TechnicalDetails } from '../../components/ui';
 
@@ -79,7 +80,8 @@ export function TicketReceipt({
     <div className="app-ticket-receipt">
       <div className="app-ticket-result" data-tone={progress.tone} role="status">
         <span className="app-ticket-result-icon">
-          {progress.tone === 'pending' || busy ? <Spinner /> : <AppIcon name={icon} size={22} />}
+          {progress.tone === 'pending' || busy ? <Spinner />
+            : icon === 'check' ? <SuccessTick size={24} /> : <AppIcon name={icon} size={22} />}
         </span>
         <strong>{progress.title}</strong>
         {progress.amount && <span className="app-ticket-receipt-amount">{progress.amount}</span>}
