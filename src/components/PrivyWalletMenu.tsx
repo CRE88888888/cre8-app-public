@@ -138,15 +138,14 @@ export function PrivyWalletMenu({ inline = false, showIcon = false, iconOnly = f
     : busy || wantLogin ? 'Signing in…' : signInFor === undefined ? 'Sign in' : signInCopy(signInFor).button;
 
   /*
-   * 標頭右上角的那一顆（不是頁面內的）平常不顯示（使用者 2026-11-15）：
+   * 標頭右上角的那一顆（不是頁面內的）在 Privy 模式**完全不顯示**（使用者 2026-11-15：
+   * 「不是說就不用右上角的錢包圖案了嗎？因為已經有 profile 了」）。
    * - 沒登入：逛的時候不用登入，要買、要賣、要建立基金時才出現登入面板（#68）。
    * - 已登入：帳號相關的事（綁定、匯出私鑰、登出）都在 Profile 的齒輪面板，導覽列已經有 Profile。
-   * 只有登入進行中、失敗、Privy 載不起來時才出現，讓使用者看得到進度與原因（Google 轉回來後換 session
-   * 就是在這時候；失敗時面板會自己攤開）。元件本身一直掛著：頁面上的「Sign in」連結與 `/#wallet`
-   * 是靠這裡的事件監聽打開登入的。
+   * - 登入進行中或失敗：進度與原因顯示在頁面內的登入按鈕下面（Profile、下單區），不在標頭。
+   * 元件本身一直掛著：頁面上的「Sign in」連結與 `/#wallet` 是靠這裡的事件監聽打開登入的。
    */
-  const headerHidden = !inline && !busy && !failed && !unavailable && !wantLogin && !open;
-  if (headerHidden) return <div className="wallet-menu" ref={rootRef} hidden />;
+  if (!inline) return <div className="wallet-menu" ref={rootRef} hidden />;
 
   return (
     <div className={inline ? 'wallet-menu wallet-menu--inline' : 'wallet-menu'} ref={rootRef}>
