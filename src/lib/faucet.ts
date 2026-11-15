@@ -75,7 +75,7 @@ export function faucetSuccess(body: { amountWei?: unknown; txHash?: unknown; sta
   };
 }
 
-const QUOTA_MESSAGE = 'No test USDT for you right now: you can claim once a day, and there is a daily total for everyone. Try again after 00:00 UTC.';
+const QUOTA_MESSAGE = 'You have already claimed today’s 1,000 test USDT, or today’s total for everyone has run out. Come back tomorrow (after 00:00 UTC).';
 const LATER_MESSAGE = 'Test USDT is not available right now. Please try again later.';
 
 export function faucetFailure(error: unknown): FaucetOutcome {
@@ -127,4 +127,47 @@ export class FaucetError extends Error {
     this.kind = outcome.kind;
     this.technical = cause instanceof ApiError ? `${cause.status === 0 ? 'NETWORK' : `${cause.status} · ${cause.code}`}\n${cause.message}` : '';
   }
+}
+
+// ---- 迎新與每日領取（backend#94）----
+
+/** 參數總表：迎新 10,000、每日 1,000（測試幣，沒有價值）。 */
+export const WELCOME_TEST_USDT = '10,000';
+export const DAILY_TEST_USDT = '1,000';
+
+/** 迎新交易送出了但結果還不知道（buy-funding 回 202）：稍後再按一次，後端會接著同一筆。 */
+export const WELCOME_PENDING = {
+  title: 'Welcome test USDT on its way',
+  message: `Your ${WELCOME_TEST_USDT} welcome test USDT has been sent but the network has not confirmed it yet. Wait a minute, then press the button again.`,
+} as const;
+
+/** 迎新不能用在這檔了（給了別檔、失敗，或在這檔用完了）：改用每日領取。 */
+export const DAILY_REQUIRED = {
+  title: 'Claim today’s test USDT',
+  message: `The ${WELCOME_TEST_USDT} welcome test USDT is one per person and has already been used. Claim today’s ${DAILY_TEST_USDT} test USDT to invest in this fund.`,
+} as const;
+
+/** buy-funding 的錯誤是不是「要改用每日領取」。 */
+export function needsDailyFaucet(error: unknown): boolean {
+  return error instanceof ApiError && error.code.toUpperCase() === 'DAILY_FAUCET_REQUIRED';
+}
+
+/**
+ * 每日領取到帳之後要再記一筆投入（funding-lots）。記帳沒成功（後端忙、交易還沒確認）時把 claimId 留在這台裝置，
+ * 下一次按買入時先補記，不然那 1,000 只是帳戶裡的現金、不會被買進去。
+ */
+const claimKey = (portfolioId: number) => `cre8.faucet-claim.${portfolioId}`;
+export function rememberClaim(portfolioId: number, claimId: string): void {
+  try { localStorage.setItem(claimKey(portfolioId), claimId); } catch { /* 只在這次造訪有效 */ }
+}
+export function pendingClaim(portfolioId: number): string | null {
+  try { return localStorage.getItem(claimKey(portfolioId)); } catch { return null; }
+}
+export function forgetClaim(portfolioId: number): void {
+  try { localStorage.removeItem(claimKey(portfolioId)); } catch { /* 沒有就算了 */ }
+}
+/** 補記失敗時要不要留著下次再試：後端忙或暫時讀不到（409 忙碌、503、網路）才留；其他（例如來源不屬於這個帳戶）就丟掉。 */
+export function retryClaimLater(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return true;
+  return error.status === 0 || error.status === 503 || (error.status === 409 && /BUSY|PENDING|UNKNOWN|UNAVAILABLE|NOT_CONFIRMED/.test(error.code.toUpperCase()));
 }

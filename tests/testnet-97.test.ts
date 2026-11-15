@@ -241,7 +241,7 @@ test("claiming test USDT: the outcomes match the backend's implementation (backe
   // 後端實作的錯誤代碼。
   expect(faucetFailure(new ApiError(429, "FAUCET_QUOTA_EXCEEDED", "x"))).toEqual({
     kind: "quota",
-    message: "No test USDT for you right now: you can claim once a day, and there is a daily total for everyone. Try again after 00:00 UTC.",
+    message: "You have already claimed today’s 1,000 test USDT, or today’s total for everyone has run out. Come back tomorrow (after 00:00 UTC).",
   });
   expect(faucetFailure(new ApiError(429, "FAUCET_RECIPIENT_LIMIT", "x"))).toEqual({
     kind: "limit",
@@ -291,7 +291,7 @@ test("a failed claim becomes an error the page can show, with the raw answer kep
   expect(error).toBeInstanceOf(Error);
   expect(error.title).toBe("Test USDT not claimed");
   expect(error.kind).toBe("quota");
-  expect(error.message).toContain("you can claim once a day");
+  expect(error.message).toContain("Come back tomorrow");
   expect(error.technical).toBe("429 · FAUCET_QUOTA_EXCEEDED\none claim per owner per UTC day; site daily cap also applies");
   expect(new FaucetError(faucetFailure(new Error("x"))).technical).toBe("");
 });
@@ -312,7 +312,7 @@ test("on the testnet a buy is funded by the faucet, into the fund account, never
   expect(chainProfile(1337).faucetFunded).toBe(false);
   const fund = fs.readFileSync("src/features/fund/FundPage.tsx", "utf8");
   // 送給水龍頭的是基金帳戶（`account`），不是錢包地址。
-  expect(fund).toContain("faucetSuccess(await postFaucetUsdt(token, account as string))");
+  expect(fund).toContain("await postFaucetUsdt(token, account as string)");
   expect(fund).not.toMatch(/postFaucetUsdt\(token, (wallet|walletAddress|connectedAddress)/);
   // 錢包轉 USDT 只在非測試網的分支裡。
   const transfer = fund.indexOf("hash = await sendUsdt(");

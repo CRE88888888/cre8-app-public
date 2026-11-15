@@ -5,7 +5,7 @@ import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { encodeFunctionData, formatEther, formatUnits, parseEther, parseUnits } from 'viem';
 import { tidyAmountInput } from '../../lib/amount-input';
 import type { Address } from 'viem';
-import { closePosition, continueRedeem, enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, getRenewalParams, getStrategy, listStrategies, postFaucetUsdt, postRebalance, postRenewalResult, redeemPortfolio } from '../../lib/api';
+import { closePosition, continueRedeem, enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, getRenewalParams, getStrategy, listStrategies, postBuyFunding, postFaucetUsdt, postFundingLot, postRebalance, postRenewalResult, redeemPortfolio } from '../../lib/api';
 import { CHAIN, CHAIN_ID, approveCalldata, bsc as appChain, publicClientFor, readOnlyClient, sendGasTopUp, sendRenewalUserOp, sendSudoCalls, sendSweep, sendWithdraw } from '../../lib/kernel';
 import type { PortfolioStatus, RedeemResult } from '../../lib/api';
 import { MOCK_FUNDS } from '../../data/mock-funds';
@@ -33,7 +33,7 @@ import { buyAllowanceState, buyLimitMessage, checkEnrollment, describePause, exp
 import { MAX_SELL_BATCHES, SellBatchError, SellUnfinished, afterSellRun, formatRemainingUsd, runSellBatches } from '../../lib/sell-batches';
 import { cashUsdOf, sellTargetUsd, totalUsdOf, withdrawShortfallNote } from '../../lib/withdraw-plan';
 import { TradeFailureError, explainTradeFailure } from '../../lib/trade-failure';
-import { FAUCET_UNCONFIRMED, FaucetError, faucetFailure, faucetSuccess } from '../../lib/faucet';
+import { DAILY_REQUIRED, DAILY_TEST_USDT, FAUCET_UNCONFIRMED, FaucetError, WELCOME_PENDING, WELCOME_TEST_USDT, faucetFailure, faucetSuccess, forgetClaim, needsDailyFaucet, pendingClaim, rememberClaim, retryClaimLater } from '../../lib/faucet';
 import { usePrivyAuth } from '../../store/privy';
 import { AccountControls } from './AccountControls';
 import { accountOnchainKey, loadAccountOnchain, useAccountOnchain } from './use-account-onchain';
@@ -349,6 +349,12 @@ function FundPageBody(): ReactNode {
   const whitelistOnly = false;
   /** 測試網：買入的錢由水龍頭直接打進基金帳戶，不從錢包轉（cre8-app#62）。 */
   const faucetBuy = CHAIN.faucetFunded && !whitelistOnly;
+  /**
+   * 測試網（backend#94）：第一次買入用迎新 10,000（每人一次，後端在 buy-funding 自動發）；之後每天領 1,000。
+   * 這檔已經有部位，或後端說迎新已經用掉（DAILY_FAUCET_REQUIRED），按鈕就改成每日領取。
+   * 還沒買過的人不先給每日領取：帳戶裡先有了錢，後端就不會再發迎新。
+   */
+  const [dailyNeeded, setDailyNeeded] = useState(false);
   const connectedAddress = useWallet((state) => state.address);
   const [whitelistNotice, setWhitelistNotice] = useState<TicketAction | null>(null);
   const [reviewKey, setReviewKey] = useState<string | null>(null);
@@ -576,10 +582,10 @@ function FundPageBody(): ReactNode {
       return;
     }
     if (faucetBuy && action === 'deposit') {
-      // 測試網的買入沒有金額可以確認：直接開始（領測試 USDT → 投資）。
+      // 測試網的買入沒有金額可以確認：直接開始（迎新或每日領取 → 投資）。
       if (token === null || wallet === null || usdt === undefined || strategy === undefined) return;
       setReviewKey(null);
-      void deposit();
+      void deposit(dailyMode);
       return;
     }
     if (mobile) {
@@ -595,6 +601,9 @@ function FundPageBody(): ReactNode {
     if (action === 'deposit') void deposit();
     else void withdraw();
   }
+
+  /** 測試網這一次按買入是不是每日領取（見上面 `dailyNeeded`）。 */
+  const dailyMode = faucetBuy && (dailyNeeded || (holding !== undefined && live !== undefined && totalUsd() > 0));
 
   const cover = reference ? REFERENCE_METADATA[reference.slug]?.cover : undefined;
   const ticketFund = (
@@ -767,11 +776,14 @@ function FundPageBody(): ReactNode {
                     }}
                   >
                     {faucetBuy ? (
-                      // 測試網：錢由水龍頭直接打進這檔基金的帳戶，不用填金額、不用從錢包轉（cre8-app#62）。
-                      <div className="swap-box" data-entry="faucet-buy">
-                        <div className="swap-head"><span className="swap-label">Test USDT</span></div>
+                      // 測試網：錢直接打進這檔基金的帳戶，不用填金額、不用從錢包轉（cre8-app#62）。
+                      // 第一次買入是迎新 10,000（每人一次），之後每天領 1,000（backend#94）。都是測試幣，沒有價值。
+                      <div className="swap-box" data-entry="faucet-buy" data-mode={dailyMode ? 'daily' : 'welcome'}>
+                        <div className="swap-head"><span className="swap-label">Test USDT</span><span className="badge">Testnet</span></div>
                         <p className="fine" style={{ margin: 0 }}>
-                          Free test USDT goes straight into this fund’s account and is invested for you. Once a day. It has no value.
+                          {dailyMode
+                            ? `Claim ${DAILY_TEST_USDT} test USDT once a day. It goes straight into this fund’s account and is invested for you. Test tokens have no value.`
+                            : `Your first purchase comes with ${WELCOME_TEST_USDT} test USDT, once per person. It goes straight into this fund’s account and is invested for you. After that, claim ${DAILY_TEST_USDT} test USDT a day. Test tokens have no value.`}
                         </p>
                         {holding !== undefined && live !== undefined && (
                           <span className="swap-sub">In this fund now: {formatUsd(totalUsd())} · cash {formatUsd(cashUsd())}</span>
@@ -839,7 +851,7 @@ function FundPageBody(): ReactNode {
                       )
                     ) : token === null ? <WalletMenu inline signInFor={{ purpose: 'buy', subject: fund.name }} /> : (
                       <button type="submit" className="btn primary block" disabled={ticketBusy || wallet === null || usdt === undefined || (!faucetBuy && (depositTooLarge || (mobile && depositUnits <= 0n)))}>
-                        {faucetBuy ? (busy ? 'Working…' : 'Claim test USDT and invest') : busy ? 'Sending…' : mobile ? 'Review order' : 'Buy'}
+                        {faucetBuy ? (busy ? 'Working…' : dailyMode ? `Claim ${DAILY_TEST_USDT} test USDT and invest` : `Get ${WELCOME_TEST_USDT} test USDT and invest`) : busy ? 'Sending…' : mobile ? 'Review order' : 'Buy'}
                       </button>
                     )}
                     {token !== null && platformPaused && <p className="fine warn" role="status">{PLATFORM_PAUSED_MESSAGE}</p>}
@@ -1357,7 +1369,8 @@ function FundPageBody(): ReactNode {
     }
   }
 
-  async function deposit(): Promise<void> {
+  /** `daily`：測試網改用每日領取 1,000（迎新已經用掉，或這檔已經有部位）。 */
+  async function deposit(daily = false): Promise<void> {
     if (wallet === null || token === null || strategy === undefined || usdt === undefined) return;
     setBusy(true);
     setError(null);
@@ -1373,6 +1386,8 @@ function FundPageBody(): ReactNode {
     let claimNote: string | null = null;
     /** 測試網：後端回 202（領取的結果未知）時是 false，要自己等到那筆交易上鏈才往下買。 */
     let claimSettled = true;
+    /** 測試網：這次每日領取的 claimId，到帳後要記成投入（funding-lots）。 */
+    let claimId: string | null = null;
     /** 這一輪配置真的成交了。 */
     let allocated = false;
     showProgress({ tone: 'pending', title: 'Preparing your purchase', detail: 'Follow the prompts in your wallet.' });
@@ -1457,23 +1472,69 @@ function FundPageBody(): ReactNode {
       let hash: string | undefined;
       let sent: string;
       if (faucetBuy) {
-        // 測試網：向水龍頭領測試 USDT，直接打進**基金帳戶**（cre8-app#62、backend#72）。
+        // 測試網（backend#94）：錢直接進**基金帳戶**，不從錢包轉（那一筆要 tBNB，email 登入的人沒有）。
         // 後端只收已經 enroll 的帳戶，所以這一步一定在上面的 enroll 之後。
-        // 不從使用者的錢包轉：那一筆是一般交易，要 tBNB 付 gas，而 email 登入的人錢包裡沒有。
-        showProgress({ tone: 'pending', title: 'Claiming test USDT', detail: enrollmentLine ?? 'Sending free test USDT to this fund’s account.' });
-        toast.replace(toastId, { tone: 'pending', title: 'Buy', body: 'Claiming test USDT…' });
-        try {
-          const claimed = faucetSuccess(await postFaucetUsdt(token, account as string));
-          hash = claimed.txHash ?? undefined;
-          sent = claimed.amount;
-          claimSettled = claimed.settled;
-        } catch (cause) {
-          const outcome = faucetFailure(cause);
-          // 今天領過了（或暫時領不到），但帳戶裡還有沒投資的現金：照樣往下，把那筆現金投進去。
-          // 這是「上次領到了、配置沒完成」的重試路徑。帳戶裡什麼都沒有就停下，講清楚原因。
-          if (holding === undefined || cashUsd() < 1) throw new FaucetError(outcome, cause);
-          claimNote = outcome.message;
-          sent = `${formatUsd(cashUsd())} already in the fund`;
+        const target = portfolioIdAfterEnroll;
+        if (target === null) throw new Error('the backend returned no portfolio for this account');
+        // 上次每日領取到帳了、卻沒記成投入（後端忙或交易還沒確認）：先補記。
+        const earlier = pendingClaim(target);
+        let recordedEarlier = false;
+        if (earlier !== null) {
+          await postFundingLot(token, target, { kind: 'faucet_claim', claimId: earlier })
+            .then(() => { forgetClaim(target); recordedEarlier = true; })
+            .catch((cause) => { if (!retryClaimLater(cause)) forgetClaim(target); });
+        }
+        if (daily && recordedEarlier) {
+          // 上次領到的那筆剛補記好：這次不再領（今天已經領過），直接往下買。
+          sent = `${DAILY_TEST_USDT} test USDT`;
+        } else if (daily) {
+          // 每日一鍵領取 1,000：領到之後（下面確認到帳）再記成這檔的投入。
+          showProgress({ tone: 'pending', title: `Claiming ${DAILY_TEST_USDT} test USDT`, detail: enrollmentLine ?? 'Testnet: today’s free test USDT goes straight into this fund’s account. It has no value.' });
+          toast.replace(toastId, { tone: 'pending', title: 'Buy', body: 'Claiming today’s test USDT…' });
+          try {
+            const body = await postFaucetUsdt(token, account as string);
+            const claimed = faucetSuccess(body);
+            if (typeof body.claimId === 'string') {
+              claimId = body.claimId;
+              rememberClaim(target, body.claimId);
+            }
+            hash = claimed.txHash ?? undefined;
+            sent = claimed.amount;
+            claimSettled = claimed.settled;
+          } catch (cause) {
+            // 今天領過了（429）：明天再來。不改用帳戶裡的舊現金，那一筆早就排進買入了。
+            throw new FaucetError(faucetFailure(cause), cause);
+          }
+        } else {
+          // 第一次買入：後端看帳戶是空的、這個人也還沒領過迎新，就 mint 10,000 進來並記成投入。
+          showProgress({ tone: 'pending', title: 'Getting your test USDT', detail: enrollmentLine ?? `Testnet: your first purchase comes with ${WELCOME_TEST_USDT} test USDT, once per person. It has no value.` });
+          toast.replace(toastId, { tone: 'pending', title: 'Buy', body: 'Getting your test USDT…' });
+          let funding;
+          try {
+            funding = await postBuyFunding(token, target);
+          } catch (cause) {
+            if (!needsDailyFaucet(cause)) throw cause;
+            // 迎新給了別檔、失敗了，或在這檔用完了：按鈕改成每日領取，讓使用者自己按。
+            setDailyNeeded(true);
+            showProgress({ tone: 'notice', title: DAILY_REQUIRED.title, detail: DAILY_REQUIRED.message });
+            toast.replace(toastId, { tone: 'warn', title: DAILY_REQUIRED.title, body: DAILY_REQUIRED.message });
+            return;
+          }
+          if (funding.state === 'pending') {
+            showProgress({ tone: 'notice', title: WELCOME_PENDING.title, detail: WELCOME_PENDING.message, hash: funding.txHash ?? undefined });
+            toast.replace(toastId, { tone: 'warn', title: WELCOME_PENDING.title, body: WELCOME_PENDING.message });
+            return;
+          }
+          if (funding.funding === 'welcome_grant' && funding.lot !== null && funding.lot.replayed !== true) {
+            // 後端回 ready 時已經確認這筆 mint 上鏈並記成投入，不必再等這裡的 RPC。
+            sent = `${WELCOME_TEST_USDT} test USDT`;
+          } else {
+            // 沒有新的錢（迎新之前就記過了，或帳戶裡本來就有現金）：用帳戶裡已有的現金往下做。
+            claimNote = funding.funding === 'existing_cash'
+              ? `This fund’s account already holds test USDT, so no welcome test USDT was sent. Claim ${DAILY_TEST_USDT} test USDT a day to add more.`
+              : `No new test USDT this time: the ${WELCOME_TEST_USDT} welcome test USDT is once per person. Claim ${DAILY_TEST_USDT} test USDT a day to add more.`;
+            sent = `${formatUsd(cashUsd())} already in the fund`;
+          }
         }
       } else {
         showProgress({ tone: 'pending', title: 'Approve the USDT transfer in your wallet', detail: enrollmentLine });
@@ -1508,6 +1569,16 @@ function FundPageBody(): ReactNode {
           toast.replace(toastId, { tone: 'warn', title: FAUCET_UNCONFIRMED.title, body: FAUCET_UNCONFIRMED.message });
           return;
         }
+      }
+      if (faucetBuy && claimId !== null && transferState === 'confirmed' && portfolioIdAfterEnroll !== null) {
+        // 每日領取到帳：記成這檔的投入，排進買入（backend BE-2）。沒記成就留著，下次按買入時補記。
+        const target = portfolioIdAfterEnroll;
+        await postFundingLot(token, target, { kind: 'faucet_claim', claimId })
+          .then(() => forgetClaim(target))
+          .catch((cause) => {
+            if (!retryClaimLater(cause)) forgetClaim(target);
+            claimNote = 'Your test USDT arrived, but it could not be scheduled to buy yet. Press the button again in a minute to finish.';
+          });
       }
       if (transferState === 'reverted') {
         showProgress({ tone: 'error', title: 'Transfer reverted', detail: 'The network rejected the transfer.', hash });

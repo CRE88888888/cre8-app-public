@@ -247,6 +247,35 @@ export function postSponsor(token: string, userOperation: PackedSponsorOperation
   return request<SponsorResponse>('/paymaster/sponsor', { method: 'POST', token, body: { userOperation } });
 }
 
+/** 一筆記帳的投入（backend BE-2 的 funding lot；只列前端會用到的欄位）。 */
+export type FundingLot = {
+  id: string;
+  txHash: string | null;
+  amountRaw: string;
+  /** true：這筆之前就記過了（重送同一個來源），這次沒有新的錢。 */
+  replayed?: boolean;
+  fundingStatus?: 'scheduled' | 'waiting_for_merged_budget' | 'recorded';
+};
+
+/**
+ * `POST /portfolios/:id/buy-funding`（backend#94，只在 chain 97）：第一次買入前呼叫。帳戶裡沒有 USDT、這個人也還沒領過
+ * 迎新，後端會 mint 10,000 測試 USDT 進基金帳戶並記成一筆投入（每人一輩子一次）。
+ *   - 200 `ready`：`funding: "welcome_grant"`（迎新，`lot.replayed` 表示之前就記過）或 `"existing_cash"`（帳戶裡已有錢，`lot: null`）。
+ *   - 202 `pending`：迎新交易已送出、結果還不知道；只能稍後重送同一個請求，不能當成已投入。
+ *   - 409 `DAILY_FAUCET_REQUIRED`：迎新給了別檔、失敗，或在這檔用完了；改用每日領取。
+ */
+export type BuyFunding =
+  | { state: 'ready'; funding: 'welcome_grant' | 'existing_cash'; lot: FundingLot | null }
+  | { state: 'pending'; funding: 'welcome_grant'; grantId: string; txHash: string | null; lot: null };
+export function postBuyFunding(token: string, portfolioId: number): Promise<BuyFunding> {
+  return request(`/portfolios/${portfolioId}/buy-funding`, { method: 'POST', token, body: {} });
+}
+
+/** `POST /portfolios/:id/funding-lots`：把每日領取的那一筆（claimId）記成這檔基金的投入。重送同一個 claim 不會重記。 */
+export function postFundingLot(token: string, portfolioId: number, source: { kind: 'faucet_claim'; claimId: string }): Promise<FundingLot> {
+  return request(`/portfolios/${portfolioId}/funding-lots`, { method: 'POST', token, body: { source } });
+}
+
 /**
  * 領測試 USDT（backend#72，`POST /faucet/usdt`，只在測試網）。
  * `account` 是**已經 enroll 的基金帳戶**（不是使用者的錢包）。200＝已確認、202＝結果未知（`state: "unknown"`）；

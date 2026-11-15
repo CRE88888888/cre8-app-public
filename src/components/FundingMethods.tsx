@@ -28,7 +28,7 @@ export function FundingMethods({ variant }: {
           <div className="feature-locked__row">
             <span className="feature-locked__text">
               <span className="feature-locked__title"><b>Test USDT</b><span className="badge badge--ok feature-badge">Free</span></span>
-              <small>Open a fund and press Buy. Once a day, straight into the fund. No value.</small>
+              <small>Testnet only. Your first purchase comes with 10,000 test USDT, once per person; then claim 1,000 a day. Straight into the fund. No value.</small>
             </span>
             <span className="feature-locked__icon" aria-hidden="true"><AppIcon name="wallet" size={22} /></span>
           </div>
