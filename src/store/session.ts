@@ -11,7 +11,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 /**
  * session 是怎麼來的（cre8-app#57）：
  * - `siwe`  ：連著的錢包簽 SIWE 換來的。session 與那個錢包綁在一起，錢包換了就失效。
- * - `privy` ：Privy 登入（email／Google／Apple／錢包）換來的。`address` 是後端記下的錢包主人，
+ * - `privy` ：Privy 登入（email／Google／X／錢包）換來的。`address` 是後端記下的錢包主人，
  *             不一定是現在連著的錢包 —— 主人錢包沒連著時只能看，見 `use-connected-session.ts`。
  * 舊的持久化資料沒有這個欄位，當成 `siwe`。
  */

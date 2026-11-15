@@ -5,10 +5,10 @@
  * 同一個信箱第一次用 Google、下次改用驗證碼，可能變成另一個帳號、另一個錢包。
  * 登入頁在上次用過的那一顆標「Last used」並把它當成主要按鈕，回來的人就不容易按錯。
  *
- * 按下去的當下先記成「待確認」（sessionStorage：Google／Apple 會整頁轉出去再回來，要撐過那一趟），
+ * 按下去的當下先記成「待確認」（sessionStorage：Google／X 會整頁轉出去再回來，要撐過那一趟），
  * 真的登入成功才寫進 localStorage。按了但沒登入成功的不算。
  */
-export type SignInChoice = 'google' | 'apple' | 'email' | 'wallet';
+export type SignInChoice = 'google' | 'x' | 'email' | 'wallet';
 
 export const LAST_SIGN_IN_KEY = 'cre8.lastSignIn';
 export const PENDING_SIGN_IN_KEY = 'cre8.pendingSignIn';
@@ -17,7 +17,7 @@ type Reader = Pick<Storage, 'getItem'>;
 type Writer = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 function choiceOf(value: unknown): SignInChoice | null {
-  return value === 'google' || value === 'apple' || value === 'email' || value === 'wallet' ? value : null;
+  return value === 'google' || value === 'x' || value === 'email' || value === 'wallet' ? value : null;
 }
 
 export function lastSignIn(local: Reader | null): SignInChoice | null {

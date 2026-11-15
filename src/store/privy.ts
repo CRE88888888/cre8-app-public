@@ -29,8 +29,8 @@ export type PrivyPhase =
 export type EmailStep = 'initial' | 'sending-code' | 'awaiting-code-input' | 'submitting-code' | 'done' | 'error';
 
 export type PrivyActions = {
-  /** 用 Google／Apple 登入：轉到對方的登入頁，回來後由 Privy 完成（headless，不開 Privy 的視窗）。 */
-  loginWithOAuth: (provider: 'google' | 'apple') => Promise<void>;
+  /** 用 Google／X 登入：轉到對方的登入頁，回來後由 Privy 完成（headless，不開 Privy 的視窗）。X 在 Privy 叫 `twitter`。 */
+  loginWithOAuth: (provider: 'google' | 'twitter') => Promise<void>;
   /** 寄 email 驗證碼。 */
   sendEmailCode: (email: string) => Promise<void>;
   /** 用收到的驗證碼登入。 */
@@ -63,7 +63,9 @@ export type PrivyAuthState = {
   /** email 登入的進度與錯誤（給登入頁用）。 */
   emailStep: EmailStep;
   emailError: unknown;
-  /** Google／Apple 登入的錯誤（轉址前就失敗時）。 */
+  /** 加綁 X／Google 沒成功時給使用者看的話（`explainLinkFailure`）。使用者自己關掉視窗不算。 */
+  linkError: string | null;
+  /** Google／X 登入的錯誤（轉址前就失敗時）。 */
   oauthError: unknown;
   /** 登入頁開著沒有。在這裡而不是元件裡：標頭、頁面內的按鈕都要能打開同一頁。 */
   signInOpen: boolean;
@@ -85,6 +87,7 @@ export const PRIVY_INITIAL: PrivyAuthState = {
   emailStep: 'initial',
   emailError: null,
   oauthError: null,
+  linkError: null,
   signInOpen: false,
   signInFor: null,
   actions: null,

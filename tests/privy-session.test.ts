@@ -94,7 +94,7 @@ test("linking is refused until there is a CRE8 session, and the config matches t
   const root = fs.readFileSync("src/features/auth/PrivyRoot.tsx", "utf8");
   expect(root).toContain("if (!latest.current.privySession) return;");
   expect(root).toContain("embeddedWallets: { ethereum: { createOnLogin: 'users-without-wallets' } }");
-  expect(fs.readFileSync("src/lib/privy-config.ts", "utf8")).toContain("['email', 'google', 'apple', 'wallet']");
+  expect(fs.readFileSync("src/lib/privy-config.ts", "utf8")).toContain("['email', 'google', 'twitter', 'wallet']");
   // 加綁的按鈕只在已登入的那一段畫面裡。
   const menu = fs.readFileSync("src/components/PrivyWalletMenu.tsx", "utf8");
   expect(menu.indexOf("actions?.link(kind)")).toBeGreaterThan(menu.indexOf("Signed in</p>"));
@@ -103,8 +103,14 @@ test("linking is refused until there is a CRE8 session, and the config matches t
 test("our own sign-in screen does not load the Privy SDK and offers the four ways in", () => {
   const screen = fs.readFileSync("src/components/SignInScreen.tsx", "utf8");
   expect(screen).not.toMatch(/@privy-io\//);
-  for (const label of ["Continue with Google", "Continue with Apple", "Continue with email", "Connect a wallet"]) expect(screen).toContain(label);
-  // Google／Apple 走 headless 轉址；錢包只開 Privy 的選錢包視窗。
+  for (const label of ["Continue with Google", "Continue with X", "Continue with email", "Connect a wallet"]) expect(screen).toContain(label);
+  // 使用者 2026-11-15：不用 Apple 了（要自己的開發者憑證）。
+  expect(screen).not.toMatch(/Apple|'apple'/);
+  // Google 在前、X 第二。
+  expect(screen.indexOf("Continue with Google")).toBeLessThan(screen.indexOf("Continue with X"));
+  expect(screen.indexOf("Continue with X")).toBeLessThan(screen.indexOf("Continue with email"));
+  // Google／X 走 headless 轉址（X 在 Privy 叫 twitter）；錢包只開 Privy 的選錢包視窗。
+  expect(screen).toContain("onClick={() => oauth('twitter')}");
   const root = fs.readFileSync("src/features/auth/PrivyRoot.tsx", "utf8");
   expect(root).toContain("useLoginWithOAuth");
   expect(root).toContain("useLoginWithEmail");

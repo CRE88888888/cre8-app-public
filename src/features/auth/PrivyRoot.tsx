@@ -16,6 +16,7 @@ import {
   useLoginWithOAuth,
   usePrivy,
   useUser,
+  useLinkAccount,
   useWallets,
 } from '@privy-io/react-auth';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -33,6 +34,8 @@ import {
   resolveOwner,
   sameAddress,
   signInMethods,
+  explainLinkFailure,
+  linkKindOf,
 } from '../../lib/privy-owner';
 import type { LinkedAccountLike, SignInMethodKind } from '../../lib/privy-owner';
 import type { Eip1193Provider } from '../../lib/wallet';
@@ -59,13 +62,21 @@ function localStorageOrNull(): Storage | null {
 const delay = (ms: number): Promise<void> => new Promise((resolve) => window.setTimeout(resolve, ms));
 
 function Bridge(): null {
-  const { ready, authenticated, user, error: initError, login, logout, connectWallet, linkEmail, linkGoogle, linkApple, linkTwitter, linkWallet, exportWallet } = usePrivy();
+  const { ready, authenticated, user, error: initError, login, logout, connectWallet, exportWallet } = usePrivy();
+  // 加綁用 useLinkAccount：才拿得到失敗原因（例如這個 X 已經單獨註冊過另一個帳號，Privy 會拒絕）。
+  const { linkEmail, linkGoogle, linkTwitter, linkWallet } = useLinkAccount({
+    onSuccess: () => usePrivyAuth.setState({ linkError: null }),
+    onError: (code, details) => {
+      const kind = linkKindOf(details?.linkMethod);
+      usePrivyAuth.setState({ linkError: kind === null ? null : explainLinkFailure(code, kind) });
+    },
+  });
   const { wallets, ready: walletsReady } = useWallets();
   const { identityToken } = useIdentityToken();
   const { refreshUser } = useUser();
   const { createWallet } = useCreateWallet();
   // 登入頁是我們自己畫的（components/SignInScreen.tsx），用 Privy 的 headless 登入。
-  // OAuth 的 hook 掛在這裡（一直存在），從 Google／Apple 轉回來的任何一頁都能完成登入。
+  // OAuth 的 hook 掛在這裡（一直存在），從 Google／X 轉回來的任何一頁都能完成登入。
   const { sendCode, loginWithCode, state: emailState } = useLoginWithEmail();
   const { initOAuth } = useLoginWithOAuth();
   const [oauthError, setOauthError] = useState<unknown>(null);
@@ -106,7 +117,7 @@ function Bridge(): null {
   // ---- 換 CRE8 session ------------------------------------------------------------------------
   //
   // 順序是後端規則決定的（backend#65）：首次登入時帳號上要有**恰好一個** EVM 錢包。
-  //   email／Google／Apple：Privy 登入完成 → Privy 建嵌入式錢包 → identity token 更新 → 才送。
+  //   email／Google／X：Privy 登入完成 → Privy 建嵌入式錢包 → identity token 更新 → 才送。
   //   錢包登入：登入完成時那個錢包就在帳號上，直接送。
   // 在拿到 CRE8 session 之前，這個 app 不提供任何「加綁」的入口（見下面的 `link`）。
   useEffect(() => {
@@ -287,9 +298,9 @@ function Bridge(): null {
       link: (kind: SignInMethodKind) => {
         // 首次拿到 CRE8 session 之前不可以加綁：後端要靠「帳號上恰好一個錢包」認定主人（backend#63）。
         if (!latest.current.privySession) return;
+        usePrivyAuth.setState({ linkError: null });
         if (kind === 'email') linkEmail();
         else if (kind === 'google') linkGoogle();
-        else if (kind === 'apple') linkApple();
         else if (kind === 'x') linkTwitter();
         else linkWallet();
       },
@@ -299,7 +310,7 @@ function Bridge(): null {
         await exportWallet(address === null ? undefined : { address });
       },
     }),
-    [login, logout, createWallet, refreshUser, linkEmail, linkGoogle, linkApple, linkTwitter, linkWallet, connectWallet, exportWallet, initOAuth, sendCode, loginWithCode],
+    [login, logout, createWallet, refreshUser, linkEmail, linkGoogle, linkTwitter, linkWallet, connectWallet, exportWallet, initOAuth, sendCode, loginWithCode],
   );
 
   // ---- 同步到給畫面用的 store ------------------------------------------------------------------

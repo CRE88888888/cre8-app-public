@@ -17,7 +17,7 @@ import { Note, TechnicalDetails } from './ui';
  *
  * 這個元件不 import Privy SDK：狀態與動作來自 `usePrivyAuth`（由 `PrivyRoot` 同步）。
  *
- * - 還沒登入：按鈕打開我們自己的登入頁（`SignInScreen`：Google／Apple／email／錢包）。
+ * - 還沒登入：按鈕打開我們自己的登入頁（`SignInScreen`：Google／X／email／錢包）。
  * - 登入中、換 session 失敗、已登入：按鈕打開選單。
  * - 已登入的選單：主人地址、已綁的登入方式、加綁、匯出私鑰（嵌入式錢包）、登出。
  *   **加綁只在已經有 CRE8 session 時出現**：首次登入前綁了別的錢包，後端就認不出誰是主人（backend#63）。
@@ -265,7 +265,7 @@ export function PrivyWalletMenu({ inline = false, showIcon = false, iconOnly = f
 /**
  * 全站橫幅：已登入，但主人錢包沒有連著（只能看）。
  *
- * 最常見的情況是用錢包註冊、後來改用 Google／Apple／email 登入：帳戶看得到，但買、賣、提領都要
+ * 最常見的情況是用錢包註冊、後來改用 Google／X／email 登入：帳戶看得到，但買、賣、提領都要
  * 主人錢包簽名。那些按鈕會因為沒有錢包而停用，這一條說明原因並給連上原錢包的入口。
  */
 export function OwnerWalletNotice(): ReactNode {

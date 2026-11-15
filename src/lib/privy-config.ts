@@ -17,7 +17,7 @@ export const PRIVY_APP_ID = readPrivyAppId(import.meta.env.VITE_PRIVY_APP_ID);
 export const PRIVY_ENABLED = PRIVY_APP_ID !== null;
 
 /** Privy 視窗上顯示的登入方式。每一種都要在 Privy Dashboard 也打開才會出現。 */
-export const PRIVY_LOGIN_METHODS = ['email', 'google', 'apple', 'wallet'] as const;
+export const PRIVY_LOGIN_METHODS = ['email', 'google', 'twitter', 'wallet'] as const;
 
 /** 嵌入式錢包在 `useWallet` store 裡用的 rdns（外部錢包用它自己的）。 */
 export const PRIVY_EMBEDDED_RDNS = 'io.privy.wallet';

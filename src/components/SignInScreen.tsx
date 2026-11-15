@@ -12,13 +12,13 @@ import { AppIcon } from './AppIcon';
  * 版面參考使用者給的登入畫面：上面是品牌與一句話，下面一排大按鈕，主要的一顆實心、其餘淺色。
  * 樣式沿用 app 既有的：實心＝`.btn`、淺色＝`.btn.ghost`，只把高度與字級放大。
  *
- * Google／Apple 會轉到對方的登入頁，回來後由 `PrivyRoot` 完成；email 在這一頁收驗證碼；
+ * Google／X 會轉到對方的登入頁，回來後由 `PrivyRoot` 完成；email 在這一頁收驗證碼；
  * 錢包打開 Privy 的選錢包視窗。Privy 那一側登入完成後這一頁自己關掉，後面的進度在標頭的選單裡。
  *
  * 這個元件不 import Privy SDK：動作來自 `usePrivyAuth`。
  *
  * 樣子（使用者選的 A：iOS 底部面板）：手機從下面滑上來、後面的頁面模糊；桌機是置中的大圓角卡片。
- * 按鈕是膠囊：Google 白底細框、Apple 黑底（兩家的品牌規範）、email 與錢包淺灰。上次用的那一顆標「Last used」。
+ * 按鈕是膠囊：Google 白底細框、X 黑底（兩家的品牌規範）、email 與錢包淺灰。上次用的那一顆標「Last used」。
  * 點旁邊、按 Escape、按最下面的「Not now」都會關掉。標題依原因而定：要買、要賣、要建立基金時寫明為了什麼
  * （逛的時候不用登入，到這一步才出現）；自己按標頭的 Sign in 是「Sign in to CRE8」。
  */
@@ -35,7 +35,7 @@ export function SignInScreen(): ReactNode {
   const [step, setStep] = useState<'choose' | 'email' | 'code'>('choose');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
-  const [leaving, setLeaving] = useState<'google' | 'apple' | null>(null);
+  const [leaving, setLeaving] = useState<'google' | 'twitter' | null>(null);
   /** 使用者看到錯誤後又改了輸入：先把錯誤收起來，下一次送出再看結果。 */
   const [edited, setEdited] = useState(false);
   /** 上次用哪一種方式登入（這台裝置）：那一顆標「Last used」並當成主要按鈕。沒有紀錄時主要按鈕是 Google。 */
@@ -96,10 +96,10 @@ export function SignInScreen(): ReactNode {
       ? 'That code did not work. Check it, or send a new one.'
       : 'We could not send a code to that address. Check it and try again.';
 
-  function oauth(provider: 'google' | 'apple'): void {
+  function oauth(provider: 'google' | 'twitter'): void {
     if (!ready) return;
     setLeaving(provider);
-    notePendingSignIn(storageOrNull('sessionStorage'), provider);
+    notePendingSignIn(storageOrNull('sessionStorage'), provider === 'twitter' ? 'x' : provider);
     void actions?.loginWithOAuth(provider);
   }
 
@@ -134,9 +134,9 @@ export function SignInScreen(): ReactNode {
               <GoogleMark /> {leaving === 'google' ? 'Opening Google…' : 'Continue with Google'}
               {last === 'google' && <LastUsed />}
             </button>
-            <button type="button" className="btn block" data-method="apple" disabled={!ready || leaving !== null} onClick={() => oauth('apple')}>
-              <AppleMark /> {leaving === 'apple' ? 'Opening Apple…' : 'Continue with Apple'}
-              {last === 'apple' && <LastUsed />}
+            <button type="button" className="btn block" data-method="x" disabled={!ready || leaving !== null} onClick={() => oauth('twitter')}>
+              <XMark /> {leaving === 'twitter' ? 'Opening X…' : 'Continue with X'}
+              {last === 'x' && <LastUsed />}
             </button>
             <button type="button" className="btn ghost block" data-method="email" disabled={!ready || leaving !== null} onClick={() => setStep('email')}>
               <MailMark /> Continue with email
@@ -253,14 +253,11 @@ function GoogleMark(): ReactNode {
   );
 }
 
-/** Apple 標誌。圖形來自 Font Awesome Free 6（CC BY 4.0，https://fontawesome.com/license/free）。 */
-function AppleMark(): ReactNode {
+/** X 的標誌（字母 X 的官方圖形）。 */
+function XMark(): ReactNode {
   return (
-    <svg className="signin-mark" width="18" height="20" viewBox="0 0 384 512" aria-hidden="true">
-      <path
-        fill="currentColor"
-        d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"
-      />
+    <svg className="signin-mark" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.65l-5.21-6.82-5.97 6.82H1.68l7.73-8.84L1.25 2.25h6.82l4.71 6.23Zm-1.16 17.52h1.83L7.08 4.13H5.12Z" />
     </svg>
   );
 }

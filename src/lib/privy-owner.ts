@@ -4,7 +4,7 @@
  *
  * ## 錢包主人（owner）
  * 後端（backend#65）在使用者**第一次**拿 CRE8 session 時，把 Privy 帳號當下唯一的 EVM 錢包記成
- * 永久的主人：email／Google／Apple 註冊者是嵌入式錢包，錢包註冊者是那一個外部錢包。之後不論
+ * 永久的主人：email／Google／X 註冊者是嵌入式錢包，錢包註冊者是那一個外部錢包。之後不論
  * 用哪種方式登入、又綁了什麼，session 都對應同一個主人。主人地址決定 smart account 地址。
  *
  * `/auth/privy` 的回應目前只有 `{ token, expiresAt }`，**沒有主人地址**。前端只能從 Privy 的
@@ -169,7 +169,7 @@ export function identityTokenWallets(token: string | null | undefined): string[]
   }
 }
 
-export type SignInMethodKind = 'email' | 'google' | 'apple' | 'x' | 'wallet';
+export type SignInMethodKind = 'email' | 'google' | 'x' | 'wallet';
 
 export type SignInMethod = {
   kind: SignInMethodKind;
@@ -177,7 +177,7 @@ export type SignInMethod = {
   detail: string;
 };
 
-const METHOD_NAME: Record<SignInMethodKind, string> = { email: 'Email', google: 'Google', apple: 'Apple', x: 'X', wallet: 'Wallet' };
+const METHOD_NAME: Record<SignInMethodKind, string> = { email: 'Email', google: 'Google', x: 'X', wallet: 'Wallet' };
 
 export function signInMethodName(kind: SignInMethodKind): string {
   return METHOD_NAME[kind];
@@ -195,7 +195,6 @@ export function signInMethods(accounts: readonly LinkedAccountLike[] | null | un
   for (const account of accounts ?? []) {
     if (account.type === 'email' && typeof account.address === 'string') methods.push({ kind: 'email', detail: account.address });
     if (account.type === 'google_oauth') methods.push({ kind: 'google', detail: account.email ?? '' });
-    if (account.type === 'apple_oauth') methods.push({ kind: 'apple', detail: account.email ?? '' });
     if (account.type === 'twitter_oauth') methods.push({ kind: 'x', detail: account.username ? `@${account.username}` : account.name ?? '' });
   }
   for (const wallet of evmWallets(accounts)) {
@@ -204,13 +203,13 @@ export function signInMethods(accounts: readonly LinkedAccountLike[] | null | un
   return methods;
 }
 
-/** 對使用者來說是同一件事的三種登入方式：「我的信箱」。 */
-const EMAIL_KINDS: readonly SignInMethodKind[] = ['google', 'email', 'apple'];
+/** 對使用者來說是同一件事的兩種登入方式：「我的信箱」。 */
+const EMAIL_KINDS: readonly SignInMethodKind[] = ['google', 'email'];
 
 /**
- * 帳號上的信箱（Google、email 驗證碼、Apple 三者擇一顯示，優先順序照這個順序）。沒有回 null。
+ * 帳號上的信箱（Google、email 驗證碼兩者擇一顯示，優先順序照這個順序）。沒有回 null。
  *
- * 使用者回饋（2026-11-14）：「email 跟 google 不是一樣的嗎？」——技術上是三種登入方式，
+ * 使用者回饋（2026-11-14）：「email 跟 google 不是一樣的嗎？」——技術上是兩種登入方式，
  * 但畫面上只該有一列「Email」。
  */
 export function emailIdentity(methods: readonly SignInMethod[]): SignInMethod | null {
@@ -224,7 +223,7 @@ export function emailIdentity(methods: readonly SignInMethod[]): SignInMethod | 
 /**
  * 還可以加綁哪些：**信箱（用 Google）與 X，各一個**。
  *
- * - 已經有信箱（不論是 Google、email 驗證碼還是 Apple）就不再問要不要綁另一種信箱。
+ * - 已經有信箱（不論是 Google 還是 email 驗證碼）就不再問要不要綁另一種信箱。
  * - **不提供再綁錢包**：一個人只有一個錢包，就是註冊時決定的錢包主人（產品架構 P02）。
  *   再綁一個錢包只會讓人以為自己有兩個錢包，也會讓「誰是主人」變得不明確。
  */
@@ -253,13 +252,12 @@ export function profileOf(accounts: readonly LinkedAccountLike[] | null | undefi
   const list = accounts ?? [];
   const x = list.find((account) => account.type === 'twitter_oauth');
   const google = list.find((account) => account.type === 'google_oauth');
-  const apple = list.find((account) => account.type === 'apple_oauth');
   const email = list.find((account) => account.type === 'email');
   const clean = (value: string | null | undefined) => (typeof value === 'string' && value.trim() !== '' ? value.trim() : null);
   const localPart = (value: string | null | undefined) => clean(value?.split('@')[0]);
   const handle = clean(x?.username);
   const name = clean(x?.name) ?? clean(google?.name) ?? (handle === null ? null : handle)
-    ?? localPart(email?.address) ?? localPart(google?.email) ?? localPart(apple?.email);
+    ?? localPart(email?.address) ?? localPart(google?.email);
   // X 給的是 48px 的縮圖；換成 400px 的同一張（X 的網址規則：`_normal` → `_400x400`）。
   const picture = clean(x?.profilePictureUrl);
   const avatarUrl = picture === null || !/^https:\/\//.test(picture) ? null : picture.replace(/_normal(\.[a-z]+)$/i, '_400x400$1');
@@ -342,4 +340,30 @@ export function readOnlyNotice(input: { owner: string | null; ownerEmbedded: boo
   return input.ownerEmbedded
     ? 'Your CRE8 wallet is not available in this browser yet, so you can view your account but not trade. Sign out and sign in again.'
     : `You can view this account, but buying, selling and withdrawing need its owner wallet ${short(input.owner)}. Connect that wallet to continue.`;
+}
+
+/**
+ * 綁定 X／Google 失敗時給使用者看的話（Privy `useLinkAccount` 的 `onError` 錯誤代碼）。
+ * 使用者自己關掉視窗（`exited_link_flow` 等）不算失敗，回 null，畫面上什麼都不顯示。
+ *
+ * 最常見的是「這個 X／Google 已經單獨註冊過另一個 CRE8 帳號」：Privy 不會把兩個帳號合併，所以拒絕。
+ */
+export function explainLinkFailure(code: unknown, kind: SignInMethodKind): string | null {
+  const name = kind === 'x' ? 'X account' : kind === 'google' ? 'Google account' : kind === 'email' ? 'email address' : 'wallet';
+  const value = typeof code === 'string' ? code : '';
+  if (value === '' || /exited|closed|cancel/.test(value)) return null;
+  if (value === 'linked_to_another_user' || value === 'account_transfer_required') {
+    return `This ${name} already has its own CRE8 account, so it can’t be added here. Sign in with it to use that account, or link a different one.`;
+  }
+  if (value === 'cannot_link_more_of_type') return `Your account already has ${/^[aeiouX]/.test(name) ? 'an' : 'a'} ${name} linked.`;
+  return `Linking your ${name} didn’t finish. Please try again.`;
+}
+
+/** Privy 回報的連結方式（`linkMethod`）對到我們的種類。 */
+export function linkKindOf(method: unknown): SignInMethodKind | null {
+  if (method === 'twitter') return 'x';
+  if (method === 'google') return 'google';
+  if (method === 'email') return 'email';
+  if (method === 'siwe' || method === 'wallet') return 'wallet';
+  return null;
 }

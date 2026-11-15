@@ -100,7 +100,7 @@ test("every feature name used on a page exists in the flag file", () => {
       if (entry.isDirectory()) { if (!file.startsWith("src/reference")) walk(file); continue; }
       if (!/\.tsx?$/.test(entry.name) || file === "src/lib/feature-flags.ts") continue;
       const source = fs.readFileSync(file, "utf8");
-      for (const match of source.matchAll(/featureLock\("([A-Za-z]+)"\)|feature="([A-Za-z]+)"/g)) used.add(match[1] ?? match[2]!);
+      for (const match of source.matchAll(/featureLock\(["']([A-Za-z]+)["']\)|feature="([A-Za-z]+)"/g)) used.add(match[1] ?? match[2]!);
     }
   };
   walk("src");

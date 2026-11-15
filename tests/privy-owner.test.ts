@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import fs from "node:fs";
 import { ApiError } from "../src/lib/api";
 import {
   PrivySetupError,
@@ -14,6 +15,8 @@ import {
   resolveOwner,
   signInMethods,
   type LinkedAccountLike,
+  explainLinkFailure,
+  linkKindOf,
 } from "../src/lib/privy-owner";
 
 // cre8-app#57：誰是錢包主人。後端（backend#65）在首次登入時把帳號上唯一的 EVM 錢包記成永久主人，
@@ -31,7 +34,6 @@ const external = (address: string, at: string): LinkedAccountLike => ({
 });
 const email: LinkedAccountLike = { type: "email", address: "ada@example.com", firstVerifiedAt: "2026-11-14T07:59:00Z" };
 const google: LinkedAccountLike = { type: "google_oauth", email: "ada@gmail.com", firstVerifiedAt: "2026-11-15T00:00:00Z" };
-const apple: LinkedAccountLike = { type: "apple_oauth", email: "ada@icloud.com", firstVerifiedAt: "2026-11-16T00:00:00Z" };
 
 test("only valid, non-zero EVM wallets count, the same way the backend counts them", () => {
   const wallets = evmWallets([
@@ -132,7 +134,8 @@ test("lists how the account can sign in, and what can still be added", () => {
   ]);
   // 已經有信箱（email 與 Google 都算），只剩 X 可以綁；錢包不提供再綁。
   expect(linkableMethods(methods)).toEqual(["x"]);
-  expect(linkableMethods(signInMethods([apple]))).toEqual(["x"]);
+  // 用 X 註冊的人：沒有信箱，可以綁 Google；X 已經有了。
+  expect(linkableMethods(signInMethods([{ type: "twitter_oauth", username: "ada", firstVerifiedAt: "2026-11-15T00:00:00Z" }]))).toEqual(["google"]);
   expect(linkableMethods([])).toEqual(["google", "x"]);
 });
 
@@ -195,11 +198,12 @@ test("X can be linked once and shows the @handle", () => {
   expect(linkableMethods([])).toContain("x");
 });
 
-test("email, Google and Apple are one thing to the user: a single email identity", () => {
+test("email and Google are one thing to the user: a single email identity", () => {
   // 使用者 2026-11-14：「email 跟 google 不是一樣的嗎？」
   expect(emailIdentity(signInMethods([google]))).toEqual({ kind: "google", detail: "ada@gmail.com" });
   expect(emailIdentity(signInMethods([email, embedded()]))).toEqual({ kind: "email", detail: "ada@example.com" });
-  expect(emailIdentity(signInMethods([apple]))).toEqual({ kind: "apple", detail: "ada@icloud.com" });
+  // Apple 已經拿掉：就算帳號上有，也不算、不顯示。
+  expect(signInMethods([{ type: "apple_oauth", email: "ada@icloud.com", firstVerifiedAt: "2026-11-16T00:00:00Z" }])).toEqual([]);
   // 兩種都綁過：顯示 Google 的。
   expect(emailIdentity(signInMethods([email, google]))?.kind).toBe("google");
   // 用錢包註冊的人沒有信箱：可以綁 Google。
@@ -213,4 +217,33 @@ test("a second wallet is never offered: one person, one wallet", () => {
   for (const accounts of [[email, embedded()], [google], [external(METAMASK, "2026-11-14T08:00:00Z")], []]) {
     expect(linkableMethods(signInMethods(accounts))).not.toContain("wallet");
   }
+});
+
+test("a failed link says why in plain words; closing the window is not a failure", () => {
+  // 最常見：這個 X／Google 已經單獨註冊過另一個 CRE8 帳號，Privy 不合併兩個帳號。
+  expect(explainLinkFailure("linked_to_another_user", "x")).toBe(
+    "This X account already has its own CRE8 account, so it can’t be added here. Sign in with it to use that account, or link a different one.",
+  );
+  expect(explainLinkFailure("account_transfer_required", "google")).toContain("This Google account already has its own CRE8 account");
+  expect(explainLinkFailure("cannot_link_more_of_type", "x")).toBe("Your account already has an X account linked.");
+  expect(explainLinkFailure("cannot_link_more_of_type", "google")).toBe("Your account already has a Google account linked.");
+  expect(explainLinkFailure("exited_link_flow", "x")).toBeNull();
+  expect(explainLinkFailure(undefined, "google")).toBeNull();
+  expect(explainLinkFailure("unknown_error", "google")).toBe("Linking your Google account didn’t finish. Please try again.");
+  for (const code of ["linked_to_another_user", "cannot_link_more_of_type", "unknown_error"]) {
+    expect(explainLinkFailure(code, "x")).not.toMatch(/[a-z]+_[a-z]+/);
+  }
+  expect(linkKindOf("twitter")).toBe("x");
+  expect(linkKindOf("google")).toBe("google");
+  expect(linkKindOf("apple")).toBeNull();
+});
+
+test("Profile shows link failures and tells wallet sign-ups that signing still needs their wallet", () => {
+  const card = fs.readFileSync("src/features/portfolios/ProfileCard.tsx", "utf8");
+  expect(card).toContain('{linkError !== null && <p className="profile-accounts__error" role="alert">{linkError}</p>}');
+  expect(card).toContain("Signing in with X or Google lets you view your account. Buying, selling and anything else that needs a signature still uses this wallet.");
+  const root = fs.readFileSync("src/features/auth/PrivyRoot.tsx", "utf8");
+  expect(root).toContain("useLinkAccount({");
+  expect(root).toContain("explainLinkFailure(code, kind)");
+  expect(root).not.toMatch(/linkApple|'apple'/);
 });

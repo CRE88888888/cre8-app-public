@@ -651,7 +651,7 @@
 /*
  * 登入頁（Privy 模式，components/SignInScreen.tsx）。使用者選的 A：iOS 底部面板。
  * 手機：從下面滑上來的面板，後面的頁面變暗並模糊。桌機：置中的大圓角卡片。
- * 按鈕是膠囊（形狀登記在 system.css 的 app-shapes），Google 白底細框、Apple 黑底、email 與錢包淺灰。
+ * 按鈕是膠囊（形狀登記在 system.css 的 app-shapes），Google 白底細框、X 黑底、email 與錢包淺灰。
  */
 .signin-screen {
   position: fixed;
@@ -748,11 +748,11 @@ html body #root .signin-screen .btn.btn {
 
 html body #root .signin-screen .btn.btn:active:not(:disabled) { transform: scale(0.98); }
 
-/* 主要動作（Send code、Sign in）與 Apple：實心。Apple 依它的品牌規範用純黑。 */
+/* 主要動作（Send code、Sign in）與 X：實心。X 依它的品牌規範用純黑。 */
 html body #root .signin-screen .btn.btn:not(.ghost) { background: var(--ink); color: var(--white); }
 html body #root .signin-screen .btn.btn:not(.ghost):hover:not(:disabled) { background: var(--deep); }
-html body #root .signin-screen .btn.btn[data-method='apple'] { background: #000; color: #fff; }
-html body #root .signin-screen .btn.btn[data-method='apple']:hover:not(:disabled) { background: #1d1d1f; }
+html body #root .signin-screen .btn.btn[data-method='x'] { background: #000; color: #fff; }
+html body #root .signin-screen .btn.btn[data-method='x']:hover:not(:disabled) { background: #1d1d1f; }
 
 /* Google 依它的品牌規範：白底細框。 */
 html body #root .signin-screen .btn.btn[data-method='google'] {
@@ -767,6 +767,7 @@ html body #root .signin-screen .btn.btn.ghost:not([data-method='google']) { back
 html body #root .signin-screen .btn.btn.ghost:not([data-method='google']):hover:not(:disabled) { background: #e7eaee; }
 
 html body #root .signin-screen .btn.btn:disabled { opacity: 0.5; }
+
 
 /*
  * 「Last used」：壓在按鈕右上緣的小膠囊標籤（不擠進按鈕裡，窄螢幕上不會跟按鈕的字撞在一起）。
@@ -1090,6 +1091,14 @@ html body #root .signin-screen .btn.btn:disabled { opacity: 0.5; }
   font-size: 12px;
   line-height: 1.5;
   color: var(--steel);
+}
+
+/* 加綁 X／Google 沒成功的原因（例如那個帳號已經單獨註冊過）。 */
+.profile-accounts__error {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--neg);
 }
 
 

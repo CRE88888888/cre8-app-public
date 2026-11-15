@@ -42,18 +42,18 @@ test("bad or blocked storage never breaks the sign-in page", () => {
   expect(confirmSignIn(null, null)).toBeNull();
   const throwing = { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); }, removeItem: () => { throw new Error("blocked"); } } as unknown as Storage;
   expect(lastSignIn(throwing)).toBeNull();
-  expect(() => notePendingSignIn(throwing, "apple")).not.toThrow();
+  expect(() => notePendingSignIn(throwing, "x")).not.toThrow();
   expect(confirmSignIn(throwing, throwing)).toBeNull();
 });
 
 test("the sign-in sheet marks the last-used way on its button", () => {
   const screen = fs.readFileSync("src/components/SignInScreen.tsx", "utf8");
-  for (const choice of ["google", "apple", "email", "wallet"]) {
+  for (const choice of ["google", "x", "email", "wallet"]) {
     expect(screen).toContain(`data-method="${choice}"`);
     expect(screen).toContain(`{last === '${choice}' && <LastUsed />}`);
   }
-  // 按鈕的顏色跟著品牌規範（Google 白、Apple 黑），不跟著「上次用的」變。
-  expect(screen).toContain('className="btn block" data-method="apple"');
+  // 按鈕的顏色跟著品牌規範（Google 白、X 黑），不跟著「上次用的」變。
+  expect(screen).toContain('className="btn block" data-method="x"');
   expect(screen).toContain('className="btn ghost block" data-method="google"');
   // 成功登入才確認。
   expect(screen).toContain("if (phase === 'signed-in') confirmSignIn(");

@@ -47,7 +47,7 @@ type WalletMenuProps = {
 /**
  * 標頭與頁面內共用的登入入口。
  *
- * `VITE_PRIVY_APP_ID` 有設定 → Privy 登入（email／Google／Apple／錢包，cre8-app#57）；
+ * `VITE_PRIVY_APP_ID` 有設定 → Privy 登入（email／Google／X／錢包，cre8-app#57）；
  * 沒設定 → 原本的錢包登入（瀏覽器錢包／WalletConnect＋SIWE），一行都沒變。
  * `PRIVY_ENABLED` 是 build 時的常數，所以同一個 build 裡永遠是同一個分支。
  */
