@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
+import { confirmSignIn, lastSignIn, notePendingSignIn } from '../lib/last-sign-in';
+import type { SignInChoice } from '../lib/last-sign-in';
 import { signInCopy } from '../lib/sign-in-reason';
 import { closeSignIn, usePrivyAuth } from '../store/privy';
 import { AppIcon } from './AppIcon';
@@ -15,11 +17,19 @@ import { AppIcon } from './AppIcon';
  *
  * 這個元件不 import Privy SDK：動作來自 `usePrivyAuth`。
  *
- * 兩種樣子：
- *   - 使用者要買、要賣、要建立基金時（`signInFor` 有值）：**整頁**，標題寫明為了什麼，後面不透出 app，
- *     沒有右上角的關閉鈕，最下面是「Not now」回到原本的地方。逛的時候不用登入，到這一步才出現。
- *   - 使用者自己按標頭的 Sign in：置中的卡片，有關閉鈕。
+ * 樣子（使用者選的 A：iOS 底部面板）：手機從下面滑上來、後面的頁面模糊；桌機是置中的大圓角卡片。
+ * 按鈕是膠囊：Google 白底細框、Apple 黑底（兩家的品牌規範）、email 與錢包淺灰。上次用的那一顆標「Last used」。
+ * 點旁邊、按 Escape、按最下面的「Not now」都會關掉。標題依原因而定：要買、要賣、要建立基金時寫明為了什麼
+ * （逛的時候不用登入，到這一步才出現）；自己按標頭的 Sign in 是「Sign in to CRE8」。
  */
+function storageOrNull(kind: 'localStorage' | 'sessionStorage'): Storage | null {
+  try {
+    return window[kind];
+  } catch {
+    return null;
+  }
+}
+
 export function SignInScreen(): ReactNode {
   const { signInOpen, signInFor, phase, actions, emailStep, emailError, oauthError } = usePrivyAuth();
   const [step, setStep] = useState<'choose' | 'email' | 'code'>('choose');
@@ -28,6 +38,8 @@ export function SignInScreen(): ReactNode {
   const [leaving, setLeaving] = useState<'google' | 'apple' | null>(null);
   /** 使用者看到錯誤後又改了輸入：先把錯誤收起來，下一次送出再看結果。 */
   const [edited, setEdited] = useState(false);
+  /** 上次用哪一種方式登入（這台裝置）：那一顆標「Last used」並當成主要按鈕。沒有紀錄時主要按鈕是 Google。 */
+  const [last, setLast] = useState<SignInChoice | null>(null);
   const firstRef = useRef<HTMLButtonElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -37,6 +49,7 @@ export function SignInScreen(): ReactNode {
     setStep('choose');
     setCode('');
     setLeaving(null);
+    setLast(lastSignIn(storageOrNull('localStorage')));
     window.setTimeout(() => firstRef.current?.focus(), 0);
   }, [signInOpen]);
 
@@ -48,6 +61,11 @@ export function SignInScreen(): ReactNode {
   useEffect(() => {
     if (step !== 'choose') window.setTimeout(() => inputRef.current?.focus(), 0);
   }, [step]);
+
+  // 真的登入成功才把剛才按的那一種記成「上次用的」。
+  useEffect(() => {
+    if (phase === 'signed-in') confirmSignIn(storageOrNull('sessionStorage'), storageOrNull('localStorage'));
+  }, [phase]);
 
   // OAuth 在轉址前就失敗：按鈕不要一直轉。
   useEffect(() => {
@@ -65,7 +83,6 @@ export function SignInScreen(): ReactNode {
 
   if (!signInOpen) return null;
 
-  const page = signInFor !== null;
   const copy = signInCopy(signInFor);
 
   const ready = actions !== null && phase === 'signed-out';
@@ -82,6 +99,7 @@ export function SignInScreen(): ReactNode {
   function oauth(provider: 'google' | 'apple'): void {
     if (!ready) return;
     setLeaving(provider);
+    notePendingSignIn(storageOrNull('sessionStorage'), provider);
     void actions?.loginWithOAuth(provider);
   }
 
@@ -96,20 +114,14 @@ export function SignInScreen(): ReactNode {
     event.preventDefault();
     if (!ready || !codeValid || checking) return;
     setEdited(false);
+    notePendingSignIn(storageOrNull('sessionStorage'), 'email');
     void actions?.submitEmailCode(code.trim());
   }
 
   return (
-    <div className="signin-screen" data-page={page ? 'true' : undefined} role="dialog" aria-modal="true" aria-labelledby="signin-title">
-      {/* 整頁的那一種點旁邊不會關；要回去按下面的「Not now」。 */}
-      <div className="signin-screen__backdrop" aria-hidden="true" onClick={page ? undefined : closeSignIn} />
+    <div className="signin-screen" data-reason={signInFor?.purpose} role="dialog" aria-modal="true" aria-labelledby="signin-title">
+      <div className="signin-screen__backdrop" aria-hidden="true" onClick={closeSignIn} />
       <div className="signin-screen__card">
-        {!page && (
-          <button type="button" className="signin-screen__close" aria-label="Close" onClick={closeSignIn}>
-            <AppIcon name="close" size={20} />
-          </button>
-        )}
-
         <header className="signin-screen__head">
           <img src="/logos/cre8-icon.svg" alt="" width={64} height={64} />
           <h2 id="signin-title">{copy.title}</h2>
@@ -118,35 +130,38 @@ export function SignInScreen(): ReactNode {
 
         {step === 'choose' ? (
           <div className="signin-screen__options">
-            <button ref={firstRef} type="button" className="btn block" disabled={!ready || leaving !== null} onClick={() => oauth('google')}>
+            <button ref={firstRef} type="button" className="btn ghost block" data-method="google" disabled={!ready || leaving !== null} onClick={() => oauth('google')}>
               <GoogleMark /> {leaving === 'google' ? 'Opening Google…' : 'Continue with Google'}
+              {last === 'google' && <LastUsed />}
             </button>
-            <button type="button" className="btn ghost block" disabled={!ready || leaving !== null} onClick={() => oauth('apple')}>
+            <button type="button" className="btn block" data-method="apple" disabled={!ready || leaving !== null} onClick={() => oauth('apple')}>
               <AppleMark /> {leaving === 'apple' ? 'Opening Apple…' : 'Continue with Apple'}
+              {last === 'apple' && <LastUsed />}
             </button>
-            <button type="button" className="btn ghost block" disabled={!ready || leaving !== null} onClick={() => setStep('email')}>
+            <button type="button" className="btn ghost block" data-method="email" disabled={!ready || leaving !== null} onClick={() => setStep('email')}>
               <MailMark /> Continue with email
+              {last === 'email' && <LastUsed />}
             </button>
             <button
               type="button"
-              className="btn ghost block"
+              className="btn ghost block" data-method="wallet"
               disabled={!ready || leaving !== null}
               onClick={() => {
+                notePendingSignIn(storageOrNull('sessionStorage'), 'wallet');
                 closeSignIn();
                 actions?.loginWithWallet();
               }}
             >
               <AppIcon name="wallet" size={20} /> Connect a wallet
+              {last === 'wallet' && <LastUsed />}
             </button>
             {oauthError !== null && oauthError !== undefined && (
               <p className="signin-screen__error" role="alert">That sign-in could not be started. Please try again.</p>
             )}
             {!ready && <p className="signin-screen__hint" role="status">Getting sign-in ready…</p>}
-            {page && (
-              <button type="button" className="wallet-menu__link signin-screen__skip" onClick={closeSignIn}>
-                Not now
-              </button>
-            )}
+            <button type="button" className="signin-screen__text" onClick={closeSignIn}>
+              Not now
+            </button>
           </div>
         ) : step === 'email' ? (
           <form className="signin-screen__options" onSubmit={sendEmail}>
@@ -169,7 +184,7 @@ export function SignInScreen(): ReactNode {
               {sending ? 'Sending code…' : 'Send code'}
             </button>
             {emailProblem && <p className="signin-screen__error" role="alert">{emailProblem}</p>}
-            <button type="button" className="wallet-menu__link" onClick={() => setStep('choose')}>
+            <button type="button" className="signin-screen__text" onClick={() => setStep('choose')}>
               Other ways to sign in
             </button>
           </form>
@@ -201,7 +216,7 @@ export function SignInScreen(): ReactNode {
             <div className="signin-screen__links">
               <button
                 type="button"
-                className="wallet-menu__link"
+                className="signin-screen__text"
                 disabled={sending}
                 onClick={() => {
                   setEdited(false);
@@ -211,7 +226,7 @@ export function SignInScreen(): ReactNode {
               >
                 {sending ? 'Sending…' : 'Send a new code'}
               </button>
-              <button type="button" className="wallet-menu__link" onClick={() => setStep('email')}>
+              <button type="button" className="signin-screen__text" onClick={() => setStep('email')}>
                 Use another email
               </button>
             </div>
@@ -220,6 +235,10 @@ export function SignInScreen(): ReactNode {
       </div>
     </div>
   );
+}
+
+function LastUsed(): ReactNode {
+  return <span className="signin-last">Last used</span>;
 }
 
 /** Google 的「G」（Google 登入按鈕規範的四色標誌）。 */

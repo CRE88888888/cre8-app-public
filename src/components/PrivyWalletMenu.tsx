@@ -24,7 +24,7 @@ import { Note, TechnicalDetails } from './ui';
  *
  * 樣式與互動都沿用原本的錢包選單，不另外發明：每個動作是一整列靠左的 `.wallet-menu__item`；
  * 「Add a sign-in method」跟原選單的「Browser wallets」一樣，點了才在下面展開選項；
- * 主要按鈕是 `.btn.sm`，次要的是底線文字 `.wallet-menu__link`。
+ * 主要按鈕是 `.btn.sm`，次要的是文字按鈕 `.wallet-menu__link`（iOS 風格：操作色、沒有底線）。
  */
 export function PrivyWalletMenu({ inline = false, showIcon = false, iconOnly = false, openEvent, signInFor }: {
   inline?: boolean;

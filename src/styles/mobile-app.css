@@ -2,7 +2,8 @@
 :root {
   --app-control-radius: 12px;
   --app-card-radius: 16px;
-  --app-sheet-radius: 24px;
+  /* 跟登入面板同一個圓角（iOS 的底部面板）。 */
+  --app-sheet-radius: 28px;
   --app-inset: 16px;
   --app-sheet-inset: 20px;
   --app-badge-radius: 6px;

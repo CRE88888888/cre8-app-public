@@ -235,7 +235,7 @@ html body #root :is(.public-periods, .creator-periods, .seg) :is([aria-pressed="
     border-radius: var(--r-ctl) !important;
   }
   :is(#root#root, body:not(#_):not(#__)) :is(.masthead .nav a, .explore-filter-option, .app-icon-tile, .activity-filter-select, .app-mode-label,
-      .app-ticket-presets button, [data-slot="sheet-close"], .signin-screen__close) {
+      .app-ticket-presets button, [data-slot="sheet-close"]) {
     border-radius: var(--r-sm) !important;
   }
   :is(#root#root, body:not(#_):not(#__)) :is(.public-periods, .creator-periods, .seg) :is(button, a, label) { border-radius: 7px !important; }
@@ -244,13 +244,22 @@ html body #root :is(.public-periods, .creator-periods, .seg) :is([aria-pressed="
     border-radius: var(--r-lg) !important;
   }
   :is(#root#root, body:not(#_):not(#__)) .profile-avatar { border-radius: 50% !important; }
+  /*
+   * 彈窗（使用者選的 A：iOS 底部面板）：登入頁、底部面板（Account、Add money、下單）、錢包選單裡的按鈕都是膠囊；
+   * 登入卡片 28px、錢包選單 18px、選單列與登入輸入框 14px。頁面上的一般按鈕不在這裡，維持原樣。
+   */
+  :is(#root#root, body:not(#_):not(#__)) :is(.signin-screen, .app-bottom-sheet, .wallet-menu__panel) .btn { border-radius: var(--r-pill) !important; }
+  :is(#root#root, body:not(#_):not(#__)) .signin-last { border-radius: var(--r-pill) !important; }
+  :is(#root#root, body:not(#_):not(#__)) .signin-screen__card { border-radius: 28px !important; }
+  :is(#root#root, body:not(#_):not(#__)) .wallet-menu__panel { border-radius: 18px !important; }
+  :is(#root#root, body:not(#_):not(#__)) :is(.wallet-menu__panel .wallet-menu__item, .signin-screen .field input) { border-radius: 14px !important; }
   /* 手機：浮在內容上的分頁列、基金頁底部操作列、右上角圓鈕維持膠囊／圓形（它們是浮動的控制層）。 */
   @media (max-width: 719px) {
     :is(#root#root, body:not(#_):not(#__)) :is(.app-mobile-nav, .app-mobile-nav a, .public-mobile-cta, .public-mobile-cta .btn,
         .app-nav-bar .header-wallet, .app-nav-bar .app-mode-switch, .masthead .app-mode-switch,
         .masthead .header-wallet.app-wallet-toolbar, .app-fund-toolbar > :is(a, button)) { border-radius: var(--r-pill) !important; }
-    /* 登入頁在手機上是整頁，不是浮起來的卡片。 */
-    :is(#root#root, body:not(#_):not(#__)) .signin-screen__card { border-radius: 0 !important; }
+    /* 登入頁在手機上是從下面滑上來的面板：只有上面兩個角是圓的。 */
+    :is(#root#root, body:not(#_):not(#__)) .signin-screen__card { border-radius: 28px 28px 0 0 !important; }
   }
 }
 

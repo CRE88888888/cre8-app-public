@@ -52,12 +52,13 @@ test("the page shows up at the moment of buying, selling or creating, never on o
   expect(fs.existsSync("src/lib/sign-in-entry.ts")).toBe(false);
 });
 
-test("the full page has a way back and no popup chrome; the header sign-in is still a card", () => {
+test("the sign-in sheet always has a way back: Not now, tapping outside, or Escape", () => {
   const screen = fs.readFileSync("src/components/SignInScreen.tsx", "utf8");
-  expect(screen).toContain("const page = signInFor !== null;");
-  expect(screen).toContain("{!page && (");
-  expect(screen).toContain("onClick={page ? undefined : closeSignIn}");
+  expect(screen).toContain('<div className="signin-screen__backdrop" aria-hidden="true" onClick={closeSignIn} />');
+  expect(screen).toContain("if (event.key === 'Escape') closeSignIn();");
   expect(screen).toContain("Not now");
+  // iOS 的面板沒有右上角的叉叉；回去的方式是上面三種。
+  expect(screen).not.toContain("signin-screen__close");
   const store = fs.readFileSync("src/store/privy.ts", "utf8");
   // 關掉或登入完成都把原因清掉，下一次按標頭的 Sign in 不會沿用上一次的原因。
   expect(store).toContain("usePrivyAuth.setState({ signInOpen: false, signInFor: null });");
