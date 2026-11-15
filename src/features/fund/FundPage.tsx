@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { encodeFunctionData, formatEther, formatUnits, parseEther, parseUnits } from 'viem';
+import { tidyAmountInput } from '../../lib/amount-input';
 import type { Address } from 'viem';
 import { closePosition, continueRedeem, enrollPortfolio, getAssets, getPortfolioStatus, getPortfolios, getRenewalParams, getStrategy, listStrategies, postFaucetUsdt, postRebalance, postRenewalResult, redeemPortfolio } from '../../lib/api';
 import { CHAIN, CHAIN_ID, approveCalldata, bsc as appChain, publicClientFor, readOnlyClient, sendGasTopUp, sendRenewalUserOp, sendSudoCalls, sendSweep, sendWithdraw } from '../../lib/kernel';
@@ -652,7 +653,7 @@ function FundPageBody(): ReactNode {
                           autoComplete="off"
                           placeholder="0"
                           value={withdrawAmount}
-                          onChange={(event) => setWithdrawAmount(event.target.value)}
+                          onChange={(event) => setWithdrawAmount(tidyAmountInput(event.target.value))}
                         />
                         {mobile ? (
                           <>
@@ -790,7 +791,7 @@ function FundPageBody(): ReactNode {
                         autoComplete="off"
                         placeholder="0"
                         value={amount}
-                        onChange={(event) => setAmount(event.target.value)}
+                        onChange={(event) => setAmount(tidyAmountInput(event.target.value))}
                       />
                       {mobile && <span className="app-ticket-currency">{usdt?.symbol ?? 'USDT'}</span>}
                       {(!mobile || token !== null) && (

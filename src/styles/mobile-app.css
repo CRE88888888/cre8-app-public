@@ -578,6 +578,16 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
   #fund-explore .collection-tabs { gap: 3px; }
   #fund-explore nav.collection-tabs > a { padding-inline: 8px; }
 }
+/* 底部彈窗的速度：原本沿用 shadcn 的開 500ms／關 300ms、ease-in-out，太慢。
+   改成開 300ms、先快後慢（iOS sheet 曲線）；關 200ms、先慢後快，收得比開得快。 */
+.app-bottom-sheet[data-slot="sheet-content"][data-state="open"] {
+  animation-duration: .3s;
+  animation-timing-function: cubic-bezier(.32, .72, 0, 1);
+}
+.app-bottom-sheet[data-slot="sheet-content"][data-state="closed"] {
+  animation-duration: .2s;
+  animation-timing-function: cubic-bezier(.4, 0, 1, 1);
+}
 @media (prefers-reduced-motion: reduce) {
   .app-bottom-sheet[data-slot="sheet-content"] { animation: none; transition: none; }
 }
@@ -1541,4 +1551,14 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
   #root :is(.btn, [data-slot="button"], .header-wallet) { transition: none; }
   #root :is(.btn, [data-slot="button"], .header-wallet):active,
   #root .app-mobile-nav a:active { transform: none; }
+}
+
+/* 手指點的範圍比看起來大（Fitts's law）：觸控裝置上，小於 44px 的文字按鈕與期間切換
+   只放大可點範圍，外觀不變。文字按鈕沒有底色，加高就是加大範圍；期間切換有底色，
+   用透明的 ::after 往上下各延伸 4px。 */
+@media (pointer: coarse) {
+  .wallet-menu__link,
+  .app-ledger-heading h3 a { min-height: 44px; }
+  html body #root #fund-explore .mkt-periods button { position: relative; }
+  html body #root #fund-explore .mkt-periods button::after { content: ""; position: absolute; inset: -4px 0; }
 }

@@ -200,11 +200,12 @@ export function SignInScreen(): ReactNode {
                 className="signin-screen__code"
                 inputMode="numeric"
                 autoComplete="one-time-code"
-                maxLength={6}
                 placeholder="000000"
                 value={code}
                 onChange={(event) => {
-                  setCode(event.target.value.replace(/\D/g, ''));
+                  // 不用 maxLength：貼上「123 456」「123-456」時它會先截成 6 個字元再進來，少一位數。
+                  // 先去掉非數字，再取前 6 位。
+                  setCode(event.target.value.replace(/\D/g, '').slice(0, 6));
                   setEdited(true);
                 }}
               />

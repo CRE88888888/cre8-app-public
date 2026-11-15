@@ -300,7 +300,8 @@ html body #root :is(.public-periods, .creator-periods, .seg) :is([aria-pressed="
 .roll-reel {
   display: block;
   transform: translateY(calc(var(--roll-to) * -1.1em));
-  animation: roll-in .7s cubic-bezier(.2, .75, .2, 1) calc(var(--roll-order) * 50ms + 60ms) both;
+  /* 0.3 秒、每位數只錯開 25ms：切期間時每次都會重播，太長會讓人等。 */
+  animation: roll-in .3s cubic-bezier(.2, .75, .2, 1) calc(var(--roll-order) * 25ms) both;
   will-change: transform;
 }
 .roll-reel i { display: block; height: 1.1em; font-style: normal; line-height: 1.1em; text-align: center; }
