@@ -20,7 +20,9 @@ import { underlyingSlug } from "../../reference/lib/asset-navigation";
 import { LAUNCH_COPY, POPULAR_ASSET_KEYS, isLaunchAsset } from "../../lib/launch-admission";
 import { IS_TESTNET, isTestnetSymbol } from "../../lib/testnet-catalogue";
 import { featureLock, playLock } from "../../lib/feature-flags";
-import { EXECUTION_COPY, describeExecutionProblem, designExecution, rowExtras } from "../../lib/fund-execution";
+import { EXECUTION_COPY, STACK_SLICES, describeExecutionProblem, designExecution, rowExtras, stackExecution } from "../../lib/fund-execution";
+// 測試網上 ZEC 與 #89 的 8 個加密資產改成可交易（只限測試網）。要在任何畫面讀目錄之前跑。
+import "../../lib/testnet-assets";
 import { FeatureBadge } from "../../components/FeatureLock";
 
 const base = "";
@@ -35,6 +37,8 @@ const assetSrc = (key: string) => base + B.logoPath(key === B.CASH.key ? { categ
 // 上線時能不能上架（cre8-app#51）：主網只看 lib/launch-admission.ts 的 38 個。
 // 部署在 BSC 測試網（VITE_CHAIN_ID=97）時改看測試網的 92 個（cre8-app#86，lib/testnet-catalogue.ts），用鏈上符號比對。
 // 下面的 `testnet` prop 是參考設計的另一種測試網模式（offered 名單），app 沒有用到，不套這個。
+/** Stack 的時刻是創作者這台裝置的當地時間（送出時換成 UTC）。 */
+const LOCAL_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const opensAtLaunch = (asset: B.Asset) => IS_TESTNET ? isTestnetSymbol(asset.symbol) : isLaunchAsset(asset.token);
 // 還不能加的資產標什麼（cre8-app#58）：Ondo 的冷門股是「主網開放」，其餘沿用「After launch」。
 // 開關在 lib/feature-flags.ts 的 `ondoStocks`。
@@ -258,9 +262,9 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
   // 舊草稿裡可能已經有上線時還不能上架的資產（清單出來之前選的）：先講清楚，不要等到啟用才被擋。
   const laterNames = testnet ? [] : [...new Set(state.rows.map((row) => B.assetOf(row.key)).filter((asset) => !opensAtLaunch(asset)).map((asset) => B.displayAssetSymbol(asset.symbol)))];
   const launchNotice = laterNames.length === 0 ? "" : `${laterNames.join(", ")} ${laterNames.length === 1 ? "opens" : "open"} after launch. Remove ${laterNames.length === 1 ? "it" : "them"} to activate this fund now.`;
-  // 一檔基金一種執行模式（cre8-app#79）：全部 Buy & hold 或全部 Stack。還沒開放的策略、混合、附加設定都先講清楚，
+  // 每個資產各自 Buy & hold 或 Stack（docs#57 G0-4）。還沒開放的策略、附加設定、排程不對、同資產兩種設定都先講清楚，
   // 草稿不刪任何欄位。參考設計的測試網模式（`testnet` prop）有自己的規則，不套這個。
-  const execution = testnet ? null : designExecution(state.rows, state.rules, (play) => B.PLAYS[play as B.Play]?.name ?? play);
+  const execution = testnet ? null : designExecution(state.rows, { rules: state.rules, playName: (play) => B.PLAYS[play as B.Play]?.name ?? play, assetName: (key) => B.displayAssetSymbol(B.assetOf(key).symbol) });
   const previewNotice = execution && "problem" in execution ? describeExecutionProblem(execution.problem) : "";
   const feeLock = testnet ? null : featureLock("performanceFee"), delayLock = testnet ? null : featureLock("settingsDelay");
   const cashName = testnet ? testnet.cash : B.CASH.symbol;
@@ -335,7 +339,7 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
           <section className={styles.panel} aria-label="Holdings">
             <div className={styles.ptop}>
               <h2>Holdings</h2>
-              <span className={styles.label}>{keys.length} of {limits.assets} assets</span>
+              <span className={styles.label}>{keys.length} {keys.length === 1 ? "asset" : "assets"}</span>
             </div>
             {canGrow && (
               <div className={styles.quickAdd}>
@@ -384,7 +388,7 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
                         </div>
                         <button type="button" className={styles.strat} aria-label={`Strategy for ${asset.name}: ${B.PLAYS[row.play].name}. Edit`} onClick={() => setDrawer({ mode: "edit", id: row.id })}>
                           <Chart kind={row.play} w={76} h={34} mini />
-                          <span><b>{B.PLAYS[row.play].name}{B.rowBeta(row) && <Beta />}</b><small>{!testnet && (row.play === "hold" || row.play === "stack") ? EXECUTION_COPY[row.play].short : B.summary(row, testnet?.timeZone)}</small></span>
+                          <span><b>{B.PLAYS[row.play].name}{B.rowBeta(row) && <Beta />}</b><small>{!testnet && row.play === "hold" ? EXECUTION_COPY.hold.short : B.summary(row, testnet?.timeZone ?? (row.play === "stack" ? LOCAL_ZONE : undefined))}</small></span>
                           <span className={styles.go} aria-hidden="true">Edit</span>
                         </button>
                         <button type="button" className={styles.x} aria-label={`Remove ${asset.name}`} onClick={() => update((s) => B.removeRow(s, row.id))}>×</button>
@@ -447,7 +451,7 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
             <dl className={styles.kv}>
               <div><dt>Lending income</dt><dd className={styles.posText}>{!state.rows.length ? "—" : testnet ? (state.rules.idle.on ? (testnet.idleVenues.includes(state.rules.idle.venue) ? B.VENUE_NAME[state.rules.idle.venue] : "Sandbox lending vault") : "None") : B.lendingIncome(state) > 0 ? `≈ ${B.pct(B.lendingIncome(state))} / yr` : "None"}</dd></div>
               <div><dt>Strategies</dt><dd>{state.rows.length ? `${state.rows.length} on assets${B.rulesOn(state.rules).length ? ` + ${B.rulesOn(state.rules).length} fund-wide` : ""}` : "—"}</dd></div>
-              <div><dt title="Every deposit has to fit in one BNB Chain transaction, which limits how many positions a fund runs.">Capacity used</dt><dd>{state.rows.length ? `${roomUsed}% · ${room.positions} of ${limits.positions} positions` : "—"}</dd></div>
+              {testnet && <div><dt title="Every deposit has to fit in one BNB Chain transaction, which limits how many positions a fund runs.">Capacity used</dt><dd>{state.rows.length ? `${roomUsed}% · ${room.positions} of ${limits.positions} positions` : "—"}</dd></div>}
               <div><dt>Deposit fee</dt><dd>{B.FEE.depositPct}% · to CRE8</dd></div>
               <div><dt>Performance fee</dt><dd>CRE8 {B.FEE.platform}% + yours</dd></div>
               {!testnet && <div data-locked={delayLock?.state} title={delayLock?.note}><dt>Changes to a live fund</dt><dd>24-hour notice{delayLock && <> <FeatureBadge lock={delayLock} className={styles.beta} /></>}</dd></div>}
@@ -535,7 +539,7 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
             </> : <>
               <button className={cx("btn", styles.wide)} type="button" disabled={!state.name.trim() || !stakeValid || !!sourceIssue} onClick={download}>Download design</button>
               {(!state.name.trim() || !stakeValid) && <span className={styles.note}>{!state.name.trim() ? "Give your fund a name to continue." : `Set a stake of at least ${B.STAKE.min} USDT.`}</span>}
-              {previews.length === 0 && !B.problem(state) && !launchNotice && !previewNotice && execution && "kind" in execution && <a className={styles.textLink} href={testnetCreate}>Activate as {EXECUTION_COPY[execution.kind].name} →</a>}
+              {previews.length === 0 && !B.problem(state) && !launchNotice && !previewNotice && execution && "assets" in execution && <a className={styles.textLink} href={testnetCreate}>Activate this fund →</a>}
               {launchNotice && <span className={styles.note}>{launchNotice}</span>}
               {previewNotice && <span className={styles.note}>{previewNotice}</span>}
             </>}
@@ -602,7 +606,7 @@ function AddAsset({ state, query, setQuery, tab, setTab, pick, close }: { state:
   return (
     <>
       <div className={styles.dHead}>
-        <div><h2>Add asset</h2><small>{have.size} of {limits.assets} assets · {B.capacity(state).positions} of {limits.positions} positions</small></div>
+        <div><h2>Add asset</h2><small>{testnet ? `${have.size} of ${limits.assets} assets · ${B.capacity(state).positions} of ${limits.positions} positions` : `${have.size} ${have.size === 1 ? "asset" : "assets"} in the fund`}</small></div>
         <button className={styles.x} type="button" aria-label="Close" onClick={close}>×</button>
       </div>
       <div className={styles.dBody}>
@@ -995,14 +999,40 @@ function Schedule({ p, set, quarterly = true }: { p: { every: B.Every; day?: num
   );
 }
 
-/** 一列資產的說明句。App 裡 hold／stack 沒有逐資產參數（cre8-app#79），不講舊草稿的時刻與次數。 */
+/** 一列資產的說明句。App 裡 hold 沒有參數；stack 講創作者設的時刻（當地時間）與次數（G0-4）。 */
 function rowWords(row: B.Row, testnet: TestnetMode | null): { lead: string; text: string } {
-  const words = B.sentence(row, testnet?.timeZone);
-  return !testnet && (row.play === "hold" || row.play === "stack") ? { lead: words.lead, text: EXECUTION_COPY[row.play].sentence } : words;
+  const words = B.sentence(row, testnet?.timeZone ?? (row.play === "stack" ? LOCAL_ZONE : undefined));
+  return !testnet && row.play === "hold" ? { lead: words.lead, text: EXECUTION_COPY.hold.sentence } : words;
+}
+
+const UTC_DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
+
+/**
+ * Stack 的逐資產參數（docs#57 G0-4）：每天或每週、星期幾、時刻（當地時間）、每筆投入分幾次買（2–52）。
+ * 全部由創作者設定，基金裡每個人同一時間買。送出時換成 UTC，這裡也寫出換算後的 UTC 時刻。
+ */
+function StackFields({ p, set }: { p: B.Settings["stack"]; set: (field: string, value: unknown) => void }) {
+  const utc = stackExecution(p);
+  const options: ["daily" | "weekly", string][] = [["daily", "Daily"], ["weekly", "Weekly"]];
+  return <>
+    <Field label="When it buys" note={`Your local time (${LOCAL_ZONE}). Everyone in the fund buys at this time. A missed buy is skipped, not made up later.`}>
+      <div className={styles.inline}>
+        <Seg label="How often" value={p.every === "daily" ? "daily" : p.every === "weekly" ? "weekly" : ("" as "daily")} options={options} onChange={(value) => set("every", value)} />
+        {p.every === "weekly" && <select aria-label="Day of the week" value={p.day} onChange={(event) => set("day", Number(event.target.value))}>{B.DAYS.map((day, index) => <option key={day} value={index}>{day}</option>)}</select>}
+        <input type="time" aria-label="Time" value={p.time} onChange={(event) => set("time", event.target.value || "09:00")} />
+      </div>
+    </Field>
+    <Field label="Split each deposit into" note="Each buy spends what is left for this asset divided by the buys remaining; the last buy takes the rest.">
+      <Range label="Number of buys" value={p.buys} limit={STACK_SLICES} unit={unit.buys} onChange={(value) => set("buys", value)} />
+    </Field>
+    {utc
+      ? <p className={styles.note}>Saved as {utc.every === "daily" ? "every day" : `every ${UTC_DAYS[utc.weekday ?? 0]}`} at {utc.timeUtc} UTC.</p>
+      : <p className={styles.notice} role="status">Stack buys daily or weekly, in {STACK_SLICES.min}–{STACK_SLICES.max} buys. Pick one of those to activate this fund.</p>}
+  </>;
 }
 
 /**
- * Buy & hold／Stack 在 app 裡的設定面板（cre8-app#79）：沒有可調的逐資產參數，只說明會發生什麼。
+ * Buy & hold／Stack 在 app 裡的設定面板：hold 沒有參數，只說明會發生什麼；stack 加上創作者的排程（StackFields）。
  * 還沒開放的附加設定（持有期間出借、停利停損、價格上限）灰色顯示；舊草稿開著的話，給一顆按鈕關掉，
  * 只改那幾個欄位，其他舊參數原樣留在草稿裡。
  */
@@ -1021,6 +1051,7 @@ function PlainExecution({ row, set }: { row: B.Row; set: (field: string, value: 
   };
   return <>
     <p className={styles.note}>{EXECUTION_COPY[kind].line}</p>
+    {row.play === "stack" && <StackFields p={row.p} set={set} />}
     {locks.map((lock) => (
       <div key={lock.feature} className={styles.rule} data-locked={lock.state}>
         <div><b>{lock.feature === "strategyLimits" ? "Take profit or stop loss" : lock.name}<FeatureBadge lock={lock} className={styles.beta} /></b><small>{lock.note}</small></div>
@@ -1035,7 +1066,7 @@ function PlainExecution({ row, set }: { row: B.Row; set: (field: string, value: 
 function Settings({ row, set }: { row: B.Row; set: (field: string, value: unknown) => void }) {
   const testnet = useContext(Testnet);
   const asset = B.assetOf(row.key);
-  // App（非參考測試網模式）：hold／stack 沒有逐資產參數（cre8-app#79）。舊草稿的參數留在草稿裡，畫面只講會發生什麼。
+  // App（非參考測試網模式）：hold／stack 用 app 自己的面板（停利停損、價格上限、持有期間出借還沒開放）。
   if (!testnet && (row.play === "hold" || row.play === "stack")) return <PlainExecution row={row} set={set} />;
   switch (row.play) {
     case "hold": {

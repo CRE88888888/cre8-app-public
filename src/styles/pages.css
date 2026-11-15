@@ -154,8 +154,8 @@ html body #root .cf-cadence button { min-width: 0; padding: 0 16px; font: 500 14
 #root .cf-summary-list li { display: flex; justify-content: space-between; gap: 12px; min-height: 32px; align-items: center; color: var(--ink); font: 500 14px/1 var(--sans); }
 #root .cf-summary-list li + li { border-top: 1px solid var(--hair); }
 #root .cf-summary-list b { color: var(--deep); font: 400 13px/1 var(--mono); }
-#root .cf-summary-facts { display: flex; justify-content: space-between; margin: 0; padding-top: 12px; border-top: 1px solid var(--hair); color: var(--steel); font: 400 14px/1 var(--sans); }
-#root .cf-summary-facts dd { margin: 0; color: var(--ink); font-weight: 500; }
+#root .cf-summary-facts { display: grid; grid-template-columns: auto 1fr; gap: 10px 12px; margin: 0; padding-top: 12px; border-top: 1px solid var(--hair); color: var(--steel); font: 400 14px/1 var(--sans); }
+#root .cf-summary-facts dd { margin: 0; color: var(--ink); font-weight: 500; text-align: right; line-height: 1.3; }
 html body #root .cf-submit { width: 100%; min-height: 54px; font-size: 16px; }
 #root .cf-missing { margin: -4px 0 0; color: var(--steel); font: 400 13px/1.45 var(--sans); text-align: center; }
 

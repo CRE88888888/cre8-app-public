@@ -398,14 +398,14 @@ export function venuesOf(asset: Asset): (LendVenue | "pancakeswap")[] {
 }
 
 // ---------- Limits (contracts and runbook) ----------
-/** Distinct assets per fund (registry policy.maxTargets). */
-export const MAX_ASSETS = 7;
-/** Spot scopes plus native positions per fund (MandateCompositeMixedVault.configureScope, PositionBook.register). */
-export const MAX_POSITIONS = 8;
-/** Demo reserves one additional position for idle cash, alongside ten distinct assets. */
-export const builderLimits = (mode: BuilderMode = "execution") => mode === "demo"
-  ? { assets: 10, positions: 11 }
-  : { assets: MAX_ASSETS, positions: MAX_POSITIONS };
+/**
+ * CRE8 exception (approved by the C3 manager; user decision 2026-11-15, docs#61): a fund has no asset limit.
+ * The former caps (7 assets / 8 positions, demo 10 / 11) are gone: cre8-contracts#45 removes the contract cap and the
+ * backend splits a large fund's buys over several operations (backend#92).
+ */
+export const MAX_ASSETS = Number.POSITIVE_INFINITY;
+export const MAX_POSITIONS = Number.POSITIVE_INFINITY;
+export const builderLimits = (_mode: BuilderMode = "execution") => ({ assets: MAX_ASSETS, positions: MAX_POSITIONS });
 /**
  * A fund that borrows keeps at least 5% in cash: with a borrowing position its caps total at most 9,500 bps
  * (MandateCompositeNativeCatalog.validateCapacity) and buys and funding leave 5% of NAV free. A fund that does

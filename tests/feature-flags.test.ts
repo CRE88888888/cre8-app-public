@@ -11,8 +11,8 @@ test("the defaults match what the testnet shows as not yet available", () => {
     depositCard: "mainnet",
     depositCrossChain: "mainnet",
     ondoStocks: "mainnet",
-    // 定期定額：使用者決定參數由創作者設定，後端改好之前維持 Coming soon（cre8-app#79）。
-    strategyDca: "soon",
+    // 定期定額：逐資產、參數由創作者設定（G0-4），後端 BE-2 已支援，開放。
+    strategyDca: "on",
     // 其他策略與功能還沒做好：一律「Coming soon」（使用者 2026-11-15 決定，原本 Later 的四種也改成這樣）。
     strategyDips: "soon",
     strategyLimits: "soon",
@@ -36,11 +36,13 @@ test("a locked feature carries its badge and a one-sentence explanation", () => 
     name: "Card or Apple Pay",
     note: "Buy USDT with a card or Apple Pay, sent straight to your account. Opens on mainnet.",
   });
-  expect(featureLock("strategyDca", {})?.label).toBe("Coming soon");
+  expect(featureLock("strategyDca", {})).toBeNull();
+  expect(featureLock("strategyDca", { strategyDca: "soon" })?.label).toBe("Coming soon");
   expect(featureLock("strategyCarry", {})?.label).toBe("Coming soon");
   expect(featureLock("strategyCarry", { strategyCarry: "later" })?.label).toBe("Later");
   for (const key of Object.keys(FEATURES) as FeatureKey[]) {
-    const lock = featureLock(key, {});
+    // 已開放的（例如 strategyDca）也照「還沒開放」檢查一次說明文字：之後關回去時要讀得通。
+    const lock = featureLock(key, featureState(key, {}) === "on" ? { [key]: "soon" } : {});
     expect(lock).not.toBeNull();
     // 每一項都有名稱與一句完整的說明，而且說明講了什麼時候開放。
     expect(lock!.name.length).toBeGreaterThan(3);
@@ -65,9 +67,10 @@ test("deployment overrides: only known names and states are accepted", () => {
   expect(parseFeatureOverrides("idleYield=on,idleYield=later")).toEqual({ idleYield: "later" });
 });
 
-test("strategies: buy & hold is open; stack waits for its flag; the other six are locked as Coming soon", () => {
+test("strategies: buy & hold and stack are open; the other six are locked as Coming soon", () => {
   expect(playLock("hold", {})).toBeNull();
-  expect(playLock("stack", {})?.feature).toBe("strategyDca");
+  expect(playLock("stack", {})).toBeNull();
+  expect(playLock("stack", { strategyDca: "soon" })?.feature).toBe("strategyDca");
   expect(playLock("stack", { strategyDca: "on" })).toBeNull();
   for (const play of ["dips", "custom", "range", "trend", "lp", "carry"]) expect(playLock(play, {})?.label).toBe("Coming soon");
   expect(Object.fromEntries(["dips", "custom", "range", "trend", "lp", "carry"].map((play) => [play, playLock(play, {})?.feature]))).toEqual({

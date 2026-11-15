@@ -18,13 +18,13 @@ import { openSignIn, usePrivyAuth } from '../../store/privy';
 import { ErrorNote, Note, Spinner } from '../../components/ui';
 import { AssetLogo } from '../../components/AssetLogo';
 import { assetBySymbol } from '../../lib/public-funds';
-import { EXECUTION_COPY, openKinds, typedVersionBody, type ExecutionKind } from '../../lib/fund-execution';
-import { featureLock, playLock } from '../../lib/feature-flags';
+import { EXECUTION_COPY, executionConfirm, minimumDeposit, stackWords, typedVersionBody, type AssetExecution, type ExecutionKind } from '../../lib/fund-execution';
+import { featureLock } from '../../lib/feature-flags';
 import { FeatureBadge } from '../../components/FeatureLock';
 
 /** 主網 USDT。後端的資產清單會回報這條鏈真正的計價幣（`isNumeraire`），拿不到時才用這個。 */
 const MAINNET_USDT = '0x55d398326f99059ff775485246999027b3197955';
-const KINDS: readonly ExecutionKind[] = ['hold', 'stack'];
+const HOLD: AssetExecution = { kind: 'hold' };
 
 type Step =
   | 'idle'
@@ -86,16 +86,10 @@ export function ActivateFundPage(): ReactNode {
   const [description, setDescription] = useState('');
   const [weights, setWeights] = useState<Record<string, number>>(draft?.weights||{});
   /**
-   * 執行模式（cre8-app#79）：整檔基金一種。從設計器來的草稿帶著它的模式；收斂不了（混合、還沒開放的策略）
-   * 就回設計器改，這裡不替它選。快速設定預設 Buy & hold。換模式要重新勾確認。
+   * 每個資產各自的策略（docs#57 G0-4）：從設計器來的草稿帶著每個資產的設定（Stack 的排程由創作者在設計器設）；
+   * 換不了（還沒開放的策略、排程不對）就回設計器改，這裡不替它選。快速設定沒有草稿：每個資產都是 Buy & hold。
    */
-  const [kind, setKindState] = useState<ExecutionKind>(draft?.execution ?? 'hold');
   const [kindAgreed, setKindAgreed] = useState(false);
-  const setKind = (next: ExecutionKind): void => {
-    if (next === kind) return;
-    setKindState(next);
-    setKindAgreed(false);
-  };
   /**
    * 失敗後重試：策略已經建好（名稱沒改）就沿用，從發版或 enroll 接著做，不再建第二個策略。
    * 同一份設定重發，後端讀回原版本（BE-1 的冪等規則）。
@@ -126,11 +120,13 @@ export function ActivateFundPage(): ReactNode {
   const totalBps = selected.reduce((sum, [, percent]) => sum + Math.round(percent * 100), 0);
   const unavailableAssets=selected.filter(([address])=>!assets.data?.some(asset=>asset.address.toLowerCase()===address.toLowerCase()&&asset.tradable!==false));
   const usdt = (assets.data?.find((asset) => asset.isNumeraire)?.address ?? CHAIN.contracts?.usdt ?? MAINNET_USDT).toLowerCase();
-  /** stack 每期照比例買非現金成分：全部是 USDT 的話沒有東西可買，後端也會拒絕。 */
-  const stackWithoutAssets = kind === 'stack' && selected.every(([address]) => address.toLowerCase() === usdt);
+  /** 這個資產怎麼買：草稿裡的設定，沒有就是 Buy & hold。USDT 是現金，不買。 */
+  const executionOf = (address: string): AssetExecution => draft?.executions?.[address.toLowerCase()] ?? HOLD;
+  const invested = selected.filter(([address]) => address.toLowerCase() !== usdt);
+  const kinds = new Set<ExecutionKind>(invested.map(([address]) => executionOf(address).kind));
   const draftProblem = draft?.executionProblem ?? null;
   const valid = name.trim().length > 0 && totalBps === 10_000 && unavailableAssets.length===0 && (draft===null||allocationAgreed)
-    && draftProblem === null && !stackWithoutAssets && kindAgreed;
+    && draftProblem === null && kindAgreed;
   const idleLock = featureLock('idleYield');
   const busy = step !== 'idle' && step !== 'done';
 
@@ -151,12 +147,15 @@ export function ActivateFundPage(): ReactNode {
     setError(null);
     setCreated(null);
     try {
-      // 先組好要發的版本：組不出來（權重不對、stack 只有 USDT）就不建策略。
+      // 先組好要發的版本：組不出來（權重不對、同一資產兩次）就不建策略。
       const version = typedVersionBody({
         chainId: CHAIN.id,
-        kind,
         usdt,
-        assets: selected.map(([address, percent]) => ({ address, weightBps: Math.round(percent * 100) })),
+        assets: selected.map(([address, percent]) => ({
+          address,
+          weightBps: Math.round(percent * 100),
+          ...(address.toLowerCase() === usdt ? {} : { execution: executionOf(address) }),
+        })),
         changeLog: 'created from the app',
       });
       const trimmed = name.trim();
@@ -310,18 +309,16 @@ export function ActivateFundPage(): ReactNode {
               ? 'Change your design first'
               : draft !== null && !allocationAgreed
                 ? 'Confirm the allocation from your design'
-                : stackWithoutAssets
-                  ? 'Stack needs at least one asset besides USDT'
-                  : !kindAgreed
-                    ? `Confirm how ${EXECUTION_COPY[kind].name} runs`
-                    : null;
+                : !kindAgreed
+                  ? 'Confirm how each asset is bought'
+                  : null;
 
   return (
     <main className="explore-wrap cf">
       <header className="explore-heading cf-head">
         <div>
           <h1>Activate a fund<span>.</span></h1>
-          <p>Pick the assets and their weights, then choose how the fund buys them.</p>
+          <p>Pick the assets and their weights, then confirm how each one is bought.</p>
         </div>
         <Link className="cf-design-link" to="/create">Open the full designer <span aria-hidden="true">→</span></Link>
       </header>
@@ -334,7 +331,7 @@ export function ActivateFundPage(): ReactNode {
               {draftProblem !== null ? (
                 <Note tone="warn">{draftProblem} <Link to="/create">Change it in the designer →</Link></Note>
               ) : (
-                <p>Activate these holdings as {EXECUTION_COPY[draft.execution ?? 'hold'].name}. Fee settings and anything still marked Coming soon stay in your design.</p>
+                <p>Activate these holdings with the strategy each asset has in your design. Fee settings and anything still marked Coming soon stay in your design.</p>
               )}
               <label className="cf-confirm">
                 <input type="checkbox" checked={allocationAgreed} disabled={draftProblem !== null} onChange={(event) => setAllocationAgreed(event.target.checked)} />
@@ -479,26 +476,27 @@ export function ActivateFundPage(): ReactNode {
 
           <section className="cf-block">
             <h2><b>3</b>How it buys</h2>
-            <div className="seg public-periods cf-cadence" role="group" aria-label="How the fund buys">
-              {KINDS.map((option) => { const lock = playLock(option); return (
-                <button
-                  key={option}
-                  type="button"
-                  className={kind === option && draftProblem === null ? 'on' : ''}
-                  aria-pressed={kind === option && draftProblem === null}
-                  disabled={draft !== null || !openKinds().includes(option)}
-                  title={lock?.note}
-                  onClick={() => setKind(option)}
-                >
-                  {EXECUTION_COPY[option].name}
-                  {lock && <> <FeatureBadge lock={lock} /></>}
-                </button>
-              ); })}
-            </div>
+            {invested.length === 0 ? (
+              <p className="cf-help">Pick an asset to see how it is bought. USDT stays as cash.</p>
+            ) : (
+              <ul className="cf-summary-list" role="list" aria-label="How each asset is bought">
+                {invested.map(([address]) => {
+                  const execution = executionOf(address);
+                  return (
+                    <li key={address}>
+                      <span>{symbolFor(address)}</span>
+                      <b>{draftProblem !== null ? '—' : execution.kind === 'stack' ? `${EXECUTION_COPY.stack.name} · ${stackWords(execution)}` : EXECUTION_COPY.hold.name}</b>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
             <p className="cf-help">
               {draftProblem !== null
-                ? 'Your design has to settle on one way first.'
-                : <>{EXECUTION_COPY[kind].line}{draft !== null && ' It comes from your design; change it there.'}</>}
+                ? 'Your design has to be changed first.'
+                : draft !== null
+                  ? <>{[...kinds].map((kind) => EXECUTION_COPY[kind].line).join(' ')} It comes from your design; change it there.</>
+                  : <>{EXECUTION_COPY.hold.line} To stack an asset, set its schedule in the <Link to="/create">full designer</Link>.</>}
             </p>
             {idleLock && (
               <p className="cf-help" data-locked={idleLock.state}>
@@ -509,7 +507,7 @@ export function ActivateFundPage(): ReactNode {
             {draftProblem === null && (
               <label className="cf-confirm">
                 <input type="checkbox" checked={kindAgreed} onChange={(event) => setKindAgreed(event.target.checked)} />
-                {EXECUTION_COPY[kind].confirm}
+                {executionConfirm(kinds)}
               </label>
             )}
           </section>
@@ -537,7 +535,9 @@ export function ActivateFundPage(): ReactNode {
 
             <dl className="cf-summary-facts">
               <dt>Buys</dt>
-              <dd>{draftProblem !== null ? '—' : EXECUTION_COPY[kind].name}</dd>
+              <dd>{draftProblem !== null || kinds.size === 0 ? '—' : [...kinds].map((kind) => EXECUTION_COPY[kind].name).join(' and ')}</dd>
+              <dt>Minimum deposit</dt>
+              <dd>{selected.length === 0 ? '—' : `${minimumDeposit(selected.map(([address, percent]) => ({ address, weightBps: Math.round(percent * 100) })), usdt)} USDT`}</dd>
               <dt>Earn on idle USDT</dt>
               <dd>Off</dd>
             </dl>

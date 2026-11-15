@@ -50,11 +50,11 @@ export const FEATURES = {
   },
   // ---- 第二批：策略與基金規則（第 7、8 節） ----
   strategyDca: {
-    // 2026-11-15 使用者決定：定期定額的參數由創作者設定（每天或每週、每期買每筆投入的固定比例），買的人只決定投多少。
-    // 後端的 typed 版本還不收創作者的定期參數（BE-1 是持有人各自設定），等後端改好再開。
-    state: 'soon',
+    // 2026-11-15 使用者決定（docs#57 G0-4）：每個資產各自選純持有或定期定額，定期定額的參數（每天或每週、星期、時刻、
+    // 分幾期）也逐資產由創作者設定，買的人只決定投多少。後端 BE-2（backend#93）已收這組參數，開放。
+    state: 'on',
     name: 'Recurring buys',
-    note: `You set daily or weekly buys of a fixed share of each deposit. ${SOON}`,
+    note: `You set daily or weekly buys for each asset, split over 2–52 buys. ${SOON}`,
   },
   strategyDips: {
     state: 'soon',

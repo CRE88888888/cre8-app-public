@@ -1,14 +1,34 @@
-import { expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import fs from "node:fs";
 import { activationDesign } from "../src/lib/activation-design";
-import { EXECUTION_COPY, describeExecutionProblem, designExecution, openKinds, rowExtras, typedVersionBody } from "../src/lib/fund-execution";
+import {
+  EXECUTION_COPY,
+  describeExecutionProblem,
+  designExecution,
+  executionConfirm,
+  minimumDeposit,
+  openKinds,
+  rowExtras,
+  stackExecution,
+  stackWords,
+  typedVersionBody,
+} from "../src/lib/fund-execution";
+import { openTestnetCrypto } from "../src/lib/testnet-assets";
 import * as B from "../src/reference/lib/fund-builder";
 
-// cre8-app#79（APP-1）：一檔基金一種執行模式（hold／stack），送出 typed 版本；其他策略即將推出。
+// docs#57 G0-4（使用者 2026-11-15）：每個資產各自 hold 或 stack，stack 的排程逐資產由創作者設定；
+// 送出 schema 2 的 per_asset 版本（backend BE-2）。
 
 const USDT = "0x55d398326f99059ff775485246999027b3197955";
 const BTC = "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c";
 const ETH = "0x2170ed0880ac9a755fd29b2688956bd959f933f8";
+
+// 時區固定成台北（UTC+8，沒有夏令時間），換算才有固定答案。
+const zone = process.env.TZ;
+beforeAll(() => { process.env.TZ = "Asia/Taipei"; });
+afterAll(() => { if (zone === undefined) delete process.env.TZ; else process.env.TZ = zone; });
+/** 2026-11-18 是星期三（台北中午）。 */
+const NOW = new Date("2026-11-18T04:00:00Z");
 
 const design = (plays: B.Play[]) => {
   let state = B.emptyBuilder();
@@ -19,106 +39,176 @@ const design = (plays: B.Play[]) => {
   }
   return { ...state, name: "Test fund" };
 };
-
-// stack 開放後（後端收創作者的定期參數）的行為；目前 stack 鎖著，見下一個測試。
 const BOTH = ["hold", "stack"] as const;
 
-test("all hold → hold, all stack → stack, nothing → hold", () => {
-  expect(designExecution(design(["hold", "hold"]).rows, {}, undefined, BOTH)).toEqual({ kind: "hold" });
-  expect(designExecution(design(["stack", "stack"]).rows, {}, undefined, BOTH)).toEqual({ kind: "stack" });
-  expect(designExecution([], {}, undefined, BOTH)).toEqual({ kind: "hold" });
+test("stack is open now that the backend takes the creator's schedule", () => {
+  expect(openKinds()).toEqual(["hold", "stack"]);
+  expect(openKinds(false)).toEqual(["hold"]);
 });
 
-test("while stack is locked, a stack design is asked to switch to Buy & hold", () => {
-  expect(openKinds()).toEqual(["hold"]);
-  expect(openKinds(true)).toEqual(["hold", "stack"]);
-  const result = designExecution(design(["stack"]).rows, {}, (play) => B.PLAYS[play as B.Play].name);
-  expect(result).toEqual({ problem: { kind: "excluded", plays: ["Stack"] } });
-  expect(describeExecutionProblem({ kind: "excluded", plays: ["Stack"] })).toBe("Stack is coming soon. Switch it to Buy & hold to activate this fund now.");
-  expect(activationDesign(design(["stack"]))!.execution).toBeNull();
+test("a stack row's local schedule becomes the backend's UTC schedule", () => {
+  const stack = B.defaults("stack");
+  // 設計器預設：每週一 09:00、12 期。台北 09:00 = UTC 01:00，同一天（星期一 = 1）。
+  expect(stackExecution(stack, NOW)).toEqual({ kind: "stack", every: "weekly", weekday: 1, timeUtc: "01:00", slices: 12 });
+  // 台北星期一 07:00 是 UTC 星期日 23:00：星期跟著退一天（後端星期日 = 0）。
+  expect(stackExecution({ ...stack, time: "07:00" }, NOW)).toEqual({ kind: "stack", every: "weekly", weekday: 0, timeUtc: "23:00", slices: 12 });
+  // 設計器星期日（6）→ 後端 0。
+  expect(stackExecution({ ...stack, day: 6, time: "12:30" }, NOW)?.weekday).toBe(0);
+  expect(stackExecution({ ...stack, every: "daily", buys: 2 }, NOW)).toEqual({ kind: "stack", every: "daily", weekday: null, timeUtc: "01:00", slices: 2 });
+  expect(stackExecution({ ...stack, buys: 52 }, NOW)?.slices).toBe(52);
+  // 後端只收每天／每週、2–52 期。
+  expect(stackExecution({ ...stack, every: "monthly" }, NOW)).toBeNull();
+  expect(stackExecution({ ...stack, buys: 53 }, NOW)).toBeNull();
+  expect(stackExecution({ ...stack, buys: 1 }, NOW)).toBeNull();
+  expect(stackExecution({ ...stack, time: "9:00" }, NOW)).toBeNull();
 });
 
-test("mixed hold and stack is not silently turned into one of them", () => {
-  const result = designExecution(design(["hold", "stack"]).rows, {}, undefined, BOTH);
-  expect(result).toEqual({ problem: { kind: "mixed" } });
-  expect(describeExecutionProblem({ kind: "mixed" })).toContain("every asset");
+test("the UTC schedule is told back in local time", () => {
+  expect(stackWords({ kind: "stack", every: "weekly", weekday: 0, timeUtc: "23:00", slices: 12 }, NOW)).toBe("Every Monday at 07:00 your time, over 12 buys");
+  expect(stackWords({ kind: "stack", every: "daily", weekday: null, timeUtc: "01:00", slices: 4 }, NOW)).toBe("Every day at 09:00 your time, over 4 buys");
 });
 
-test("the six excluded strategies are reported by name, before anything else", () => {
-  const rows = design(["dips", "stack"]).rows;
-  const result = designExecution(rows, {}, (play) => B.PLAYS[play as B.Play].name, BOTH);
-  expect(result).toEqual({ problem: { kind: "excluded", plays: ["Buy dips"] } });
-  expect(describeExecutionProblem({ kind: "excluded", plays: ["Buy dips", "Custom"] }, BOTH)).toBe("Buy dips, Custom are coming soon. Switch them to Buy & hold or Stack to activate this fund now.");
+test("each asset keeps its own strategy: hold and stack can sit in one fund", () => {
+  const result = designExecution(design(["hold", "stack"]).rows, { open: BOTH, now: NOW });
+  expect("assets" in result && Object.fromEntries(result.assets)).toEqual({
+    BTC: { kind: "hold" },
+    ETH: { kind: "stack", every: "weekly", weekday: 1, timeUtc: "01:00", slices: 12 },
+  });
+  expect(designExecution([], { open: BOTH })).toEqual({ assets: new Map() });
+});
+
+test("what still blocks activation is named, one thing at a time", () => {
+  const name = (play: string) => B.PLAYS[play as B.Play].name;
+  // 還沒開放的策略先講。
+  expect(designExecution(design(["dips", "stack"]).rows, { playName: name, open: BOTH })).toEqual({ problem: { kind: "excluded", plays: ["Buy dips"] } });
   for (const play of ["custom", "dips", "range", "trend", "lp", "carry"] as const) {
-    const one = designExecution([{ play, p: B.defaults(play) } as B.Row], {}, undefined, BOTH);
+    const one = designExecution([{ key: "BTC", play, p: B.defaults(play) } as B.Row], { open: BOTH });
     expect("problem" in one && one.problem.kind).toBe("excluded");
   }
+  // stack 關掉的話（功能開關），stack 也算還沒開放。
+  expect(designExecution(design(["stack"]).rows, { playName: name, open: ["hold"] })).toEqual({ problem: { kind: "excluded", plays: ["Stack"] } });
+  // 舊草稿的每月排程或 1000 期。
+  const monthly = { key: "ETH", play: "stack", p: { ...B.defaults("stack"), every: "monthly" } } as B.Row;
+  expect(designExecution([monthly], { open: BOTH, assetName: () => "ETH" })).toEqual({ problem: { kind: "schedule", assets: ["ETH"] } });
+  expect(describeExecutionProblem({ kind: "schedule", assets: ["ETH"] })).toBe("Stack buys daily or weekly, in 2–52 buys. Change the schedule of ETH to activate this fund now.");
+  // 同一個資產兩列、設定不同：後端一個資產一種設定。設定相同就合併。
+  const hold = { key: "BTC", play: "hold", p: B.defaults("hold") } as B.Row;
+  const stack = { key: "BTC", play: "stack", p: B.defaults("stack") } as B.Row;
+  expect(designExecution([hold, stack], { open: BOTH, assetName: () => "BTCB" })).toEqual({ problem: { kind: "split", assets: ["BTCB"] } });
+  expect(describeExecutionProblem({ kind: "split", assets: ["BTCB"] })).toBe("BTCB has two different strategies. Give each asset one strategy to activate this fund now.");
+  expect(designExecution([hold, { ...hold, id: 9 }], { open: BOTH })).toEqual({ assets: new Map([["BTC", { kind: "hold" }]]) });
 });
 
 test("old hold/stack extras and whole-fund rules block activation until turned off; the draft keeps its fields", () => {
-  const lending = { play: "hold", p: { ...B.defaults("hold"), venue: "venus" } } as B.Row;
-  const stops = { play: "stack", p: { ...B.defaults("stack"), exit: "tpsl" } } as unknown as B.Row;
-  const ceiling = { play: "stack", p: { ...B.defaults("stack"), ceiling: 90_000 } } as B.Row;
+  const lending = { key: "BTC", play: "hold", p: { ...B.defaults("hold"), venue: "venus" } } as B.Row;
+  const stops = { key: "BTC", play: "stack", p: { ...B.defaults("stack"), exit: "tpsl" } } as unknown as B.Row;
+  const ceiling = { key: "BTC", play: "stack", p: { ...B.defaults("stack"), ceiling: 90_000 } } as B.Row;
   expect(rowExtras(lending)).toEqual(["Earn while held"]);
   expect(rowExtras(stops)).toEqual(["Take profit or stop loss"]);
   expect(rowExtras(ceiling)).toEqual(["Pause buying above a price"]);
-  expect(designExecution([lending], {}, undefined, BOTH)).toEqual({ problem: { kind: "extras", settings: ["Earn while held"] } });
-  // 整檔規則開著（例如舊草稿的再平衡）也要先關。
-  expect(designExecution(design(["hold"]).rows, { rebalance: { on: true } })).toEqual({ problem: { kind: "extras", settings: ["Whole-fund rules"] } });
-  expect(designExecution(design(["hold"]).rows, { rebalance: { on: false }, idle: { on: false } })).toEqual({ kind: "hold" });
-  // 預設的 hold／stack 沒有附加設定。
+  expect(designExecution([lending], { open: BOTH })).toEqual({ problem: { kind: "extras", settings: ["Earn while held"] } });
+  expect(designExecution(design(["hold"]).rows, { rules: { rebalance: { on: true } } })).toEqual({ problem: { kind: "extras", settings: ["Whole-fund rules"] } });
+  expect("assets" in designExecution(design(["hold"]).rows, { rules: { rebalance: { on: false }, idle: { on: false } } })).toBe(true);
   expect(rowExtras({ play: "hold", p: B.defaults("hold") } as B.Row)).toEqual([]);
   expect(rowExtras({ play: "stack", p: B.defaults("stack") } as B.Row)).toEqual([]);
-  // 檢查不改動草稿。
   expect(lending.p).toEqual({ ...B.defaults("hold"), venue: "venus" });
 });
 
-test("the typed version keeps the mode, funding schedule and idle yield off", () => {
-  const body = typedVersionBody({ chainId: 97, kind: "stack", usdt: USDT, assets: [{ address: BTC.toUpperCase().replace("0X", "0x"), weightBps: 5000 }, { address: USDT, weightBps: 5000 }], changeLog: "x" });
+test("the version body is the backend's schema 2 per_asset shape", () => {
+  const stack = { kind: "stack", every: "weekly", weekday: 1, timeUtc: "01:00", slices: 12 } as const;
+  const body = typedVersionBody({ chainId: 97, usdt: USDT.toUpperCase().replace("0X", "0x"), changeLog: "x", assets: [
+    { address: BTC.toUpperCase().replace("0X", "0x"), weightBps: 5000, execution: stack },
+    { address: ETH, weightBps: 3000 },
+    { address: USDT, weightBps: 2000 },
+  ] });
   expect(body).toEqual({
     chainId: 97,
-    allocation: { assets: [{ address: BTC, weightBps: 5000 }, { address: USDT, weightBps: 5000 }] },
-    execution: { kind: "stack" },
+    allocation: { assets: [{ address: BTC, weightBps: 5000 }, { address: ETH, weightBps: 3000 }, { address: USDT, weightBps: 2000 }] },
+    execution: {
+      kind: "per_asset",
+      numeraire: USDT,
+      rebalance: "none",
+      assets: [
+        { asset: BTC, weightBps: 5000, execution: stack, yield: null },
+        { asset: ETH, weightBps: 3000, execution: { kind: "hold" }, yield: null },
+        { asset: USDT, weightBps: 2000, yield: null },
+      ],
+    },
     schedule: { kind: "funding" },
     idleYield: { enabled: false },
     changeLog: "x",
   });
-  // round-trip：JSON 來回後內容一樣（不丟模式）。
-  expect(JSON.parse(JSON.stringify(body))).toEqual(body);
-  expect(typedVersionBody({ chainId: 56, kind: "hold", usdt: USDT, assets: [{ address: ETH, weightBps: 10_000 }] }).execution).toEqual({ kind: "hold" });
-  expect("changeLog" in typedVersionBody({ chainId: 56, kind: "hold", usdt: USDT, assets: [{ address: ETH, weightBps: 10_000 }] })).toBe(false);
+  // USDT 沒選也要列（0%）：後端會把它補進 allocation，兩邊要一項一項對得上。
+  const noCash = typedVersionBody({ chainId: 56, usdt: USDT, assets: [{ address: ETH, weightBps: 10_000 }] });
+  expect(noCash.allocation.assets).toEqual([{ address: ETH, weightBps: 10_000 }, { address: USDT, weightBps: 0 }]);
+  expect(noCash.execution.assets.at(-1)).toEqual({ asset: USDT, weightBps: 0, yield: null });
+  expect("changeLog" in noCash).toBe(false);
+  // 純 USDT 可以（沒有東西要買）。
+  expect(typedVersionBody({ chainId: 97, usdt: USDT, assets: [{ address: USDT, weightBps: 10_000 }] }).execution.assets).toEqual([{ asset: USDT, weightBps: 10_000, yield: null }]);
 });
 
-test("the typed version refuses weights that are not 100% and a stack with only USDT", () => {
-  expect(() => typedVersionBody({ chainId: 97, kind: "hold", usdt: USDT, assets: [{ address: BTC, weightBps: 9_999 }] })).toThrow("99.99%");
-  expect(() => typedVersionBody({ chainId: 97, kind: "hold", usdt: USDT, assets: [{ address: BTC, weightBps: 10_001 }] })).toThrow("100.01%");
-  expect(() => typedVersionBody({ chainId: 97, kind: "hold", usdt: USDT, assets: [] })).toThrow();
-  expect(() => typedVersionBody({ chainId: 97, kind: "stack", usdt: USDT, assets: [{ address: USDT.toUpperCase().replace("0X", "0x"), weightBps: 10_000 }] })).toThrow("Stack needs");
-  // hold 可以是純 USDT。
-  expect(typedVersionBody({ chainId: 97, kind: "hold", usdt: USDT, assets: [{ address: USDT, weightBps: 10_000 }] }).execution.kind).toBe("hold");
+test("a version that does not add up, lists an asset twice or stacks USDT is refused before anything is created", () => {
+  expect(() => typedVersionBody({ chainId: 97, usdt: USDT, assets: [{ address: BTC, weightBps: 9_999 }] })).toThrow("99.99%");
+  expect(() => typedVersionBody({ chainId: 97, usdt: USDT, assets: [] })).toThrow();
+  expect(() => typedVersionBody({ chainId: 97, usdt: USDT, assets: [{ address: BTC, weightBps: 5_000 }, { address: BTC.toUpperCase().replace("0X", "0x"), weightBps: 5_000 }] })).toThrow("twice");
+  expect(() => typedVersionBody({ chainId: 97, usdt: USDT, assets: [{ address: USDT, weightBps: 10_000, execution: { kind: "stack", every: "daily", weekday: null, timeUtc: "01:00", slices: 2 } }] })).toThrow("USDT");
 });
 
-test("a design reaches the activation page with its mode, or with what to change", () => {
-  const hold = activationDesign(design(["hold", "hold"]))!;
-  expect(hold.execution).toBe("hold");
-  expect(hold.executionProblem).toBeNull();
-  // 目前 stack 鎖著：混合設計先被要求把 Stack 換成 Buy & hold。
-  const mixed = activationDesign(design(["hold", "stack"]))!;
-  expect(mixed.execution).toBeNull();
-  expect(mixed.executionProblem).toBe(describeExecutionProblem({ kind: "excluded", plays: ["Stack"] }));
-  // 權重照舊帶過去。
+test("the minimum deposit is 50 USDT of buys: cash does not count", () => {
+  expect(minimumDeposit([{ address: BTC, weightBps: 10_000 }], USDT)).toBe(50);
+  expect(minimumDeposit([{ address: BTC, weightBps: 5_000 }, { address: USDT, weightBps: 5_000 }], USDT)).toBe(100);
+  expect(minimumDeposit([{ address: BTC, weightBps: 3_000 }, { address: USDT.toUpperCase().replace("0X", "0x"), weightBps: 7_000 }], USDT)).toBe(166.67);
+  expect(minimumDeposit([{ address: USDT, weightBps: 10_000 }], USDT)).toBe(50);
+});
+
+test("a design reaches the activation page with each asset's strategy, keyed by token", () => {
+  const mixed = activationDesign(design(["hold", "stack"]), false, NOW)!;
+  expect(mixed.executionProblem).toBeNull();
+  expect(mixed.executions).toEqual({
+    [BTC]: { kind: "hold" },
+    [ETH]: { kind: "stack", every: "weekly", weekday: 1, timeUtc: "01:00", slices: 12 },
+  });
   expect(Object.values(mixed.weights).reduce((sum, value) => sum + value, 0)).toBe(100);
+  const dips = activationDesign(design(["dips"]), false, NOW)!;
+  expect(dips.executions).toBeNull();
+  expect(dips.executionProblem).toContain("coming soon");
 });
 
-test("the copy names both modes and the confirmation states what will happen", () => {
-  expect(EXECUTION_COPY.hold.confirm).toMatch(/does not sell or rebalance/);
-  expect(EXECUTION_COPY.stack.confirm).toMatch(/skipped/);
-  // 使用者決定：定期定額的參數由創作者設定，買的人只決定投多少。
+test("the copy names both strategies and the confirmation states only what this fund does", () => {
   expect(EXECUTION_COPY.stack.line).toMatch(/Holders only choose how much/);
+  expect(executionConfirm(new Set(["hold"]))).toBe(EXECUTION_COPY.hold.confirm);
+  expect(executionConfirm(new Set(["stack"]))).toBe(EXECUTION_COPY.stack.confirm);
+  expect(executionConfirm(new Set(["hold", "stack"]))).toMatch(/Buy & hold assets .* Stack assets .* skipped/);
   expect(EXECUTION_COPY.stack.confirm).toMatch(/slices I set/);
 });
 
-// 原始碼守住：建立頁只送 typed 版本，不再送 interval；要明示確認；連點與失敗重試不會建第二個策略。
+test("a fund has no asset limit (docs#61)", () => {
+  expect(B.builderLimits("demo")).toEqual({ assets: Infinity, positions: Infinity });
+  expect(B.builderLimits("execution")).toEqual({ assets: Infinity, positions: Infinity });
+  let state = B.emptyBuilder();
+  const keys = B.ASSETS.filter((asset) => asset.category === "crypto" && B.canAdd(asset)).slice(0, 20).map((asset) => asset.key);
+  for (const key of keys) state = B.addAsset(state, key, "demo");
+  expect(B.assetKeys(state.rows).length).toBe(20);
+  expect(B.positionsFull(state, "demo")).toBe(false);
+  expect(B.problem(state, "demo")).not.toMatch(/at most|more than one fund can run/);
+});
+
+test("ZEC and the 8 added cryptos open on testnet only", () => {
+  const copy = B.ASSETS.map((asset) => ({ ...asset }));
+  expect(openTestnetCrypto(copy, false)).toEqual([]);
+  const opened = openTestnetCrypto(copy, true);
+  expect(opened.sort()).toEqual(["AAVE", "ATOM", "CAKE", "DOT", "FIL", "PEPE", "SHIB", "TON", "ZEC"]);
+  const zec = copy.find((asset) => asset.key === "ZEC")!;
+  expect(zec.status).toBe("ready");
+  expect(B.canPickAsset(zec)).toBe(true);
+  expect(B.playBlock("stack", zec, "demo")).toBeNull();
+  expect(B.playBlock("stack", copy.find((asset) => asset.key === "CAKE")!, "demo")).toBeNull();
+  // 第二次不再改；主網目錄（沒傳 copy 的那份）不動。
+  expect(openTestnetCrypto(copy, true)).toEqual([]);
+  expect(B.ASSET_BY_KEY.get("ZEC")?.status).toBe("no-feed");
+});
+
+// 原始碼守住：建立頁只送 typed 版本，要明示確認；連點與失敗重試不會建第二個策略。
 test("the activation page publishes the typed version only after explicit confirmation", () => {
   const page = fs.readFileSync("src/features/create/CreateFundPage.tsx", "utf8");
   expect(page).toContain("typedVersionBody(");

@@ -372,8 +372,8 @@ export function createStrategy(
 }
 
 /**
- * 發一個 typed 版本（backend BE-1，`docs/strategy-api.zh-TW.md`）：執行模式 hold／stack、排程 `funding`、閒置生息關閉。
- * 本文由 `lib/fund-execution.ts` 的 `typedVersionBody` 組（權重剛好 10000、stack 不能純 USDT）。
+ * 發一個 typed 版本（backend BE-2 schema 2，`docs/strategy-api.zh-TW.md`）：每個資產各自 hold／stack、排程 `funding`、
+ * 不再平衡、生息關閉。本文由 `lib/fund-execution.ts` 的 `typedVersionBody` 組（權重剛好 10000、USDT 沒有執行設定）。
  * 舊的 `schedule: interval`（目標比例再平衡）後端已經不收新的 HTTP 發版。
  */
 export function publishVersion(

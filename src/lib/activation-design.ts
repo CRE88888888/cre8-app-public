@@ -1,19 +1,21 @@
-import { describeExecutionProblem, designExecution, type ExecutionKind } from "./fund-execution";
+import { describeExecutionProblem, designExecution, type AssetExecution } from "./fund-execution";
 import { PLAYS, type Play } from "../reference/lib/fund-builder";
 import {
   reviveBuilder,
   assetOf,
   cashShare,
+  displayAssetSymbol,
   DRAFT_STORAGE_KEY,
 } from "../reference/lib/fund-builder";
 import { IS_TESTNET, testnetToken } from "./testnet-catalogue";
+import "./testnet-assets";
 export type ActivationDesign = {
   name: string;
   weights: Record<string, number>;
   symbols: Record<string, string>;
-  /** 設計收斂成的模式（cre8-app#79）；收斂不了是 null，原因在 `executionProblem`。 */
-  execution: ExecutionKind | null;
-  /** 要先回設計器改的事（混合、還沒開放的策略或附加設定）；沒有就是 null。 */
+  /** 每個資產（代幣地址，小寫）的執行設定（G0-4）；換不了是 null，原因在 `executionProblem`。USDT 不在裡面。 */
+  executions: Record<string, AssetExecution> | null;
+  /** 要先回設計器改的事（還沒開放的策略、附加設定、排程、同資產兩種設定）；沒有就是 null。 */
   executionProblem: string | null;
 };
 // 草稿僅作為表單輸入；資產仍須與登入後 API 的確切地址核對，不能直接成為交易授權。
@@ -23,14 +25,15 @@ export type ActivationDesign = {
  */
 const tokenFor = (symbol: string, mainnet: string, testnet: boolean): string =>
   (testnet ? testnetToken(symbol) ?? mainnet : mainnet).toLowerCase();
-export function activationDesign(value: unknown, testnet: boolean = IS_TESTNET): ActivationDesign | null {
+export function activationDesign(value: unknown, testnet: boolean = IS_TESTNET, now: Date = new Date()): ActivationDesign | null {
   const design = reviveBuilder(value, "demo");
   if (!design || !design.rows.length) return null;
   const weights: Record<string, number> = {},
     symbols: Record<string, string> = {};
+  const tokenOf = (key: string): string => { const asset = assetOf(key); return tokenFor(asset.symbol, asset.token, testnet); };
   for (const row of design.rows) {
     const asset = assetOf(row.key),
-      token = tokenFor(asset.symbol, asset.token, testnet);
+      token = tokenOf(row.key);
     weights[token] = (weights[token] || 0) + Math.round(row.share * 100) / 100;
     symbols[token] = asset.symbol;
   }
@@ -40,12 +43,17 @@ export function activationDesign(value: unknown, testnet: boolean = IS_TESTNET):
     weights[token] = (weights[token] || 0) + cash;
     symbols[token] = "USDT";
   }
-  const execution = designExecution(design.rows, design.rules, (play) => PLAYS[play as Play]?.name ?? play);
+  const execution = designExecution(design.rows, {
+    rules: design.rules,
+    playName: (play) => PLAYS[play as Play]?.name ?? play,
+    assetName: (key) => displayAssetSymbol(assetOf(key).symbol),
+    now,
+  });
   return {
     name: design.name,
     weights,
     symbols,
-    execution: "kind" in execution ? execution.kind : null,
+    executions: "assets" in execution ? Object.fromEntries([...execution.assets].map(([key, setting]) => [tokenOf(key), setting])) : null,
     executionProblem: "problem" in execution ? describeExecutionProblem(execution.problem) : null,
   };
 }
