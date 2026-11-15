@@ -267,6 +267,14 @@ function FundPageBody(): ReactNode {
   const requestedReturn = search.get('returnTo');
   const backTo = safePublicReturn(requestedReturn);
   const [tab, setTab] = useState<'deposit' | 'withdraw'>(search.get('tab') === 'withdraw' ? 'withdraw' : 'deposit');
+  /**
+   * 沒登入就不能賣（使用者 2026-11-15：「還沒登入的時候就不要有 sell 按鈕了，他也只能 buy」）。
+   * 沒登入時：手機底部只有 Buy、桌機下單區沒有 Buy／Sell 分頁；`?tab=withdraw` 的連結也落在 Buy。
+   */
+  const canSell = token !== null;
+  useEffect(() => {
+    if (!canSell && tab === 'withdraw') setTab('deposit');
+  }, [canSell, tab]);
   // 切到 Sell 分頁時，手上的 status 如果不是剛讀的就重讀一次（cre8-app#49）。
   // 排程器會在背景買賣，頁面不會自己知道；而 Sell 面板的 Cash／positions／total 是使用者決定賣多少的依據。
   // 只在「切到 Sell」那一刻檢查（不跟著每次資料更新重跑）；送出前另外還會再讀一次，那才是判斷要不要賣的依據。
@@ -603,7 +611,7 @@ function FundPageBody(): ReactNode {
               {/* 畫面上叫 Buy／Sell（2026-11-13 使用者決定，比 Deposit／Withdraw 好懂）；
                   程式內部、網址參數與 API 仍是 deposit／withdraw。 */}
               <Tabs value={tab} onValueChange={(value) => setTab(value as 'deposit' | 'withdraw')}>
-                {!mobile && (
+                {!mobile && canSell && (
                   <TabsList aria-label="Fund actions" className="w-full bg-[var(--card,#eef3f7)]">
                     <TabsTrigger value="deposit" className="flex-1">Buy</TabsTrigger>
                     <TabsTrigger value="withdraw" className="flex-1">Sell</TabsTrigger>
@@ -930,7 +938,9 @@ function FundPageBody(): ReactNode {
           ) : <aside className="side">{ticket}{reference && <FundSnapshot fund={reference} />}</aside>}
           <div className="public-mobile-cta" aria-label="Fund actions" role="group">
             <button className="btn" type="button" aria-haspopup="dialog" disabled={ticketBusy} onClick={() => openMobileTicket('deposit')}>Buy</button>
-            <button className="btn ghost" type="button" aria-haspopup="dialog" disabled={ticketBusy} onClick={() => openMobileTicket('withdraw')}>Sell</button>
+            {canSell && (
+              <button className="btn ghost" type="button" aria-haspopup="dialog" disabled={ticketBusy} onClick={() => openMobileTicket('withdraw')}>Sell</button>
+            )}
           </div>
         </div>
       </main>
