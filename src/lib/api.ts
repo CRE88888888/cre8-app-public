@@ -120,13 +120,14 @@ export type PortfolioStatus = {
   holdings: StatusHolding[];
   unpriced: unknown[];
   targets: { asset: string; symbol: string; weightBps: number }[];
+  /** 價格或 RPC 不完整時後端回 `null`（cre8-app#93）：讀之前一定要先檢查。 */
   drift: {
     grossDriftBps: number;
     maxAbsDeltaBps: number;
     needsRebalance: boolean;
     thresholdBps: number;
     assets: DriftAssetRow[];
-  };
+  } | null;
   blocked: unknown[];
   sessionKey?: SessionKeyReport | null;
   /**
@@ -235,8 +236,8 @@ export function postLogin(message: string, signature: string): Promise<SessionCr
  * 會回的錯誤：401（token 無效或過期）、409 `PRIVY_NO_WALLET`／`PRIVY_OWNER_AMBIGUOUS`
  * （首次登入時帳號上不是恰好一個 EVM 錢包）、503 `PRIVY_UNAVAILABLE`（後端沒設定 Privy）。
  */
-export function postPrivyLogin(identityToken: string): Promise<SessionCredentials & { address?: string }> {
-  return request<SessionCredentials & { address?: string }>('/auth/privy', { method: 'POST', body: { identityToken } });
+export function postPrivyLogin(identityToken: string, signal?: AbortSignal): Promise<SessionCredentials & { address?: string }> {
+  return request<SessionCredentials & { address?: string }>('/auth/privy', { method: 'POST', body: { identityToken }, ...(signal === undefined ? {} : { signal }) });
 }
 
 /**
@@ -432,6 +433,14 @@ export function enrollPortfolio(token: string, strategyId: number): Promise<Port
   return request<Portfolio>('/portfolios', { method: 'POST', token, body: { strategyId } });
 }
 
+/**
+ * `GET /portfolios/:id/execution`（BE-2）：typed 基金的執行狀態。前端只用 `automation`：
+ * `"enabled"` 才表示這條鏈的產品投入管線開著（目前只有 chain 97）。舊的目標比例基金回 409 `EXECUTION_VERSION_MISMATCH`。
+ */
+export function getPortfolioExecution(token: string, id: number): Promise<{ automation?: 'enabled' | 'testnet_only' | string; [key: string]: unknown }> {
+  return request(`/portfolios/${id}/execution`, { token });
+}
+
 /** 這個端點會掃 Transfer 日誌、讀池子、定價 —— 實測 2–3 秒，不是卡住。 */
 export function getPortfolioStatus(token: string, id: number): Promise<PortfolioStatus> {
   return request<PortfolioStatus>(`/portfolios/${id}/status`, { token });
@@ -525,6 +534,8 @@ export type StrategyAllocationAsset = { address: string; weightBps: number };
 export type StrategyVersion = {
   strategyId: number;
   version: number;
+  /** 0 = 舊的目標比例；1、2 = typed 版本（2 是逐資產）。舊後端沒有這個欄位。 */
+  executionSchemaVersion?: number;
   allocation: { assets: StrategyAllocationAsset[] };
   schedule: { kind: 'interval'; intervalSeconds: number } | { kind: 'cron'; cron: string };
   changeLog: string | null;

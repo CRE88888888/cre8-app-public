@@ -22,7 +22,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ApiError, postPrivyLogin } from '../../lib/api';
-import { CHAIN_ID } from '../../lib/kernel';
+import { CHAIN, CHAIN_ID } from '../../lib/kernel';
 import { PRIVY_APP_ID, PRIVY_EMBEDDED_RDNS, PRIVY_LOGIN_METHODS, privyChain } from '../../lib/privy-config';
 import {
   PrivySetupError,
@@ -43,6 +43,7 @@ import { PRIVY_INITIAL, usePrivyAuth } from '../../store/privy';
 import type { PrivyActions, PrivyPhase } from '../../store/privy';
 import { sessionIsLive, useSession } from '../../store/session';
 import { useWallet } from '../../store/wallet';
+import { createExchangeGuard } from '../../lib/exchange-guard';
 
 /** 等嵌入式錢包建好、等 identity token 帶到它，最多等這麼久；超過就顯示錯誤與「再試一次」。 */
 const SETUP_TIMEOUT_MS = 25_000;
@@ -50,6 +51,8 @@ const SETUP_TIMEOUT_MS = 25_000;
 const SIGNER_GRACE_MS = 3_000;
 /** 後端回 `PRIVY_NO_WALLET`（token 還沒帶到剛建好的錢包）時，自動重試幾次。 */
 const AUTO_RETRIES = 2;
+/** `POST /auth/privy` 最多等這麼久；到時 abort，顯示「再試一次」（cre8-app#93）。 */
+const EXCHANGE_TIMEOUT_MS = 20_000;
 
 function localStorageOrNull(): Storage | null {
   try {
@@ -86,7 +89,8 @@ function Bridge(): null {
   /** 只用來讓「換 session」的 effect 再跑一次。 */
   const [attempt, setAttempt] = useState(0);
   const [signer, setSigner] = useState<'checking' | 'ready' | 'missing'>('checking');
-  const inFlight = useRef(false);
+  /** 換 session 的請求：有 timeout、登出或重試時撤銷，舊請求的結果不會寫進新的登入狀態（`lib/exchange-guard.ts`）。 */
+  const [exchange] = useState(() => createExchangeGuard(EXCHANGE_TIMEOUT_MS));
   const autoRetries = useRef(0);
   const refreshedFor = useRef<string | null>(null);
 
@@ -105,6 +109,7 @@ function Bridge(): null {
   // ---- 登出（或 Privy 的登入過期）：CRE8 session 與錢包一起清掉 ------------------------------
   useEffect(() => {
     if (!ready || authenticated) return;
+    exchange.cancel();
     const current = useSession.getState();
     if (current.via === 'privy') current.clear();
     const wallet = useWallet.getState();
@@ -112,7 +117,7 @@ function Bridge(): null {
     setFailure(null);
     autoRetries.current = 0;
     refreshedFor.current = null;
-  }, [ready, authenticated]);
+  }, [ready, authenticated, exchange]);
 
   // ---- 換 CRE8 session ------------------------------------------------------------------------
   //
@@ -122,7 +127,7 @@ function Bridge(): null {
   // 在拿到 CRE8 session 之前，這個 app 不提供任何「加綁」的入口（見下面的 `link`）。
   useEffect(() => {
     if (!ready || !authenticated || userId === null || privySession || otherSession || failure !== null) return;
-    if (inFlight.current) return;
+    if (exchange.busy()) return;
     if (accountWallets.length === 0) return; // 等嵌入式錢包（逾時由下面的 effect 處理）
     if (identityToken === null) return; // 等 Privy 給 identity token
     const signed = identityTokenWallets(identityToken);
@@ -135,12 +140,14 @@ function Bridge(): null {
       return;
     }
 
-    inFlight.current = true;
+    const ticket = exchange.start(userId);
+    /** 這一次的結果還能不能用：沒被撤銷、沒有更新的一次、登入的還是同一個人。 */
+    const current = (): boolean => ticket.isCurrent() && latest.current.userId === userId;
     void (async () => {
       try {
-        const credentials = await postPrivyLogin(identityToken);
+        const credentials = await postPrivyLogin(identityToken, ticket.signal);
         // 等回應的期間使用者可能已經登出或換人：那就丟掉這份 session。
-        if (latest.current.userId !== userId) return;
+        if (!current()) return;
         const storage = localStorageOrNull();
         const resolution = resolveOwner({
           responseAddress: credentials.address,
@@ -157,6 +164,9 @@ function Bridge(): null {
         });
         autoRetries.current = 0;
       } catch (cause) {
+        // 舊的請求（已登出、換了人、或被重試撤銷）失敗：不寫進現在的登入狀態。
+        if (!current()) return;
+        ticket.done();
         if (cause instanceof ApiError && cause.code === 'PRIVY_NO_WALLET' && autoRetries.current < AUTO_RETRIES) {
           autoRetries.current += 1;
           await refreshUser().catch(() => undefined);
@@ -166,10 +176,10 @@ function Bridge(): null {
           setFailure(cause);
         }
       } finally {
-        inFlight.current = false;
+        ticket.done();
       }
     })();
-  }, [ready, authenticated, userId, privySession, otherSession, failure, accountWallets, identityToken, attempt, refreshUser]);
+  }, [ready, authenticated, userId, privySession, otherSession, failure, accountWallets, identityToken, attempt, refreshUser, exchange]);
 
   // ---- 嵌入式錢包沒有自動建：自己建 ------------------------------------------------------------
   // `createOnLogin` 在 Privy 的視窗登入時一定會建；用 headless 登入時文件沒有明說，所以登入後
@@ -194,11 +204,12 @@ function Bridge(): null {
   useEffect(() => {
     if (waitingFor === null) return;
     const timer = window.setTimeout(() => {
-      if (latest.current.privySession || inFlight.current) return;
+      // 交換請求有自己的 timeout（到時以錯誤結束），這裡只管「還在等錢包／token」。
+      if (latest.current.privySession || exchange.busy()) return;
       setFailure(new PrivySetupError(waitingFor === 'token' ? 'NO_IDENTITY_TOKEN' : 'NO_WALLET'));
     }, SETUP_TIMEOUT_MS);
     return () => window.clearTimeout(timer);
-  }, [waitingFor]);
+  }, [waitingFor, exchange]);
 
   // ---- 把主人錢包放進 `useWallet`（只放主人的；別的錢包一律不放） ------------------------------
   useEffect(() => {
@@ -281,12 +292,15 @@ function Bridge(): null {
       },
       loginWithWallet: () => login({ loginMethods: ['wallet'] }),
       logout: async () => {
+        exchange.cancel();
         useSession.getState().clear();
         const wallet = useWallet.getState();
         if (wallet.kind === 'injected') wallet.disconnect();
         await logout();
       },
       retry: () => {
+        // 撤銷還掛著的那一次，重試用新的請求。
+        exchange.cancel();
         autoRetries.current = 0;
         refreshedFor.current = null;
         // 帳號上還沒有錢包（自動建立沒成功）就明確建一個；有的話請 Privy 重發 identity token。
@@ -310,7 +324,7 @@ function Bridge(): null {
         await exportWallet(address === null ? undefined : { address });
       },
     }),
-    [login, logout, createWallet, refreshUser, linkEmail, linkGoogle, linkTwitter, linkWallet, connectWallet, exportWallet, initOAuth, sendCode, loginWithCode],
+    [login, logout, createWallet, refreshUser, linkEmail, linkGoogle, linkTwitter, linkWallet, connectWallet, exportWallet, initOAuth, sendCode, loginWithCode, exchange],
   );
 
   // ---- 同步到給畫面用的 store ------------------------------------------------------------------
@@ -354,7 +368,8 @@ function Bridge(): null {
 }
 
 export default function PrivyRoot(): ReactNode {
-  const chain = useMemo(() => privyChain(CHAIN_ID, import.meta.env.VITE_RPC_URL), []);
+  // 測試網用測試網自己的節點（`CHAIN.rpcUrl`），不拿主網的 `VITE_RPC_URL`（cre8-app#93）。
+  const chain = useMemo(() => privyChain(CHAIN_ID, CHAIN.testnet ? CHAIN.rpcUrl : import.meta.env.VITE_RPC_URL), []);
   if (PRIVY_APP_ID === null) return null;
   return (
     <PrivyProvider

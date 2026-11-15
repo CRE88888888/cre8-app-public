@@ -23,6 +23,11 @@ import { featureLock, playLock } from "../../lib/feature-flags";
 import { EXECUTION_COPY, REBALANCE_COPY, REBALANCE_STACK_NOTE, STACK_SLICES, describeExecutionProblem, designExecution, rebalanceOf, rowExtras, stackExecution, type Rebalance } from "../../lib/fund-execution";
 // 測試網上 ZEC 與 #89 的 8 個加密資產改成可交易（只限測試網）。要在任何畫面讀目錄之前跑。
 import "../../lib/testnet-assets";
+import { PERFORMANCE_FEE, performanceSplit, swapFeeLabel } from "../../lib/fees";
+import { exportDesign } from "../../lib/design-export";
+import { readChainId } from "../../lib/chain-config";
+
+const CHAIN_ID = readChainId(import.meta.env.VITE_CHAIN_ID);
 import { FeatureBadge } from "../../components/FeatureLock";
 
 const base = "";
@@ -240,7 +245,7 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
   const [reviewing, setReviewing] = useState(false);
   const [query, setQuery] = useState("");
   const [assetTab, setAssetTab] = useState<B.AssetClass>("crypto");
-  const [fee, setFee] = useState<number>(B.FEE.default);
+  const [fee, setFee] = useState<number>(PERFORMANCE_FEE.default);
   const [stakeText, setStakeText] = useState(String(B.STAKE.default));
   const [agreed, setAgreed] = useState(false);
   const [symbolText, setSymbolText] = useState("");
@@ -308,7 +313,8 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
     setReviewing(true);
   }
   function download() {
-    const design = B.fundDesign(state, { fee, stake }, new Date().toISOString(), mode);
+    // 匯出套用這個 build 的鏈與地址、參數總表的費用（`lib/design-export.ts`）。
+    const design = exportDesign(B.fundDesign(state, { fee, stake }, new Date().toISOString(), mode), { chainId: CHAIN_ID, testnet: IS_TESTNET, feePct: fee });
     const blob = new Blob([JSON.stringify(design, null, 2) + "\n"], { type: "application/json" });
     const url = URL.createObjectURL(blob), link = document.createElement("a");
     link.href = url;
@@ -452,8 +458,8 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
               <div><dt>Lending income</dt><dd className={styles.posText}>{!state.rows.length ? "—" : testnet ? (state.rules.idle.on ? (testnet.idleVenues.includes(state.rules.idle.venue) ? B.VENUE_NAME[state.rules.idle.venue] : "Sandbox lending vault") : "None") : B.lendingIncome(state) > 0 ? `≈ ${B.pct(B.lendingIncome(state))} / yr` : "None"}</dd></div>
               <div><dt>Strategies</dt><dd>{state.rows.length ? `${state.rows.length} on assets${B.rulesOn(state.rules).length ? ` + ${B.rulesOn(state.rules).length} fund-wide` : ""}` : "—"}</dd></div>
               {testnet && <div><dt title="Every deposit has to fit in one BNB Chain transaction, which limits how many positions a fund runs.">Capacity used</dt><dd>{state.rows.length ? `${roomUsed}% · ${room.positions} of ${limits.positions} positions` : "—"}</dd></div>}
-              <div><dt>Deposit fee</dt><dd>{B.FEE.depositPct}% · to CRE8</dd></div>
-              <div><dt>Performance fee</dt><dd>CRE8 {B.FEE.platform}% + yours</dd></div>
+              <div><dt>Swap fee</dt><dd>{swapFeeLabel()}</dd></div>
+              <div><dt>Performance fee</dt><dd>{PERFORMANCE_FEE.min}–{PERFORMANCE_FEE.max}%, set by you · CRE8 keeps 10% of it</dd></div>
               {!testnet && <div data-locked={delayLock?.state} title={delayLock?.note}><dt>Changes to a live fund</dt><dd>24-hour notice{delayLock && <> <FeatureBadge lock={delayLock} className={styles.beta} /></>}</dd></div>}
             </dl>
             {(issue || sourceIssue) && <p className={styles.issue} role="status">{issue || sourceIssue}</p>}
@@ -472,7 +478,7 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
       </dialog>
 
       <Sheet open={drawer !== null} onOpenChange={(open) => { if(!open) setDrawer(null); }}><SheetContent side="right" showCloseButton={false} className={cx(styles.drawer,"public-builder-strategy p-0")} onOpenAutoFocus={() => { drawerFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; }} onCloseAutoFocus={(event) => { if(drawerFocus.current?.isConnected) {event.preventDefault();drawerFocus.current.focus();} }}><SheetTitle className="sr-only">{editing ? B.assetOf(editing.key).name + " strategy" : "Strategy"}</SheetTitle><SheetDescription className="sr-only">Choose a strategy for this asset.</SheetDescription>
-        {editing && <EditRow row={editing} state={state} update={update} close={() => setDrawer(null)} split={() => { const next = B.addSlice(state, editing.id, mode); if (next === state) return; commit(next); setDrawer({ mode: "edit", id: next.nextId - 1 }); }} />}
+        {editing && <EditRow row={editing} state={state} update={update} close={() => setDrawer(null)} />}
       </SheetContent></Sheet>
 
       <dialog ref={reviewRef} className={styles.modal} aria-labelledby="review-title" onClose={() => setReviewing(false)} onClick={(event) => { if (event.target === event.currentTarget) setReviewing(false); }}>
@@ -492,8 +498,8 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
               </label>
             )}
             <div className={styles.field} data-locked={feeLock?.state}><span className={styles.label}>Your performance fee{feeLock && <> <FeatureBadge lock={feeLock} className={styles.beta} /></>}</span>
-              <div className={styles.feeLine}><input type="range" min={B.FEE.min} max={B.FEE.max} step={1} value={fee} aria-label="Your performance fee" disabled={!!feeLock} title={feeLock?.note} onChange={(event) => { if (!feeLock) setFee(Number(event.target.value)); }} /><b>{fee}%</b></div>
-              <span className={styles.note}>{feeLock ? feeLock.note : `CRE8 adds ${B.FEE.platform}%, so holders pay ${fee + B.FEE.platform}% of their realized profit when they withdraw.`}</span>
+              <div className={styles.feeLine}><input type="range" min={PERFORMANCE_FEE.min} max={PERFORMANCE_FEE.max} step={1} value={fee} aria-label="Your performance fee" disabled={!!feeLock} title={feeLock?.note} onChange={(event) => { if (!feeLock) setFee(Number(event.target.value)); }} /><b>{fee}%</b></div>
+              <span className={styles.note}>{feeLock ? feeLock.note : `Holders pay ${fee}% of their realized profit when they withdraw. CRE8 keeps 10% of that fee (${performanceSplit(fee).platform}% of profit) and you keep ${performanceSplit(fee).creator}%.`}</span>
             </div>
             <label className={styles.field}><span className={styles.label}>Your stake · {cashName}</span>
               <input className={styles.bigInput} type="number" min={B.STAKE.min} step={B.STAKE.step} value={stakeText} onChange={(event) => setStakeText(event.target.value)} />
@@ -648,7 +654,7 @@ function AddAsset({ state, query, setQuery, tab, setTab, pick, close }: { state:
   );
 }
 
-function EditRow({ row, state, update, close, split }: { row: B.Row; state: B.Builder; update: Update; close: () => void; split: () => void }) {
+function EditRow({ row, state, update, close }: { row: B.Row; state: B.Builder; update: Update; close: () => void }) {
   const testnet = useContext(Testnet);
   const asset = B.assetOf(row.key), words = rowWords(row, testnet);
   // On testnet an Earn fees row re-centers only as an admitted pool key of its range does (the key fixes it for good):
@@ -657,7 +663,6 @@ function EditRow({ row, state, update, close, split }: { row: B.Row; state: B.Bu
     const next = B.setSetting(s, row.id, field, value);
     return testnet ? B.fitRecenter(next, row.id, testnet.lpRecenters) : next;
   });
-  const room = B.capacity(state);
   const settingsRef = useRef<HTMLDivElement>(null);
   const sources = !testnet ? B.stockSourceChoices(asset) : [];
   const recommendation = sources.length > 1 ? B.stockSourceRecommendation(asset) : null;
@@ -720,7 +725,8 @@ function EditRow({ row, state, update, close, split }: { row: B.Row; state: B.Bu
         {testnet && <p className={styles.note}>Charts illustrate how each strategy trades. They are not past results.</p>}
       </div>
       <div className={styles.dFoot}>
-        <button className={cx("btn", "sm", styles.lineBtn)} type="button" onClick={split} disabled={(!!testnet && B.isPlanningOnly(asset)) || room.positions >= B.builderLimits(testnet ? "execution" : "demo").positions || row.share < 2} title="Give this asset a second strategy with half of its share.">+ Another strategy</button>
+        {/* 「+ Another strategy」拿掉了（cre8-app#93）：每個資產只有一種買法（G0-4），分列只會插入一個還沒開放的
+            Range trade，剛加的設計立刻被啟用檢查擋下。 */}
         <button className="btn sm" type="button" onClick={close}>Done</button>
       </div>
     </>

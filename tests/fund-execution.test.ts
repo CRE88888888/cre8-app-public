@@ -14,7 +14,8 @@ import {
   stackWords,
   typedVersionBody,
 } from "../src/lib/fund-execution";
-import { openTestnetCrypto } from "../src/lib/testnet-assets";
+import { MAINNET_STATUS, openTestnetCrypto } from "../src/lib/testnet-assets";
+import { IS_TESTNET } from "../src/lib/testnet-catalogue";
 import * as B from "../src/reference/lib/fund-builder";
 
 // docs#57 G0-4（使用者 2026-11-15）：每個資產各自 hold 或 stack，stack 的排程逐資產由創作者設定；
@@ -196,7 +197,8 @@ test("a fund has no asset limit (docs#61)", () => {
 });
 
 test("ZEC and the 8 added cryptos open on testnet only", () => {
-  const copy = B.ASSETS.map((asset) => ({ ...asset }));
+  // 從主網的原始 status 開始（測試網的 build 載入時已經就地改過 B.ASSETS）。
+  const copy = B.ASSETS.map((asset) => ({ ...asset, status: MAINNET_STATUS.get(asset.key) ?? asset.status }));
   expect(openTestnetCrypto(copy, false)).toEqual([]);
   const opened = openTestnetCrypto(copy, true);
   expect(opened.sort()).toEqual(["AAVE", "ATOM", "CAKE", "DOT", "FIL", "PEPE", "SHIB", "TON", "ZEC"]);
@@ -207,7 +209,9 @@ test("ZEC and the 8 added cryptos open on testnet only", () => {
   expect(B.playBlock("stack", copy.find((asset) => asset.key === "CAKE")!, "demo")).toBeNull();
   // 第二次不再改；主網目錄（沒傳 copy 的那份）不動。
   expect(openTestnetCrypto(copy, true)).toEqual([]);
-  expect(B.ASSET_BY_KEY.get("ZEC")?.status).toBe("no-feed");
+  expect(MAINNET_STATUS.get("ZEC")).toBe("no-feed");
+  // 載入時只在測試網的 build 打開。
+  expect(B.ASSET_BY_KEY.get("ZEC")?.status).toBe(IS_TESTNET ? "ready" : "no-feed");
 });
 
 // 原始碼守住：建立頁只送 typed 版本，要明示確認；連點與失敗重試不會建第二個策略。

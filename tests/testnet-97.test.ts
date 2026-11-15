@@ -330,7 +330,7 @@ test("on the testnet a buy is funded by the faucet, into the fund account, never
 test("nothing outside the chain config hard-codes mainnet for the wallet, the chain object or explorer links", () => {
   const kernel = fs.readFileSync("src/lib/kernel.ts", "utf8");
   expect(kernel).not.toContain("bsc-dataseed");
-  expect(kernel).toContain("chainProfile(CHAIN_ID, import.meta.env.VITE_RPC_URL)");
+  expect(kernel).toContain("chainProfile(CHAIN_ID, import.meta.env.VITE_RPC_URL, import.meta.env.VITE_TESTNET_RPC_URL)");
   const menu = fs.readFileSync("src/components/WalletMenu.tsx", "utf8");
   expect(menu).not.toMatch(/bscscan|bsc-dataseed/);
   expect(menu).toContain("walletChainParams(CHAIN)");

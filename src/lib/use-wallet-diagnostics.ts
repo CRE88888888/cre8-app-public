@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CHAIN_ID } from './kernel';
+import { CHAIN_ID, readRpcUrl } from './kernel';
 
 /**
  * 錢包端診斷：**注入式錢包讀的是它自己設定的 RPC**，不是我們後端那一條。
@@ -40,7 +40,7 @@ export function useWalletDiagnostics(address: string | null, provider: unknown):
     let cancelled = false;
 
     void (async () => {
-      const rpcUrl = import.meta.env.VITE_RPC_URL ?? (import.meta.env.DEV ? '/rpc' : undefined);
+      const rpcUrl = readRpcUrl();
       const injected = provider as Eip1193 | null;
       const ask = (method: string, params: unknown[]) => injected?.request?.({ method, params });
       const fromNode = async (method: string, params: unknown[]): Promise<string | null> => {

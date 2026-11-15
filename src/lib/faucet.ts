@@ -75,7 +75,7 @@ export function faucetSuccess(body: { amountWei?: unknown; txHash?: unknown; sta
   };
 }
 
-const QUOTA_MESSAGE = 'You have already claimed today’s 1,000 test USDT, or today’s total for everyone has run out. Come back tomorrow (after 00:00 UTC).';
+export const QUOTA_MESSAGE = 'You have already claimed today’s 1,000 test USDT, or today’s total for everyone has run out. Come back tomorrow (after 00:00 UTC).';
 const LATER_MESSAGE = 'Test USDT is not available right now. Please try again later.';
 
 export function faucetFailure(error: unknown): FaucetOutcome {
@@ -166,8 +166,131 @@ export function pendingClaim(portfolioId: number): string | null {
 export function forgetClaim(portfolioId: number): void {
   try { localStorage.removeItem(claimKey(portfolioId)); } catch { /* 沒有就算了 */ }
 }
-/** 補記失敗時要不要留著下次再試：後端忙或暫時讀不到（409 忙碌、503、網路）才留；其他（例如來源不屬於這個帳戶）就丟掉。 */
+/**
+ * 補記失敗時要不要留著下次再試（cre8-app#93）。預設**留著**：錢已經到帳，丟掉 claimId 就再也排不進買入。
+ * 只有後端明確說「這個來源永遠記不成」才丟：
+ *   - 400 驗證錯誤（來源格式不對、這條鏈不收這種來源、金額不夠最低投入）
+ *   - 403 這筆領取不是這個帳戶的
+ *   - 404 基金帳戶不存在
+ *   - 409 `FUNDING_EVENT_CONFLICT`（這筆領取已經記在別檔或別的身分上）
+ * 401（登入過期）、408、409 忙碌／還沒確認、429、5xx、網路錯誤都是暫時的。
+ */
 export function retryClaimLater(error: unknown): boolean {
   if (!(error instanceof ApiError)) return true;
-  return error.status === 0 || error.status === 503 || (error.status === 409 && /BUSY|PENDING|UNKNOWN|UNAVAILABLE|NOT_CONFIRMED/.test(error.code.toUpperCase()));
+  if (error.status === 400 || error.status === 403 || error.status === 404) return false;
+  if (error.status === 409 && error.code.toUpperCase() === 'FUNDING_EVENT_CONFLICT') return false;
+  return true;
+}
+
+// ---- 結果不明的每日領取（cre8-app#93）----
+
+/** UTC 日期（`2026-11-16`），水龍頭的額度以 UTC 日計。 */
+export function utcDay(now: Date = new Date()): string {
+  return now.toISOString().slice(0, 10);
+}
+
+/**
+ * 領取的請求送出了、回應卻沒回來（網路斷、逾時、5xx）：後端可能已經 mint，只是這裡拿不到 claimId。
+ * 記下「今天這個帳戶有一筆結果不明的領取」，同一天再按遇到「今天領過了」時，講清楚錢可能已經到了，
+ * 不是單純叫人明天再來。後端提供原 claim 的查詢之前，前端只能做到這裡。
+ */
+export function claimOutcomeUnknown(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return true;
+  return error.status === 0 || error.status === 408 || error.status === 500 || error.status === 503 || error.status === 504;
+}
+const unknownKey = (portfolioId: number) => `cre8.faucet-unknown.${portfolioId}`;
+export function rememberUnknownClaim(portfolioId: number, now: Date = new Date()): void {
+  try { localStorage.setItem(unknownKey(portfolioId), utcDay(now)); } catch { /* 只在這次造訪有效 */ }
+}
+export function hadUnknownClaimToday(portfolioId: number, now: Date = new Date()): boolean {
+  try { return localStorage.getItem(unknownKey(portfolioId)) === utcDay(now); } catch { return false; }
+}
+export function forgetUnknownClaim(portfolioId: number): void {
+  try { localStorage.removeItem(unknownKey(portfolioId)); } catch { /* 沒有就算了 */ }
+}
+export const CLAIM_UNCONFIRMED_TODAY = {
+  title: 'Today’s test USDT may already be in the fund',
+  message: `Your claim today did not come back, so it could not be scheduled to buy. The ${DAILY_TEST_USDT} test USDT may already be in this fund’s account. You can claim again after 00:00 UTC; contact the team if it does not show up.`,
+} as const;
+
+/**
+ * 每日領取的冪等契約（backend#97，總管 2026-11-16）：同一天重送 `POST /faucet/usdt`，後端回**原來那筆**
+ * （200＋同一個 claimId），不再一律 429。所以「回應遺失」的那一筆，再按一次就拿得回 claimId，照常記成投入。
+ * 記帳時回 `replayed` 表示這筆之前就記過了：今天的已經投進去，不是新的錢。
+ */
+export function dailyClaimAlreadyInvested(lot: { replayed?: boolean } | null | undefined): boolean {
+  return lot?.replayed === true;
+}
+
+// ---- 迎新還在路上（buy-funding 回 202）----
+
+/**
+ * 迎新 202 之後記下 grantId。下一次按買入一定先再問一次 buy-funding（後端會對同一筆交易對帳），
+ * 不因為帳戶已經有錢就改走每日領取（cre8-app#93）。
+ */
+const welcomeKey = (portfolioId: number) => `cre8.welcome-pending.${portfolioId}`;
+export function rememberPendingWelcome(portfolioId: number, grantId: string): void {
+  try { localStorage.setItem(welcomeKey(portfolioId), grantId); } catch { /* 只在這次造訪有效 */ }
+}
+export function pendingWelcome(portfolioId: number): string | null {
+  try { return localStorage.getItem(welcomeKey(portfolioId)); } catch { return null; }
+}
+export function forgetPendingWelcome(portfolioId: number): void {
+  try { localStorage.removeItem(welcomeKey(portfolioId)); } catch { /* 沒有就算了 */ }
+}
+
+/** 已經確定迎新在這個人身上用掉（後端說改領每日，或在這檔記過）：按鈕直接是每日領取。 */
+const usedKey = (portfolioId: number) => `cre8.welcome-used.${portfolioId}`;
+export function rememberWelcomeUsed(portfolioId: number): void {
+  try { localStorage.setItem(usedKey(portfolioId), '1'); } catch { /* 只在這次造訪有效 */ }
+}
+export function welcomeUsed(portfolioId: number): boolean {
+  try { return localStorage.getItem(usedKey(portfolioId)) === '1'; } catch { return false; }
+}
+
+// ---- 錢已經記成投入、配置還沒做完 ----
+
+/**
+ * 迎新或每日領取已經記成這檔的投入，但後面的授權或配置沒做完：記下來，下一次按鈕是「把它買完」，
+ * 不再領新的錢（以前會用「總值大於 0」判斷改領每日，結果遇到 429 就卡住，或迎新後多領一筆 1,000）。
+ */
+const resumeKey = (portfolioId: number) => `cre8.buy-resume.${portfolioId}`;
+export function rememberResume(portfolioId: number): void {
+  try { localStorage.setItem(resumeKey(portfolioId), '1'); } catch { /* 只在這次造訪有效 */ }
+}
+export function needsResume(portfolioId: number): boolean {
+  try { return localStorage.getItem(resumeKey(portfolioId)) === '1'; } catch { return false; }
+}
+export function forgetResume(portfolioId: number): void {
+  try { localStorage.removeItem(resumeKey(portfolioId)); } catch { /* 沒有就算了 */ }
+}
+
+/**
+ * 測試網買入按鈕這一次做什麼（純函式，畫面與流程共用）：
+ *   - `resume`：上次的錢已經記成投入、還沒買完 → 只做授權與配置，不領新的錢。
+ *   - `welcome`：還沒確定迎新用掉 → 先問 buy-funding（202 之後再按也是這條：對帳原來那筆）。
+ *   - `daily`：已經確定迎新用掉（後端說要改領每日，或迎新已在這檔記過）→ 仍先問 buy-funding，再領每日 1,000。
+ * 不看帳戶總值：總值大於 0 不代表迎新用掉，也不代表配置做完。
+ */
+export type FaucetBuyMode = 'resume' | 'welcome' | 'daily';
+export function faucetBuyMode(input: { resume: boolean; welcomePending: boolean; welcomeUsed: boolean }): FaucetBuyMode {
+  if (input.resume) return 'resume';
+  if (input.welcomePending) return 'welcome';
+  return input.welcomeUsed ? 'daily' : 'welcome';
+}
+
+/**
+ * buy-funding 回 ready 之後怎麼走：
+ *   - `invest`：這次有新的迎新（或 202 那筆終於到了）→ 用它買。
+ *   - `daily`：迎新之前就記過了 → 要買就領每日 1,000。
+ *   - `existing`：舊後端的 `existing_cash`（帳戶本來有錢，沒發迎新）→ 用帳戶裡的現金往下做。
+ */
+export function afterBuyFunding(
+  funding: { funding: 'welcome_grant' | 'existing_cash'; lot: { replayed?: boolean } | null },
+  waitingForWelcome: boolean,
+): 'invest' | 'daily' | 'existing' {
+  if (funding.funding === 'existing_cash') return 'existing';
+  if (funding.lot === null) return 'daily';
+  if (funding.lot.replayed !== true || waitingForWelcome) return 'invest';
+  return 'daily';
 }

@@ -3,7 +3,9 @@ import { ApiError } from '../lib/api';
 import { TradeFailureError } from '../lib/trade-failure';
 import { SponsorshipError } from '../lib/paymaster';
 import { FaucetError } from '../lib/faucet';
-import { AddressBookMismatch } from '../lib/chain-config';
+import { AddressBookMismatch, RpcChainMismatch } from '../lib/chain-config';
+import { SubscriptionLocked } from '../lib/subscription-lock';
+import { ApprovalBatchError } from '../lib/approval-batches';
 
 export type Tone = 'neutral' | 'ok' | 'warn' | 'bad';
 
@@ -79,10 +81,22 @@ export function ErrorNote({ error }: { error: unknown }): ReactNode {
   }
 
   // 後端說「這一輪沒成交」，或平台沒有代付這筆交易的 gas：白話訊息在 `message`，原文收進可展開的細節。
-  if (error instanceof TradeFailureError || error instanceof SponsorshipError || error instanceof FaucetError || error instanceof AddressBookMismatch) {
+  if (error instanceof TradeFailureError || error instanceof SponsorshipError || error instanceof FaucetError || error instanceof AddressBookMismatch ||
+    error instanceof RpcChainMismatch || error instanceof SubscriptionLocked) {
     return (
       <Note tone="bad">
         <strong>{error.title}</strong>
+        <div style={{ marginTop: 6 }}>{error.message}</div>
+        <TechnicalDetails text={error.technical} />
+      </Note>
+    );
+  }
+
+  // 授權分批中途失敗：講清楚已經授權幾個、還差幾個（cre8-app#93）。
+  if (error instanceof ApprovalBatchError) {
+    return (
+      <Note tone="bad">
+        <strong>Asset approval did not finish</strong>
         <div style={{ marginTop: 6 }}>{error.message}</div>
         <TechnicalDetails text={error.technical} />
       </Note>

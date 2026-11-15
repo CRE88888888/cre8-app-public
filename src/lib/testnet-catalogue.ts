@@ -9,8 +9,9 @@
  * 函式都另外收一個 `testnet` 參數，單元測試不必改環境變數。
  */
 import { TESTNET_97 } from './testnet-97';
+import { readChainId } from './chain-config';
 
-export const IS_TESTNET = Number(import.meta.env.VITE_CHAIN_ID ?? 1337) === TESTNET_97.chainId;
+export const IS_TESTNET = readChainId(import.meta.env.VITE_CHAIN_ID) === TESTNET_97.chainId;
 
 /** 測試網列出的 16 檔（照 cre8-app#86 的順序）。 */
 export const TESTNET_LISTED_SLUGS: readonly string[] = [

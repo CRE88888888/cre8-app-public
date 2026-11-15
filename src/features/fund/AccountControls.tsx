@@ -19,6 +19,7 @@ import type { PauseSource } from '../../lib/a10';
 import { readOnchainAccount, setPausedCalldata, upgradeCalls } from '../../lib/atp-contracts';
 import type { AccountCall, OnchainAccount, OnchainAllocation } from '../../lib/atp-contracts';
 import { publicClientFor, sendSudoCalls } from '../../lib/kernel';
+import { upgradeBatches } from '../../lib/approval-batches';
 import type { RenewalWallet } from '../../lib/kernel';
 import type { AccountOnchain } from './use-account-onchain';
 
@@ -95,6 +96,8 @@ export function AccountControls({
     try {
       let calls: AccountCall[];
       let upgraded: { version: number; symbols: string[] } | null = null;
+      /** enroll 打的 registry（升版時用剛重讀的那一個）。 */
+      let registry: string = state.registry;
       if (kind === 'upgrade') {
         // 送出前重讀一次鏈上狀態（cre8-app#50）：`enroll` 釘的是**送出當下**的最新版本，
         // 要授權的新資產必須照那一版算，不能照畫面上可能已經過時的那一版。
@@ -123,18 +126,26 @@ export function AccountControls({
           latest: fresh.latest,
         });
         calls = plan.calls;
+        registry = fresh.registry;
         upgraded = { version: fresh.latestVersion, symbols: plan.newAssets.map(symbolOf) };
       } else {
         calls = [{ to: state.registry, data: setPausedCalldata(account as Address, kind === 'pause'), value: 0n }];
       }
-      const receipt = await sendSudoCalls({
-        wallet,
-        token,
-        accountAddress: account as Address,
-        strategyId: dbStrategyId,
-        calls,
-      });
-      if (!receipt.success) throw new Error(`The transaction landed on-chain but reverted: ${receipt.txHash}`);
+      // 升版：approve 每 32 個一筆、enroll 在最後一批（`upgradeBatches`，cre8-app#93）。暫停／恢復只有一個 call。
+      const batches = kind === 'upgrade' ? upgradeBatches(calls, registry) : [calls];
+      let receipt: Awaited<ReturnType<typeof sendSudoCalls>> | null = null;
+      for (const [index, batch] of batches.entries()) {
+        if (batches.length > 1) toast.replace(id, { tone: 'pending', title, body: `Signature ${index + 1} of ${batches.length}…` });
+        receipt = await sendSudoCalls({
+          wallet,
+          token,
+          accountAddress: account as Address,
+          strategyId: dbStrategyId,
+          calls: batch,
+        });
+        if (!receipt.success) throw new Error(`The transaction landed on-chain but reverted: ${receipt.txHash}`);
+      }
+      if (receipt === null) throw new Error('Nothing to send.');
       const message =
         upgraded !== null
           ? upgradeDoneMessage(upgraded.version, upgraded.symbols)

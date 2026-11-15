@@ -26,7 +26,7 @@ import { createPublicClient, createWalletClient, custom, encodeFunctionData, enc
 import type { Address, Chain, Hex, LocalAccount, PublicClient, WalletClient } from 'viem';
 
 import { postSponsor } from './api';
-import { chainProfile, checkedContract } from './chain-config';
+import { chainProfile, checkedContract, readChainId, verifyRpcChain } from './chain-config';
 import { SponsorshipError, packForSponsorship, sponsorshipFromResponse, stubPaymasterData } from './paymaster';
 
 const API_BASE: string = import.meta.env.VITE_API_BASE ?? '/api';
@@ -41,13 +41,37 @@ const API_BASE: string = import.meta.env.VITE_API_BASE ?? '/api';
  *
  * 正式部署時把 `VITE_CHAIN_ID=56` 設回去即可，呼叫端的名字不變。
  */
-export const CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID ?? 1337);
+export const CHAIN_ID = readChainId(import.meta.env.VITE_CHAIN_ID);
 
 /**
  * 這條鏈的設定：主網、測試網（97）、本機 fork 各自一份，互不回落（cre8-app#62，`lib/chain-config.ts`）。
  * 測試網的 RPC、區塊瀏覽器、合約地址、代付都從這裡來。
  */
-export const CHAIN = chainProfile(CHAIN_ID, import.meta.env.VITE_RPC_URL);
+export const CHAIN = chainProfile(CHAIN_ID, import.meta.env.VITE_RPC_URL, import.meta.env.VITE_TESTNET_RPC_URL);
+
+/**
+ * 讀鏈用的 RPC。測試網一律用 `CHAIN.rpcUrl`（測試網自己的節點，不拿主網的 `VITE_RPC_URL`）；
+ * 其他鏈照舊：`VITE_RPC_URL`，dev 沒設時走 vite 的 `/rpc` proxy。
+ */
+export function readRpcUrl(): string | undefined {
+  if (CHAIN.testnet) return CHAIN.rpcUrl;
+  return import.meta.env.VITE_RPC_URL ?? (import.meta.env.DEV ? '/rpc' : undefined);
+}
+
+let rpcChecked: Promise<void> | null = null;
+/**
+ * 送任何交易前呼叫：用獨立的 HTTP 請求確認 RPC 真的是這條鏈（`verifyRpcChain`）。對不上就丟錯，交易不送。
+ * 成功一次就記住；失敗不記，下次再問。
+ */
+export function assertRpcChain(): Promise<void> {
+  if (rpcChecked === null) {
+    rpcChecked = verifyRpcChain(CHAIN).catch((cause: unknown) => {
+      rpcChecked = null;
+      throw cause;
+    });
+  }
+  return rpcChecked;
+}
 
 export const bsc = {
   id: CHAIN_ID,
@@ -87,7 +111,7 @@ export function publicClientFor(wallet: RenewalWallet): PublicClient {
   if (wallet.kind === 'injected') {
     return createPublicClient({ chain: bsc, transport: custom(wallet.provider as never) });
   }
-  const rpcUrl = import.meta.env.VITE_RPC_URL ?? (import.meta.env.DEV ? '/rpc' : undefined);
+  const rpcUrl = readRpcUrl();
   if (rpcUrl === undefined || rpcUrl === '') {
     throw new Error(
       'Dev private-key mode needs an RPC: set VITE_RPC_URL, or use the vite /rpc proxy in dev (it targets 127.0.0.1:8545)',
@@ -150,6 +174,8 @@ export async function sendSudoCalls(args: {
   strategyId: number;
   timeoutMs?: number;
 }): Promise<RenewalReceipt> {
+  // RPC 連到的不是這條鏈（例如測試網的 build 讀主網）：不簽、不送（cre8-app#93）。
+  await assertRpcChain();
   const publicClient = publicClientFor(args.wallet);
   const entryPoint = ENTRY_POINT as never;
   const kernelVersion: GetKernelVersion<'0.7'> = KERNEL_V3_3;
@@ -394,7 +420,7 @@ export function approveCalldata(spender: Address): Hex {
  * 那段長說明（永遠不知道其實已經 approve 了）。把讀取與簽名拆開：讀用 RPC，簽才需要錢包。
  */
 export function readOnlyClient(): PublicClient {
-  const rpcUrl = import.meta.env.VITE_RPC_URL ?? (import.meta.env.DEV ? '/rpc' : undefined);
+  const rpcUrl = readRpcUrl();
   if (rpcUrl === undefined || rpcUrl === '') {
     throw new Error(
       'Reading allowance needs an RPC: set VITE_RPC_URL (in dev the vite /rpc proxy is used automatically)',
@@ -470,8 +496,9 @@ export async function sendGasTopUp(args: {
 }
 
 async function submitGasTopUp(args: { wallet: RenewalWallet; to: Address; valueWei: bigint }): Promise<Hex> {
+  await assertRpcChain();
   if (args.wallet.kind === 'dev') {
-    const rpcUrl = import.meta.env.VITE_RPC_URL ?? (import.meta.env.DEV ? '/rpc' : undefined);
+    const rpcUrl = readRpcUrl();
     if (rpcUrl === undefined || rpcUrl === '') {
       throw new Error('dev 私鑰模式需要一個 RPC 才能送交易：設 VITE_RPC_URL（dev 預設 /rpc）');
     }

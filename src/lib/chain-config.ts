@@ -42,7 +42,35 @@ export type ChainProfile = {
 
 const isHttpUrl = (value: string | undefined): value is string => value !== undefined && /^https?:\/\//.test(value);
 
-export function chainProfile(chainId: number, rpcOverride?: string): ChainProfile {
+/** 沒設 `VITE_CHAIN_ID` 時的預設：本機 fork（見 `lib/kernel.ts` 的說明）。 */
+export const DEFAULT_CHAIN_ID = 1337;
+
+/**
+ * 讀 `VITE_CHAIN_ID`。沒設、空字串（照 `.env.example` 複製後留下的 `VITE_CHAIN_ID=`）、不是正整數：一律用 1337。
+ * `Number('')` 是 0，以前會變成一條叫 0 的鏈。
+ */
+export function readChainId(value: string | undefined): number {
+  const trimmed = value?.trim() ?? '';
+  if (!/^\d+$/.test(trimmed)) return DEFAULT_CHAIN_ID;
+  const id = Number(trimmed);
+  return Number.isSafeInteger(id) && id > 0 ? id : DEFAULT_CHAIN_ID;
+}
+
+/** 公開的 BSC 主網節點（認得出來就不拿來當測試網的 RPC）。 */
+const MAINNET_RPC = /bsc-dataseed\.binance|bsc-dataseed\d*\.(binance|defibit|ninicoin)|bsc-rpc\.publicnode|bsc\.publicnode|bsc-mainnet|binance\.llamarpc|bsc\.drpc|56\.rpc/i;
+
+/**
+ * 測試網的 RPC：只收 `VITE_TESTNET_RPC_URL`（或明顯不是主網節點的 `VITE_RPC_URL`），否則用公開的測試網節點。
+ * 部署只把 `VITE_CHAIN_ID` 改成 97、卻留著 production 的主網 `VITE_RPC_URL` 時，不能讀主網（cre8-app#93）。
+ * 實際連到哪條鏈另由 `verifyRpcChain` 在交易前驗。
+ */
+export function testnetRpcUrl(testnetOverride?: string, generalOverride?: string): string {
+  if (isHttpUrl(testnetOverride)) return testnetOverride;
+  if (isHttpUrl(generalOverride) && !MAINNET_RPC.test(generalOverride)) return generalOverride;
+  return 'https://bsc-testnet.publicnode.com';
+}
+
+export function chainProfile(chainId: number, rpcOverride?: string, testnetRpcOverride?: string): ChainProfile {
   if (chainId === 56) {
     return {
       id: 56,
@@ -64,7 +92,7 @@ export function chainProfile(chainId: number, rpcOverride?: string): ChainProfil
       testnet: true,
       nativeSymbol: 'tBNB',
       // 與合約部署手冊用的同一個公開節點（data-seed 節點只留幾分鐘的 state）。
-      rpcUrl: isHttpUrl(rpcOverride) ? rpcOverride : 'https://bsc-testnet.publicnode.com',
+      rpcUrl: testnetRpcUrl(testnetRpcOverride, rpcOverride),
       explorerUrl: 'https://testnet.bscscan.com',
       sponsored: true,
       faucetFunded: true,
@@ -129,4 +157,43 @@ export function checkedContract(profile: ChainProfile, kind: keyof ChainContract
 /** 錢包現在所在的鏈是不是 app 的鏈。`null`（讀不到）當成「不知道」，不算錯。 */
 export function isWrongNetwork(profile: ChainProfile, walletChainId: number | null): boolean {
   return walletChainId !== null && walletChainId !== profile.id;
+}
+
+/** RPC 實際的鏈與 app 的鏈對不上：停用所有交易。 */
+export class RpcChainMismatch extends Error {
+  readonly title = 'Network setup problem';
+  readonly technical: string;
+  constructor(expected: number, actual: number | null, url: string) {
+    super('This site is connected to the wrong network, so nothing can be sent. This is on our side. Please try again later.');
+    this.name = 'RpcChainMismatch';
+    this.technical = `RPC ${url} reported chain ${actual ?? 'unknown'}; this build expects chain ${expected}`;
+  }
+}
+
+/**
+ * 用一個獨立的 HTTP 請求問 RPC 的 `eth_chainId`（不經 Privy／錢包的 provider：那邊回的是它自己的設定，抓不出錯配）。
+ * 回傳實際的鏈 id；讀不到回 null。
+ */
+export async function readRpcChainId(url: string, fetchImpl: typeof fetch = fetch): Promise<number | null> {
+  try {
+    const response = await fetchImpl(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_chainId', params: [] }),
+    });
+    const body = (await response.json()) as { result?: unknown };
+    return typeof body.result === 'string' && /^0x[0-9a-f]+$/i.test(body.result) ? Number(BigInt(body.result)) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 交易前的檢查：主網與測試網的 RPC 必須回報同一條鏈，否則丟 `RpcChainMismatch`。讀不到（null）也停，
+ * 不在不知道連到哪條鏈的情況下送交易。本機 fork 不檢查（dev 的 /rpc proxy 不一定是 http URL）。
+ */
+export async function verifyRpcChain(profile: ChainProfile, fetchImpl: typeof fetch = fetch): Promise<void> {
+  if (profile.id !== 56 && profile.id !== 97) return;
+  const actual = await readRpcChainId(profile.rpcUrl, fetchImpl);
+  if (actual !== profile.id) throw new RpcChainMismatch(profile.id, actual, profile.rpcUrl);
 }

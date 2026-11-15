@@ -88,13 +88,25 @@ export function stackExecution(
   if (!Number.isInteger(p.buys) || p.buys < STACK_SLICES.min || p.buys > STACK_SLICES.max) return null;
   const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(p.time ?? '09:00');
   if (match === null) return null;
-  const local = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(match[1]), Number(match[2]));
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  // 先定位目標日期（用中午，避開夏令時間切換那一小時），再設時刻（cre8-app#93）。
+  // 以前先在今天設 02:30，遇到今天沒有 02:30（春季撥快）會被正規化成 03:30，再搬到星期一就錯一小時。
+  const day = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12);
   if (p.every === 'weekly') {
-    const day = p.day ?? 0;
-    if (!Number.isInteger(day) || day < 0 || day > 6) return null;
-    const target = (day + 1) % 7;
-    local.setDate(local.getDate() + ((target - local.getDay() + 7) % 7));
+    const weekday = p.day ?? 0;
+    if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) return null;
+    const target = (weekday + 1) % 7;
+    day.setDate(day.getDate() + ((target - day.getDay() + 7) % 7));
   }
+  // 那一天的這個當地時刻不存在（撥快跳過）或出現兩次（撥慢重複）：往後找下一個（每天＋1 天、每週＋7 天）時刻清楚的日子。
+  const step = p.every === 'weekly' ? 7 : 1;
+  let local = localTimeOn(day, hour, minute);
+  for (let tries = 0; local === null && tries < 4; tries += 1) {
+    day.setDate(day.getDate() + step);
+    local = localTimeOn(day, hour, minute);
+  }
+  if (local === null) return null;
   return {
     kind: 'stack',
     every: p.every,
@@ -102,6 +114,17 @@ export function stackExecution(
     timeUtc: `${pad(local.getUTCHours())}:${pad(local.getUTCMinutes())}`,
     slices: p.buys,
   };
+}
+
+/** 那一天的當地 `hour:minute`；不存在或有兩個（夏令時間切換）回 null。 */
+function localTimeOn(day: Date, hour: number, minute: number): Date | null {
+  const at = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hour, minute);
+  if (at.getHours() !== hour || at.getMinutes() !== minute || at.getDate() !== day.getDate()) return null; // 被跳過
+  const later = new Date(at.getTime() + 3_600_000);
+  if (later.getHours() === hour && later.getMinutes() === minute) return null; // 撥慢：一小時後又是同一個時刻
+  const earlier = new Date(at.getTime() - 3_600_000);
+  if (earlier.getHours() === hour && earlier.getMinutes() === minute) return null;
+  return at;
 }
 
 /**
@@ -270,4 +293,19 @@ export function typedVersionBody(input: { chainId: number; usdt: string; assets:
 export function minimumDeposit(assets: readonly { address: string; weightBps: number }[], usdt: string): number {
   const invested = assets.filter((asset) => asset.address.toLowerCase() !== usdt.toLowerCase()).reduce((sum, asset) => sum + asset.weightBps, 0);
   return invested === 0 ? 50 : Math.ceil((50 * 10_000) / invested * 100) / 100;
+}
+
+/** 百分比換成 bps（0.01%）。輸入框與送出用同一個換算（cre8-app#93）。 */
+export const percentToBps = (percent: number): number => Math.round(percent * 100);
+/** 輸入的百分比先量化到 0.01%，畫面看到的就是會送出的。 */
+export const quantizePercent = (percent: number): number => percentToBps(Math.max(0, Math.min(100, percent))) / 100;
+
+/**
+ * 有填權重、換成 bps 卻是 0 的非現金資產（例如 0.001%）。四捨五入後合計仍可能剛好 10000，
+ * 但 0 bps 的資產後端會拒絕，要在建立策略之前就擋下。
+ */
+export function zeroBpsAssets(weights: readonly (readonly [string, number])[], usdt: string): string[] {
+  return weights
+    .filter(([address, percent]) => address.toLowerCase() !== usdt.toLowerCase() && percent > 0 && percentToBps(percent) < 1)
+    .map(([address]) => address);
 }

@@ -23,4 +23,7 @@ export function openTestnetCrypto(assets: readonly Asset[] = ASSETS, testnet: bo
   return opened;
 }
 
+/** 改之前（主網）的 status，給測試在任何鏈上都能拿到同一份原始資料（cre8-app#93）。 */
+export const MAINNET_STATUS: ReadonlyMap<string, Asset['status']> = new Map(ASSETS.map((asset) => [asset.key, asset.status]));
+
 openTestnetCrypto();

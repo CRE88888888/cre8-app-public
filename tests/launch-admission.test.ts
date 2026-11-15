@@ -76,22 +76,23 @@ test("every asset on the list (except USDT cash) exists in the designer, matched
 });
 
 test("exactly the five funds whose holdings are all on the list are investable", () => {
+  // 主網的名單：明確指定鏈，`VITE_CHAIN_ID=97 bun test` 也要過（cre8-app#93）。
   // 與 docs#32 的結論一致：Mag7、Elon Universe、Raoul Pal、Ming-Chi Kuo（郭明錤）、Lyn Alden。
   // 這個測試失敗代表目錄資料或清單變了、可投資的名單跟著變了：確認是預期的再更新這裡。
   expect([...INVESTABLE_FUND_SLUGS].sort()).toEqual(["elon-universe", "lyn-alden-x", "mag7", "ming-chi-kuo-x", "raoul-pal-x"]);
   expect(MOCK_FUNDS.length).toBe(30);
-  expect(MOCK_FUNDS.filter((fund) => fundLaunchStatus(fund.slug)?.status === "preview").length).toBe(25);
+  expect(MOCK_FUNDS.filter((fund) => fundLaunchStatus(fund.slug, false)?.status === "preview").length).toBe(25);
 });
 
 test("each showcase fund reports its status and what is missing", () => {
-  expect(fundLaunchStatus("mag7")).toEqual({ status: "open", missing: [] });
-  expect(fundLaunchStatus("lyn-alden-x")).toEqual({ status: "open", missing: [] });
+  expect(fundLaunchStatus("mag7", false)).toEqual({ status: "open", missing: [] });
+  expect(fundLaunchStatus("lyn-alden-x", false)).toEqual({ status: "open", missing: [] });
   // 兩個成分在審查裡沒過。
-  expect(fundLaunchStatus("crypto-leaders")).toEqual({ status: "preview", missing: ["ADA", "LINK"] });
+  expect(fundLaunchStatus("crypto-leaders", false)).toEqual({ status: "preview", missing: ["ADA", "LINK"] });
   // 一個成分不在清單上。
-  expect(fundLaunchStatus("treasury-reserve")).toEqual({ status: "preview", missing: ["IEFon"] });
+  expect(fundLaunchStatus("treasury-reserve", false)).toEqual({ status: "preview", missing: ["IEFon"] });
   for (const fund of MOCK_FUNDS) {
-    const result = fundLaunchStatus(fund.slug);
+    const result = fundLaunchStatus(fund.slug, false);
     expect(result).not.toBeNull();
     expect(result?.status === "open").toBe(result?.missing.length === 0);
   }
@@ -99,7 +100,7 @@ test("each showcase fund reports its status and what is missing", () => {
 
 test("anything that is not a showcase fund has no launch status", () => {
   // Community 策略（/funds/strategy/:id）是真的上鏈的策略，不套這個標示。
-  expect(fundLaunchStatus("strategy-12")).toBeNull();
+  expect(fundLaunchStatus("strategy-12", false)).toBeNull();
   expect(fundLaunchStatus("")).toBeNull();
   expect(fundLaunchStatus(undefined)).toBeNull();
   expect(fundLaunchStatus(null)).toBeNull();

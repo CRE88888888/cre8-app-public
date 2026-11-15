@@ -66,8 +66,9 @@ test("the testnet purchase asks buy-funding first and records the daily claim as
   expect(api).toContain("`/portfolios/${portfolioId}/funding-lots`, { method: 'POST', token, body: { source } }");
   expect(page).toContain("await postBuyFunding(token, target)");
   expect(page).toContain("postFundingLot(token, target, { kind: 'faucet_claim', claimId })");
-  expect(page).toMatch(/if \(!needsDailyFaucet\(cause\)\) throw cause;\s*\/\/[^\n]*\n\s*setDailyNeeded\(true\);/);
-  expect(page).toContain("funding.state === 'pending'");
+  expect(page).toMatch(/if \(!needsDailyFaucet\(cause\)\) throw cause;\s*\/\/[^\n]*\n\s*forgetPendingWelcome\(target\);\s*rememberWelcomeUsed\(target\);/);
+  expect(page).toContain("setDailyNeeded(true);");
+  expect(page).toContain("funding?.state === 'pending'");
   expect(page).toContain('<span className="badge">Testnet</span>');
 });
 

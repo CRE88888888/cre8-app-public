@@ -52,7 +52,7 @@ function fundFlags(portfolio: Portfolio | undefined, status: PortfolioStatus | u
     flags.push({ label: 'Value unavailable', tone: 'warn', detail: 'Some holdings could not be priced right now.' });
   } else if (status.totalUsdE8 === '0') {
     flags.push({ label: 'Needs funding', tone: 'warn', detail: 'Add USDT so the fund can buy its holdings.' });
-  } else if (status.drift.needsRebalance) {
+  } else if (status.drift?.needsRebalance === true) {
     flags.push({ label: 'Rebalance due', tone: 'bad', detail: `Holdings have drifted ${status.drift.grossDriftBps} bps from target.` });
   }
   return flags;

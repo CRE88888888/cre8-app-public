@@ -38,6 +38,12 @@ jobs:
       - name: Unit tests
         run: bun test tests
 
+      # 測試網模式另開一個程序再跑一次：資產狀態、基金清單、地址簿都跟著鏈走（cre8-app#93）。
+      - name: Unit tests (chain 97)
+        run: bun test tests
+        env:
+          VITE_CHAIN_ID: '97'
+
       - name: Typecheck
         run: bun run typecheck
 

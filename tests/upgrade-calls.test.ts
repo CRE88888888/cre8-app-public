@@ -2,13 +2,14 @@ import { expect, test } from "bun:test";
 import { decodeFunctionData, erc20Abi, maxUint256, type Address } from "viem";
 import { upgradeDoneMessage, upgradeSummary } from "../src/lib/a10";
 import { REGISTRY_ABI, enrollCalldata, upgradeCalls } from "../src/lib/atp-contracts";
-import { approveCalldata } from "../src/lib/kernel";
+import { CHAIN, approveCalldata } from "../src/lib/kernel";
 
 // cre8-app#50：升版到含新資產的版本時，要在同一個 UserOp 裡一起 approve 新資產。
 // A3 的重現：v1 = USDT 10 / BTCB 45 / WBNB 45，v2 = USDT 10 / BTCB 30 / WBNB 30 / ETH 30。
 
 const REGISTRY = "0x737b585594DD24F9D5d154Abd1B742CFBE6927C5" as Address;
-const EXECUTOR = "0x8fa4b65a2f5b9f6159cb9efe3018873712f985d7" as Address;
+// 有地址簿的鏈（97）只准對地址簿上的 executor 授權，所以 fixture 跟著鏈走（cre8-app#93）。
+const EXECUTOR = (CHAIN.contracts?.executor ?? "0x8fa4b65a2f5b9f6159cb9efe3018873712f985d7") as Address;
 const ACCOUNT = "0x8ac8258516d8f4298b1d7629867dd22121e672ed" as Address;
 const USDT = "0x55d398326f99059fF775485246999027B3197955" as Address;
 const BTCB = "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c" as Address;

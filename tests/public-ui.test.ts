@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test";
 import fs from "node:fs";
+import { MAINNET_STATUS } from "../src/lib/testnet-assets";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { catalogueTargets } from "../src/data/public-fund-adapter";
@@ -40,7 +41,8 @@ test("full published catalogue and all figures remain available; withdrawn figur
   expect(REFERENCE_FUNDS).toHaveLength(30);
   expect(REFERENCE_ASSETS).toHaveLength(219);
   // 218 個同步自上游，加上 cre8-app#86 在 CRE8 這邊補的 8 個加密貨幣（fund-builder.ts 的 CRE8_TESTNET_CRYPTO）。
-  expect(ASSETS.filter(canPickAsset)).toHaveLength(226);
+  // 主網的目錄（測試網的 build 載入時會打開 ZEC 等，見 lib/testnet-assets.ts）：用改之前的 status 算（cre8-app#93）。
+  expect(ASSETS.map((asset) => ({ ...asset, status: MAINNET_STATUS.get(asset.key) ?? asset.status })).filter(canPickAsset)).toHaveLength(226);
   expect(
     REFERENCE_FUNDS.some((f) =>
       /ansem|arthur-hayes|michael-burry/.test(f.slug),

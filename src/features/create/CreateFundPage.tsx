@@ -18,7 +18,8 @@ import { openSignIn, usePrivyAuth } from '../../store/privy';
 import { ErrorNote, Note, Spinner } from '../../components/ui';
 import { AssetLogo } from '../../components/AssetLogo';
 import { assetBySymbol } from '../../lib/public-funds';
-import { EXECUTION_COPY, REBALANCE_COPY, executionConfirm, minimumDeposit, stackWords, typedVersionBody, type AssetExecution, type ExecutionKind } from '../../lib/fund-execution';
+import { EXECUTION_COPY, REBALANCE_COPY, executionConfirm, minimumDeposit, percentToBps, quantizePercent, stackWords, typedVersionBody, zeroBpsAssets, type AssetExecution, type ExecutionKind } from '../../lib/fund-execution';
+import { sendInBatches } from '../../lib/approval-batches';
 import { featureLock } from '../../lib/feature-flags';
 import { FeatureBadge } from '../../components/FeatureLock';
 
@@ -117,7 +118,7 @@ export function ActivateFundPage(): ReactNode {
 
   const selected = useMemo(() => Object.entries(weights).filter(([, percent]) => percent > 0), [weights]);
   /** Accumulate in bps, not floating percentages: `33.3 + 33.3 + 33.4` is not 100 in binary floating point. */
-  const totalBps = selected.reduce((sum, [, percent]) => sum + Math.round(percent * 100), 0);
+  const totalBps = selected.reduce((sum, [, percent]) => sum + percentToBps(percent), 0);
   const unavailableAssets=selected.filter(([address])=>!assets.data?.some(asset=>asset.address.toLowerCase()===address.toLowerCase()&&asset.tradable!==false));
   const usdt = (assets.data?.find((asset) => asset.isNumeraire)?.address ?? CHAIN.contracts?.usdt ?? MAINNET_USDT).toLowerCase();
   /** 這個資產怎麼買：草稿裡的設定，沒有就是 Buy & hold。USDT 是現金，不買。 */
@@ -127,7 +128,9 @@ export function ActivateFundPage(): ReactNode {
   const draftProblem = draft?.executionProblem ?? null;
   /** 整檔再平衡：從設計器來（全部 hold 才能開）；快速設定不再平衡。 */
   const rebalance = draft?.rebalance ?? 'none';
-  const valid = name.trim().length > 0 && totalBps === 10_000 && unavailableAssets.length===0 && (draft===null||allocationAgreed)
+  /** 換成 bps 是 0 的資產（例如 0.001%）：後端會拒絕，建立策略之前先擋（cre8-app#93）。 */
+  const tooSmall = zeroBpsAssets(selected, usdt);
+  const valid = name.trim().length > 0 && totalBps === 10_000 && unavailableAssets.length===0 && tooSmall.length === 0 && (draft===null||allocationAgreed)
     && draftProblem === null && kindAgreed;
   const idleLock = featureLock('idleYield');
   const busy = step !== 'idle' && step !== 'done';
@@ -156,7 +159,7 @@ export function ActivateFundPage(): ReactNode {
         rebalance,
         assets: selected.map(([address, percent]) => ({
           address,
-          weightBps: Math.round(percent * 100),
+          weightBps: percentToBps(percent),
           ...(address.toLowerCase() === usdt ? {} : { execution: executionOf(address) }),
         })),
         changeLog: 'created from the app',
@@ -203,18 +206,20 @@ export function ActivateFundPage(): ReactNode {
               await sendGasTopUp({ wallet: renewalWallet, to: status.account as `0x${string}`, valueWei: shortfall });
             }
             setStep('approving');
-            const receipt = await sendSudoCalls({
+            // 超過 32 個資產就分批，一批確認了才送下一批（代付一筆 UserOp 的上限，cre8-app#93）。
+            // 中途失敗：已授權的留在鏈上，Allowance 卡片只補剩下的。
+            const receipts = await sendInBatches(status.targets, (batch) => sendSudoCalls({
               wallet: renewalWallet,
               token,
               accountAddress: status.account as `0x${string}`,
               strategyId: strategy.id,
-              calls: status.targets.map((target) => ({
+              calls: batch.map((target) => ({
                 to: target.asset as `0x${string}`,
                 data: approveCalldata(executor as `0x${string}`),
                 value: 0n,
               })),
-            });
-            approval = { tx: receipt.txHash, error: null };
+            }));
+            approval = { tx: receipts.at(-1)?.txHash ?? null, error: null };
           }
         } catch (cause) {
           approval = { tx: null, error: cause };
@@ -306,6 +311,8 @@ export function ActivateFundPage(): ReactNode {
         ? `Weights add up to ${tidy(totalPercent)}%. ${tidy(((10_000 - totalBps) / 100))}% to go`
         : totalBps > 10_000
           ? `Weights add up to ${tidy(totalPercent)}%. Remove ${tidy(((totalBps - 10_000) / 100))}%`
+          : tooSmall.length > 0
+            ? `Give ${tooSmall.map(symbolFor).join(', ')} at least 0.01%, or remove ${tooSmall.length === 1 ? 'it' : 'them'}`
           : unavailableAssets.length > 0
             ? 'Remove the assets that are not available'
             : draftProblem !== null
@@ -442,7 +449,8 @@ export function ActivateFundPage(): ReactNode {
                               const percent = Number(event.target.value);
                               setWeights((current) => ({
                                 ...current,
-                                [key]: Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0,
+                                // 量化到 0.01%：畫面上的數字就是會送出的 bps。
+                                [key]: Number.isFinite(percent) ? quantizePercent(percent) : 0,
                               }));
                             }}
                           />

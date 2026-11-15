@@ -3,6 +3,7 @@ import type { FormEvent, ReactNode } from 'react';
 import { confirmSignIn, lastSignIn, notePendingSignIn } from '../lib/last-sign-in';
 import type { SignInChoice } from '../lib/last-sign-in';
 import { signInCopy } from '../lib/sign-in-reason';
+import { showCodeStep, trapFocus } from '../lib/sign-in-steps';
 import { closeSignIn, usePrivyAuth } from '../store/privy';
 import { AppIcon } from './AppIcon';
 
@@ -42,10 +43,17 @@ export function SignInScreen(): ReactNode {
   const [last, setLast] = useState<SignInChoice | null>(null);
   const firstRef = useRef<HTMLButtonElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  /** 這一次按了 Send code（或 Send a new code）、還在等結果。只有它成功才換到輸入驗證碼。 */
+  const codeRequested = useRef(false);
+  /** 打開前焦點在哪裡：關掉後還給它。 */
+  const returnFocus = useRef<HTMLElement | null>(null);
 
   // 每次打開都從頭開始。
   useEffect(() => {
     if (!signInOpen) return;
+    returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    codeRequested.current = false;
     setStep('choose');
     setCode('');
     setLeaving(null);
@@ -53,10 +61,22 @@ export function SignInScreen(): ReactNode {
     window.setTimeout(() => firstRef.current?.focus(), 0);
   }, [signInOpen]);
 
-  // 寄出驗證碼後換到輸入驗證碼。
+  // 寄出驗證碼後換到輸入驗證碼：只看這一次寄碼的結果，不看 SDK 一直停著的狀態（換信箱時不會被拉回來）。
   useEffect(() => {
-    if (emailStep === 'awaiting-code-input' && step === 'email') setStep('code');
+    if (showCodeStep({ step, emailStep, requested: codeRequested.current })) {
+      codeRequested.current = false;
+      setStep('code');
+    }
+    if (emailStep === 'error') codeRequested.current = false;
   }, [emailStep, step]);
+
+  // 關掉時把焦點還給打開前的那個元素。
+  useEffect(() => {
+    if (signInOpen) return;
+    const target = returnFocus.current;
+    returnFocus.current = null;
+    if (target?.isConnected) target.focus();
+  }, [signInOpen]);
 
   useEffect(() => {
     if (step !== 'choose') window.setTimeout(() => inputRef.current?.focus(), 0);
@@ -76,6 +96,15 @@ export function SignInScreen(): ReactNode {
     if (!signInOpen) return;
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') closeSignIn();
+      if (event.key !== 'Tab' || cardRef.current === null) return;
+      // 焦點留在對話框裡：Tab 到最後一個回第一個，Shift+Tab 反過來；從外面 Tab 進來也拉回對話框。
+      const focusables = [...cardRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')];
+      const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const next = trapFocus(focusables, active !== null && cardRef.current.contains(active) ? active : null, event.shiftKey);
+      if (next !== null) {
+        event.preventDefault();
+        next.focus();
+      }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -107,6 +136,7 @@ export function SignInScreen(): ReactNode {
     event.preventDefault();
     if (!ready || !emailValid || sending) return;
     setEdited(false);
+    codeRequested.current = true;
     void actions?.sendEmailCode(email.trim());
   }
 
@@ -121,7 +151,7 @@ export function SignInScreen(): ReactNode {
   return (
     <div className="signin-screen" data-reason={signInFor?.purpose} role="dialog" aria-modal="true" aria-labelledby="signin-title">
       <div className="signin-screen__backdrop" aria-hidden="true" onClick={closeSignIn} />
-      <div className="signin-screen__card">
+      <div className="signin-screen__card" ref={cardRef}>
         <header className="signin-screen__head">
           <img src="/logos/cre8-icon.svg" alt="" width={64} height={64} />
           <h2 id="signin-title">{copy.title}</h2>
@@ -229,7 +259,7 @@ export function SignInScreen(): ReactNode {
               >
                 {sending ? 'Sending…' : 'Send a new code'}
               </button>
-              <button type="button" className="signin-screen__text" onClick={() => setStep('email')}>
+              <button type="button" className="signin-screen__text" onClick={() => { codeRequested.current = false; setCode(''); setStep('email'); }}>
                 Use another email
               </button>
             </div>

@@ -29,6 +29,7 @@ import { decodeRebalanceSteps, hasVenue } from '../../lib/venues';
 function holdingState(status: PortfolioStatus | undefined) {
   if (status === undefined || !status.complete) return <Badge tone="warn">Value unavailable</Badge>;
   if (status.totalUsdE8 === '0') return <Badge tone="warn">Needs funding</Badge>;
+  if (status.drift === null) return <Badge tone="warn">Value unavailable</Badge>;
   if (status.drift.needsRebalance) return <Badge tone="bad">Rebalance due</Badge>;
   return <Badge tone="ok">Aligned</Badge>;
 }
@@ -127,7 +128,7 @@ export function PortfoliosPage(): ReactNode {
       cover: slug ? REFERENCE_METADATA[slug]?.cover : undefined,
       path,
       value: status?.complete ? formatUsdE8(status.totalUsdE8) : '—',
-      drift: status?.complete && status.totalUsdE8 !== '0' ? `${status.drift.grossDriftBps} bps` : '—',
+      drift: status?.complete && status.totalUsdE8 !== '0' && status.drift !== null ? `${status.drift.grossDriftBps} bps` : '—',
       state: query?.isPending ? <span className="muted">Loading…</span> : holdingState(status),
     };
   });

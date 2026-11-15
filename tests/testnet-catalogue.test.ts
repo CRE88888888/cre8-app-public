@@ -1,10 +1,11 @@
 import { expect, test } from "bun:test";
 import { MOCK_FUNDS } from "../src/data/mock-funds";
+import { MAINNET_STATUS } from "../src/lib/testnet-assets";
 import { activationDesign } from "../src/lib/activation-design";
 import { LAUNCH_ASSETS } from "../src/lib/launch-admission";
 import { INVESTABLE_FUND_SLUGS, fundLaunchStatus, investableFundSlugs } from "../src/lib/launch-funds";
 import { TESTNET_97 } from "../src/lib/testnet-97";
-import { TESTNET_LISTED_SLUGS, isListedFund, isTestnetSymbol, listedFunds, testnetToken } from "../src/lib/testnet-catalogue";
+import { IS_TESTNET, TESTNET_LISTED_SLUGS, isListedFund, isTestnetSymbol, listedFunds, testnetToken } from "../src/lib/testnet-catalogue";
 import * as B from "../src/reference/lib/fund-builder";
 
 // cre8-app#86：測試網只展示 16 檔、資產用 cre8-contracts#43 的 92 個；主網不變。
@@ -57,14 +58,18 @@ test("the 8 cryptos CRE8 added to the designer catalogue are there, testnet-list
   for (const symbol of added) {
     const asset = B.ASSETS.find((candidate) => candidate.symbol === symbol);
     expect(asset?.category).toBe("crypto");
-    expect(asset?.status).toBe("preview");
+    // 主網只能規劃（preview）；測試網的 build 載入時改成 ready（lib/testnet-assets.ts）。
+    expect(MAINNET_STATUS.get(asset!.key)).toBe("preview");
+    expect(asset?.status).toBe(IS_TESTNET ? "ready" : "preview");
     expect(B.canPickAsset(asset!)).toBe(true);
     expect(isTestnetSymbol(symbol)).toBe(true);
     // 主網仍不在 38 個准入資產裡。
     expect(LAUNCH_ASSETS.some((launch) => launch.symbol.toLowerCase() === symbol.toLowerCase())).toBe(false);
   }
-  const offered = B.ASSETS.filter((asset) => B.canPickAsset(asset) && isTestnetSymbol(asset.symbol));
-  expect(offered.length).toBe(91);
+  // 主網的 status 下 91 個可選（ZEC 沒有價格來源）；測試網的 build 打開 ZEC，92 個（cre8-app#93：明確指定鏈）。
+  const mainnet = B.ASSETS.map((asset) => ({ ...asset, status: MAINNET_STATUS.get(asset.key) ?? asset.status }));
+  expect(mainnet.filter((asset) => B.canPickAsset(asset) && isTestnetSymbol(asset.symbol)).length).toBe(91);
+  expect(B.ASSETS.filter((asset) => B.canPickAsset(asset) && isTestnetSymbol(asset.symbol)).length).toBe(IS_TESTNET ? 92 : 91);
   // 加得進設計（只能用 Buy & hold，跟其他 preview 資產一樣）。
   const design = B.addAsset(B.emptyBuilder(), "CAKE", "demo");
   expect(design.rows.map((row) => row.key)).toEqual(["CAKE"]);

@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "bun test tests"
+    "test": "bun test tests",
+    "test:97": "VITE_CHAIN_ID=97 bun test tests"
   },
   "dependencies": {
     "@privy-io/react-auth": "3.51.3",
