@@ -2,10 +2,10 @@
  * BSC 測試網（chain 97）的合約地址簿（cre8-app#62）。
  *
  * **產生的檔案，不要手改。** 來源：`CRE8Finance/cre8-contracts` 的 `deployments/testnet-97.json`
- *   - repo commit：`f7e5d52bce5d14a05cc64a97cd7e67f1acf5e428`
- *   - 檔案 sha256：`3fd74c0d59b912da79c9932e5ef7c026b99e171bb4aa3709326707ec8124eb15`
- *   - manifest 自己記的合約程式 commit（`gitCommit`）：`f45713e7c20e901e44cd4beb0d2f5a766e019200`
- *   - `mode: "fork"`、`verifiedAtBlock: 142687759`、`generatedAt: 2026-11-14T13:00:50Z`
+ *   - repo commit：`068d471fc2c4592c12442ef35602ad1d1a7fe9c3`
+ *   - 檔案 sha256：`2d3867c066f506633f46349a40fa0110193a32a87b053370b23b7e24b8b6a4ec`
+ *   - manifest 自己記的合約程式 commit（`gitCommit`）：`45b2ce7200b5f958555f043a31b3a533fecacbff`
+ *   - `mode: "fork"`、`verifiedAtBlock: 142810197`、`generatedAt: 2026-11-15T04:21:54Z`
  *
  * `mode: "fork"` 表示這些地址是在本機 chain 97 fork 上驗證的；合約全部用 CREATE2 部署，
  * 公開部署會落在同樣的地址（cre8-contracts `docs/testnet-97.zh-TW.md` 第 1 節）。
@@ -18,15 +18,15 @@ export const TESTNET_97 = {
   source: {
     repo: 'CRE8Finance/cre8-contracts',
     path: 'deployments/testnet-97.json',
-    commit: 'f7e5d52bce5d14a05cc64a97cd7e67f1acf5e428',
-    sha256: '3fd74c0d59b912da79c9932e5ef7c026b99e171bb4aa3709326707ec8124eb15',
+    commit: '068d471fc2c4592c12442ef35602ad1d1a7fe9c3',
+    sha256: '2d3867c066f506633f46349a40fa0110193a32a87b053370b23b7e24b8b6a4ec',
     mode: 'fork',
-    verifiedAtBlock: 142687759,
+    verifiedAtBlock: 142810197,
   },
   contracts: {
     registry: '0x88e5d2d14985f34539ffD67210F3D06963F3CCE1',
-    router: '0x625037c1e176B9c297d93fd729FEe2212979A170',
-    executor: '0xDf33A5B2a897557bC2Bcc446ace1791aBe1C88d3',
+    router: '0x89652a2a95883A7939103364C7d32A5f1678307D',
+    executor: '0x78E03637A033B3B08c0fC7Ed7d8540d992d1B0B7',
     usdt: '0xBD7D814E02C9f69af391A8BA4C1787769F2ddd4b',
     paymaster: '0xA8ac1cc4846F72a32aF0302ae5aE03b1A8dBAaFA',
     gasPolicy: '0xaeFC5AbC67FfD258abD0A3E54f65E70326F84b23',
