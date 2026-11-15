@@ -39,7 +39,8 @@ const source = JSON.parse(
 test("full published catalogue and all figures remain available; withdrawn figures stay hidden", () => {
   expect(REFERENCE_FUNDS).toHaveLength(30);
   expect(REFERENCE_ASSETS).toHaveLength(219);
-  expect(ASSETS.filter(canPickAsset)).toHaveLength(218);
+  // 218 個同步自上游，加上 cre8-app#86 在 CRE8 這邊補的 8 個加密貨幣（fund-builder.ts 的 CRE8_TESTNET_CRYPTO）。
+  expect(ASSETS.filter(canPickAsset)).toHaveLength(226);
   expect(
     REFERENCE_FUNDS.some((f) =>
       /ansem|arthur-hayes|michael-burry/.test(f.slug),

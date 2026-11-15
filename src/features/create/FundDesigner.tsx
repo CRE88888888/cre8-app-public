@@ -271,7 +271,8 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
   const roomUsed = Math.min(100, Math.round(Math.max(room.positions / limits.positions, testnet ? room.gas / B.JOIN_LIMIT : 0) * 100));
   const color = (key: string) => SWATCH[keys.indexOf(key) % SWATCH.length];
   const editing = drawer?.mode === "edit" ? state.rows.find((row) => row.id === drawer.id) ?? null : null;
-  const previews = keys.map(B.assetOf).filter(B.isPlanningOnly);
+  // 只能規劃、不能交易的資產。部署在測試網時，測試網上架了的（cre8-app#86 補的 8 個加密貨幣）不算。
+  const previews = keys.map(B.assetOf).filter((asset) => B.isPlanningOnly(asset) && !(IS_TESTNET && isTestnetSymbol(asset.symbol)));
   const stake = Math.max(B.STAKE.min, Math.round(Number(stakeText) || 0));
   const stakeValid = Number(stakeText) >= B.STAKE.min;
   // Testnet review only: what CRE8's keeper can run of the design, row by row and rule by rule.

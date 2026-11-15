@@ -51,6 +51,25 @@ test("on testnet the designer offers the catalogue assets that testnet has, new 
   expect(new Set(offered.map((symbol) => symbol.toLowerCase())).size).toBe(offered.length);
 });
 
+test("the 8 cryptos CRE8 added to the designer catalogue are there, testnet-listed and only plannable on mainnet", () => {
+  // cre8-app#86 的本地例外（src/reference/lib/fund-builder.ts 的 CRE8_TESTNET_CRYPTO）：同步上游時若被覆蓋，這裡會失敗。
+  const added = ["TONCOIN", "DOT", "SHIB", "PEPE", "AAVE", "CAKE", "FIL", "ATOM"];
+  for (const symbol of added) {
+    const asset = B.ASSETS.find((candidate) => candidate.symbol === symbol);
+    expect(asset?.category).toBe("crypto");
+    expect(asset?.status).toBe("preview");
+    expect(B.canPickAsset(asset!)).toBe(true);
+    expect(isTestnetSymbol(symbol)).toBe(true);
+    // 主網仍不在 38 個准入資產裡。
+    expect(LAUNCH_ASSETS.some((launch) => launch.symbol.toLowerCase() === symbol.toLowerCase())).toBe(false);
+  }
+  const offered = B.ASSETS.filter((asset) => B.canPickAsset(asset) && isTestnetSymbol(asset.symbol));
+  expect(offered.length).toBe(91);
+  // 加得進設計（只能用 Buy & hold，跟其他 preview 資產一樣）。
+  const design = B.addAsset(B.emptyBuilder(), "CAKE", "demo");
+  expect(design.rows.map((row) => row.key)).toEqual(["CAKE"]);
+});
+
 test("a design moves to the activation page with testnet token addresses on testnet", () => {
   const design = { ...B.addAsset(B.emptyBuilder(), "BTC", "demo"), name: "Test" };
   const testnet = activationDesign(design, true)!;

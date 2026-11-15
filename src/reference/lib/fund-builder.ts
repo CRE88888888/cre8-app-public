@@ -126,7 +126,25 @@ const REVIEWED_ASSETS: readonly Asset[] = [
   { key: "MU", name: "Micron", symbol: "MUB", token: "0xcdf2f3e0fa43c47a6662a91c9e4a7c5f69762699", targetId: "bstock:MUB", category: "stock", status: "ready", earn: {} },
   { key: "SNXX", name: "2X Long SNDK ETF", symbol: "SNXXB", token: "0x9e82e3da8f1115b73d24bb24113ab836ffdab6b6", targetId: "bstock:SNXXB", category: "stock", status: "thin", earn: {} },
 ];
-export const ASSETS: readonly Asset[] = [...REVIEWED_ASSETS, ...additionalBstockPlanningAssets(REVIEWED_ASSETS), ...ondoPlanningAssets(undefined, true), XAUT_ASSET];
+/*
+ * ⚠ CRE8 本地例外（cre8-app#86，總管 2026-11-15 核准）：這個目錄從 bnb-agent-vaults 釘住的 commit 同步而來，
+ * 原則上不能手改；只有下面這 8 個加密貨幣是在 CRE8 這邊補的最小資料，讓 BSC 測試網（cre8-contracts#43 的 92 個資產）
+ * 在設計器裡選得到。主網地址取自 PancakeSwap 官方 tokenlist（docs research/2026-11-13-launch-admission/來源/
+ * Pancake官方tokenlist.json），測試網地址在 src/lib/testnet-97.ts。主網沒有審過的價格來源與准入，所以是 "preview"
+ * （只能放進 app 設計、不能交易），主網設計器標「After launch」。logo 是 CRE8 產生的文字標記（public/logos/tokens/*.png）。
+ * 下次執行 scripts/sync-public-ui.mjs 時這段會被覆蓋：請保留這段，或改由上游補齊後刪掉。tests/testnet-catalogue.test.ts 會擋住遺漏。
+ */
+const CRE8_TESTNET_CRYPTO: readonly Asset[] = [
+  { key: "TON", name: "Toncoin", symbol: "TONCOIN", token: "0x76a797a59ba2c17726896976b7b3747bfd1d220f", category: "crypto", targetId: "crypto:TONCOIN", rank: 101, status: "preview", earn: {} },
+  { key: "DOT", name: "Polkadot", symbol: "DOT", token: "0x7083609fce4d1d8dc0c979aab8c869ea2c873402", category: "crypto", targetId: "crypto:DOT", rank: 102, status: "preview", earn: {} },
+  { key: "SHIB", name: "Shiba Inu", symbol: "SHIB", token: "0x2859e4544c4bb03966803b044a93563bd2d0dd4d", category: "crypto", targetId: "crypto:SHIB", rank: 103, status: "preview", earn: {} },
+  { key: "PEPE", name: "Pepe", symbol: "PEPE", token: "0x25d887ce7a35172c62febfd67a1856f20faebb00", category: "crypto", targetId: "crypto:PEPE", rank: 104, status: "preview", earn: {} },
+  { key: "AAVE", name: "Aave", symbol: "AAVE", token: "0xfb6115445bff7b52feb98650c87f44907e58f802", category: "crypto", targetId: "crypto:AAVE", rank: 105, status: "preview", earn: {} },
+  { key: "CAKE", name: "PancakeSwap", symbol: "CAKE", token: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", category: "crypto", targetId: "crypto:CAKE", rank: 106, status: "preview", earn: {} },
+  { key: "FIL", name: "Filecoin", symbol: "FIL", token: "0x0d8ce2a99bb6e3b7db580ed848240e4a0f9ae153", category: "crypto", targetId: "crypto:FIL", rank: 107, status: "preview", earn: {} },
+  { key: "ATOM", name: "Cosmos", symbol: "ATOM", token: "0x0eb3a705fc54725037cc9e008bdede697f62f335", category: "crypto", targetId: "crypto:ATOM", rank: 108, status: "preview", earn: {} },
+];
+export const ASSETS: readonly Asset[] = [...REVIEWED_ASSETS, ...CRE8_TESTNET_CRYPTO, ...additionalBstockPlanningAssets(REVIEWED_ASSETS), ...ondoPlanningAssets(undefined, true), XAUT_ASSET];
 export const ASSET_BY_KEY: ReadonlyMap<string, Asset> = new Map(ASSETS.map((asset) => [asset.key, asset]));
 const ASSET_BY_TOKEN = new Map(ASSETS.map(asset => [asset.token.toLowerCase(), asset]));
 const STOCK_BY_TOKEN = new Map(STOCK_CATALOG.products.filter(p => p.chainId === 56).map(p => [p.address, p]));
