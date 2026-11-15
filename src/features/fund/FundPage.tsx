@@ -788,6 +788,7 @@ function FundPageBody(): ReactNode {
                       <input
                         id="deposit-amount"
                         inputMode="decimal"
+                        aria-invalid={depositTooLarge || undefined}
                         autoComplete="off"
                         placeholder="0"
                         value={amount}

@@ -172,6 +172,7 @@ export function SignInScreen(): ReactNode {
                 type="email"
                 inputMode="email"
                 autoComplete="email"
+                aria-invalid={emailProblem !== null || undefined}
                 placeholder="you@example.com"
                 value={email}
                 onChange={(event) => {
@@ -200,6 +201,7 @@ export function SignInScreen(): ReactNode {
                 className="signin-screen__code"
                 inputMode="numeric"
                 autoComplete="one-time-code"
+                aria-invalid={emailProblem !== null || undefined}
                 placeholder="000000"
                 value={code}
                 onChange={(event) => {

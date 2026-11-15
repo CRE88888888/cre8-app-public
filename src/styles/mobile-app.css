@@ -1562,3 +1562,53 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
   html body #root #fund-explore .mkt-periods button { position: relative; }
   html body #root #fund-explore .mkt-periods button::after { content: ""; position: absolute; inset: -4px 0; }
 }
+
+/* ── 操作效果（2026-11-15，取自使用者分享的「20 Principles of UX & Animation」）──
+   只放在結果出現的那一刻，不放在每天按很多次的地方（Frequency of use）。 */
+
+/* Follow through：通知卡先滑進來，圖示與文字晚一點才就位。 */
+[data-sonner-toast] :is([data-icon], [data-content]) {
+  animation: cre8-settle .22s var(--ease) .16s both;
+}
+/* Secondary action：成功的打勾彈一下。從「處理中」換成「成功」時圖示是新的元素，會在那一刻播。 */
+[data-sonner-toast][data-type="success"] [data-icon] > svg,
+.app-ticket-result[data-tone="confirmed"] .app-ticket-result-icon > svg {
+  animation: cre8-pop .32s cubic-bezier(.34, 1.56, .64, 1) .08s both;
+}
+.app-ticket-result[data-tone="confirmed"] .app-ticket-result-icon {
+  animation: cre8-ring .45s ease-out .12s;
+}
+.app-ticket-result[data-tone="confirmed"] :is(strong, .app-ticket-receipt-amount, p) {
+  animation: cre8-settle .22s var(--ease) .1s both;
+}
+/* Exaggerated feedback：錯了就抖一下，比只變紅更容易注意到。 */
+[data-sonner-toast][data-type="error"] [data-icon] > svg,
+.app-ticket-result[data-tone="error"] .app-ticket-result-icon,
+#deposit-amount[aria-invalid="true"],
+.signin-screen input[aria-invalid="true"] {
+  animation: cre8-shake .3s cubic-bezier(.36, .07, .19, .97);
+}
+.signin-screen input[aria-invalid="true"] { border-color: var(--neg); }
+
+@keyframes cre8-settle { from { opacity: 0; transform: translateY(6px); } }
+@keyframes cre8-pop {
+  0% { opacity: 0; transform: scale(.5); }
+  60% { opacity: 1; transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+@keyframes cre8-ring {
+  from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pos) 40%, transparent); }
+  to { box-shadow: 0 0 0 10px color-mix(in srgb, var(--pos) 0%, transparent); }
+}
+@keyframes cre8-shake {
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-sonner-toast] :is([data-icon], [data-content]),
+  [data-sonner-toast] [data-icon] > svg,
+  .app-ticket-result :is(.app-ticket-result-icon, .app-ticket-result-icon > svg, strong, .app-ticket-receipt-amount, p),
+  #deposit-amount, .signin-screen input { animation: none; }
+}
