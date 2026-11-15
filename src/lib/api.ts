@@ -8,6 +8,7 @@
  * 一律走相對路徑 `/api`（dev 由 vite proxy 轉到 127.0.0.1:8081）。同源就沒有 CORS 與 preflight。
  */
 
+import type { TypedVersionBody } from './fund-execution';
 import type { PackedSponsorOperation, SponsorResponse } from './paymaster';
 
 const BASE: string = import.meta.env.VITE_API_BASE ?? '/api';
@@ -370,18 +371,32 @@ export function createStrategy(
   return request('/strategies', { method: 'POST', token, body });
 }
 
-/** 發一個版本：`allocation.assets[].weightBps` 必須剛好加總 10000。 */
+/**
+ * 發一個 typed 版本（backend BE-1，`docs/strategy-api.zh-TW.md`）：執行模式 hold／stack、排程 `funding`、閒置生息關閉。
+ * 本文由 `lib/fund-execution.ts` 的 `typedVersionBody` 組（權重剛好 10000、stack 不能純 USDT）。
+ * 舊的 `schedule: interval`（目標比例再平衡）後端已經不收新的 HTTP 發版。
+ */
 export function publishVersion(
   token: string,
   strategyId: number,
-  body: {
-    allocation: { assets: { address: string; weightBps: number }[] };
-    schedule: { kind: 'interval'; intervalSeconds: number };
-    changeLog?: string;
-  },
-): Promise<{ strategyId: number; version: number; [key: string]: unknown }> {
+  body: TypedVersionBody,
+): Promise<PublishedVersion> {
   return request(`/strategies/${strategyId}/versions`, { method: 'POST', token, body });
 }
+
+/** `POST /strategies/:id/versions` 讀回的版本（只列前端會用到的欄位）。 */
+export type PublishedVersion = {
+  strategyId: number;
+  version: number;
+  /** 0 = 0031 以前的舊列（目標比例）；1 = canonical config v1。 */
+  executionSchemaVersion?: number;
+  execution?: { kind: 'hold' | 'stack' | 'target_weight' };
+  executionChainId?: number | null;
+  /** 放進鏈上 `Version.scheduleHash` 的設定雜湊；舊列是 null。 */
+  configHash?: string | null;
+  idleYield?: { enabled: boolean };
+  [key: string]: unknown;
+};
 
 /** 把策略 enroll 成一個投組（會部署 smart account、上鏈）。 */
 export function enrollPortfolio(token: string, strategyId: number): Promise<Portfolio> {

@@ -20,6 +20,7 @@ import { underlyingSlug } from "../../reference/lib/asset-navigation";
 import { LAUNCH_COPY, POPULAR_ASSET_KEYS, isLaunchAsset } from "../../lib/launch-admission";
 import { IS_TESTNET, isTestnetSymbol } from "../../lib/testnet-catalogue";
 import { featureLock, playLock } from "../../lib/feature-flags";
+import { EXECUTION_COPY, describeExecutionProblem, designExecution, rowExtras } from "../../lib/fund-execution";
 import { FeatureBadge } from "../../components/FeatureLock";
 
 const base = "";
@@ -257,9 +258,10 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
   // 舊草稿裡可能已經有上線時還不能上架的資產（清單出來之前選的）：先講清楚，不要等到啟用才被擋。
   const laterNames = testnet ? [] : [...new Set(state.rows.map((row) => B.assetOf(row.key)).filter((asset) => !opensAtLaunch(asset)).map((asset) => B.displayAssetSymbol(asset.symbol)))];
   const launchNotice = laterNames.length === 0 ? "" : `${laterNames.join(", ")} ${laterNames.length === 1 ? "opens" : "open"} after launch. Remove ${laterNames.length === 1 ? "it" : "them"} to activate this fund now.`;
-  // 舊草稿裡也可能有還沒開放的策略（cre8-app#58）：同樣先講清楚。
-  const lockedPlays = testnet ? [] : [...new Set(state.rows.filter((row) => playLock(row.play) !== null).map((row) => B.PLAYS[row.play].name))];
-  const previewNotice = lockedPlays.length === 0 ? "" : `${lockedPlays.join(", ")} ${lockedPlays.length === 1 ? "is" : "are"} not available yet. Switch ${lockedPlays.length === 1 ? "it" : "them"} to Buy & hold to activate this fund now.`;
+  // 一檔基金一種執行模式（cre8-app#79）：全部 Buy & hold 或全部 Stack。還沒開放的策略、混合、附加設定都先講清楚，
+  // 草稿不刪任何欄位。參考設計的測試網模式（`testnet` prop）有自己的規則，不套這個。
+  const execution = testnet ? null : designExecution(state.rows, state.rules, (play) => B.PLAYS[play as B.Play]?.name ?? play);
+  const previewNotice = execution && "problem" in execution ? describeExecutionProblem(execution.problem) : "";
   const feeLock = testnet ? null : featureLock("performanceFee"), delayLock = testnet ? null : featureLock("settingsDelay");
   const cashName = testnet ? testnet.cash : B.CASH.symbol;
   const symbol = symbolText || (testnet ? testnet.symbolFor(state.name) : "");
@@ -381,7 +383,7 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
                         </div>
                         <button type="button" className={styles.strat} aria-label={`Strategy for ${asset.name}: ${B.PLAYS[row.play].name}. Edit`} onClick={() => setDrawer({ mode: "edit", id: row.id })}>
                           <Chart kind={row.play} w={76} h={34} mini />
-                          <span><b>{B.PLAYS[row.play].name}{B.rowBeta(row) && <Beta />}</b><small>{B.summary(row, testnet?.timeZone)}</small></span>
+                          <span><b>{B.PLAYS[row.play].name}{B.rowBeta(row) && <Beta />}</b><small>{!testnet && (row.play === "hold" || row.play === "stack") ? EXECUTION_COPY[row.play].short : B.summary(row, testnet?.timeZone)}</small></span>
                           <span className={styles.go} aria-hidden="true">Edit</span>
                         </button>
                         <button type="button" className={styles.x} aria-label={`Remove ${asset.name}`} onClick={() => update((s) => B.removeRow(s, row.id))}>×</button>
@@ -498,7 +500,7 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
             <div className={styles.field}><span className={styles.label}>Holders will read</span>
               <div className={styles.quote}>
                 <p><b>{state.name.trim() || "Your fund"}</b> holds:</p>
-                {state.rows.map((row) => { const words = B.sentence(row, testnet?.timeZone); return <p key={row.id}><b>{words.lead}</b>{words.text}</p>; })}
+                {state.rows.map((row) => { const words = rowWords(row, testnet); return <p key={row.id}><b>{words.lead}</b>{words.text}</p>; })}
                 <p>{B.fundSentences(state, testnet ? { cash: testnet.cash, idle: testnetIdle(testnet, state.rules.idle.venue) } : {}).join(" ")}</p>
               </div>
               {B.launchPriceNote(state.rows) && <span className={styles.note}>{B.launchPriceNote(state.rows)}</span>}
@@ -532,7 +534,7 @@ export default function FundDesigner({ embedded = false, value, onChange, flash 
             </> : <>
               <button className={cx("btn", styles.wide)} type="button" disabled={!state.name.trim() || !stakeValid || !!sourceIssue} onClick={download}>Download design</button>
               {(!state.name.trim() || !stakeValid) && <span className={styles.note}>{!state.name.trim() ? "Give your fund a name to continue." : `Set a stake of at least ${B.STAKE.min} USDT.`}</span>}
-              {previews.length === 0 && !B.problem(state) && !launchNotice && !previewNotice && <a className={styles.textLink} href={testnetCreate}>Activate a target-weight strategy →</a>}
+              {previews.length === 0 && !B.problem(state) && !launchNotice && !previewNotice && execution && "kind" in execution && <a className={styles.textLink} href={testnetCreate}>Activate as {EXECUTION_COPY[execution.kind].name} →</a>}
               {launchNotice && <span className={styles.note}>{launchNotice}</span>}
               {previewNotice && <span className={styles.note}>{previewNotice}</span>}
             </>}
@@ -643,7 +645,7 @@ function AddAsset({ state, query, setQuery, tab, setTab, pick, close }: { state:
 
 function EditRow({ row, state, update, close, split }: { row: B.Row; state: B.Builder; update: Update; close: () => void; split: () => void }) {
   const testnet = useContext(Testnet);
-  const asset = B.assetOf(row.key), words = B.sentence(row, testnet?.timeZone);
+  const asset = B.assetOf(row.key), words = rowWords(row, testnet);
   // On testnet an Earn fees row re-centers only as an admitted pool key of its range does (the key fixes it for good):
   // after each change its re-centering moves onto the nearest such key's.
   const set = (field: string, value: unknown) => update((s) => {
@@ -696,7 +698,7 @@ function EditRow({ row, state, update, close, split }: { row: B.Row; state: B.Bu
                   <button type="button" className={styles.play} aria-pressed={row.play === play} disabled={!lock && !!block} aria-disabled={lock ? true : undefined} data-locked={lock?.state} title={lock?.note} onClick={() => { if (lock) setHint(hint === play ? null : play); else choose(play); }}>
                     <Chart kind={play} w={220} h={84} />
                     <b>{B.PLAYS[play].name}{lock ? <FeatureBadge lock={lock} className={styles.beta} /> : B.rowBeta(preview) && <Beta />}</b>
-                    <small role={lock && hint === play ? "status" : undefined}>{lock ? (hint === play ? lock.note : B.PLAYS[play].line) : block ?? B.PLAYS[play].line}</small>
+                    <small role={lock && hint === play ? "status" : undefined}>{lock ? (hint === play ? lock.note : B.PLAYS[play].line) : block ?? (!testnet && (play === "hold" || play === "stack") ? EXECUTION_COPY[play].short : B.PLAYS[play].line)}</small>
                   </button>
                   {index === rowEnd && (
                     <div className={styles.settings} data-side={chosen % 2 ? "right" : "left"} ref={settingsRef} role="region" aria-label={`${B.PLAYS[row.play].name} settings`}>
@@ -992,9 +994,48 @@ function Schedule({ p, set, quarterly = true }: { p: { every: B.Every; day?: num
   );
 }
 
+/** 一列資產的說明句。App 裡 hold／stack 沒有逐資產參數（cre8-app#79），不講舊草稿的時刻與次數。 */
+function rowWords(row: B.Row, testnet: TestnetMode | null): { lead: string; text: string } {
+  const words = B.sentence(row, testnet?.timeZone);
+  return !testnet && (row.play === "hold" || row.play === "stack") ? { lead: words.lead, text: EXECUTION_COPY[row.play].sentence } : words;
+}
+
+/**
+ * Buy & hold／Stack 在 app 裡的設定面板（cre8-app#79）：沒有可調的逐資產參數，只說明會發生什麼。
+ * 還沒開放的附加設定（持有期間出借、停利停損、價格上限）灰色顯示；舊草稿開著的話，給一顆按鈕關掉，
+ * 只改那幾個欄位，其他舊參數原樣留在草稿裡。
+ */
+function PlainExecution({ row, set }: { row: B.Row; set: (field: string, value: unknown) => void }) {
+  const kind = row.play === "stack" ? "stack" : "hold";
+  const extras = rowExtras(row);
+  const locks = [kind === "hold" ? featureLock("holdEarn") : null, featureLock("strategyLimits")].filter((lock) => lock !== null);
+  const turnOff = () => {
+    if (row.play === "hold") {
+      if (row.p.venue !== "hold") set("venue", "hold");
+      if (row.p.exit !== "none") set("exit", "none");
+    } else if (row.play === "stack") {
+      if (row.p.exit !== "none") set("exit", "none");
+      if (row.p.ceiling > 0) set("ceiling", 0);
+    }
+  };
+  return <>
+    <p className={styles.note}>{EXECUTION_COPY[kind].line}</p>
+    {locks.map((lock) => (
+      <div key={lock.feature} className={styles.rule} data-locked={lock.state}>
+        <div><b>{lock.feature === "strategyLimits" ? "Take profit or stop loss" : lock.name}<FeatureBadge lock={lock} className={styles.beta} /></b><small>{lock.note}</small></div>
+      </div>
+    ))}
+    {extras.length > 0 && <p className={styles.notice} role="status">
+      This draft has {extras.join(" and ").toLowerCase()} on, which {extras.length === 1 ? "isn't" : "aren't"} open yet. <button type="button" className={styles.textLink} onClick={turnOff}>Turn {extras.length === 1 ? "it" : "them"} off</button>
+    </p>}
+  </>;
+}
+
 function Settings({ row, set }: { row: B.Row; set: (field: string, value: unknown) => void }) {
   const testnet = useContext(Testnet);
   const asset = B.assetOf(row.key);
+  // App（非參考測試網模式）：hold／stack 沒有逐資產參數（cre8-app#79）。舊草稿的參數留在草稿裡，畫面只講會發生什麼。
+  if (!testnet && (row.play === "hold" || row.play === "stack")) return <PlainExecution row={row} set={set} />;
   switch (row.play) {
     case "hold": {
       const p = row.p;
@@ -1167,7 +1208,8 @@ function Rules({ state, update }: { state: B.Builder; update: Update }) {
         const enabled = rules[key].on, needsTwo = (key === "pair" || key === "rotate") && keys.length < 2;
         // On testnet: idle lending the catalog does not admit now, or a rule testnet funds cannot run yet.
         // 閒置 USDT 生息還沒開放（cre8-app#58，lib/feature-flags.ts 的 `idleYield`）：灰色、開不起來，說明就寫在那一行。
-        const lock = !testnet && key === "idle" ? featureLock("idleYield") : null;
+        // 其餘整檔規則也還沒開放（cre8-app#79，`fundRules`）：hold 不再平衡、stack 只照比例買。
+        const lock = testnet ? null : key === "idle" ? featureLock("idleYield") : featureLock("fundRules");
         const closed = lock ? lock.note : !testnet ? "" : key === "idle" && !testnet.idle ? "Not open on testnet right now." : testnet.ruleBlock(key) ?? "";
         return (
           <div key={key} className={styles.rule} data-locked={lock?.state}>

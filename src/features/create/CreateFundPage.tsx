@@ -18,13 +18,13 @@ import { openSignIn, usePrivyAuth } from '../../store/privy';
 import { ErrorNote, Note, Spinner } from '../../components/ui';
 import { AssetLogo } from '../../components/AssetLogo';
 import { assetBySymbol } from '../../lib/public-funds';
+import { EXECUTION_COPY, openKinds, typedVersionBody, type ExecutionKind } from '../../lib/fund-execution';
+import { featureLock, playLock } from '../../lib/feature-flags';
+import { FeatureBadge } from '../../components/FeatureLock';
 
-/** Rebalance cadence. The backend requires `intervalSeconds >= 60`; one hour is the shortest sensible cadence. */
-const INTERVALS = [
-  { label: 'Hourly', seconds: 3600 },
-  { label: 'Every 6h', seconds: 21_600 },
-  { label: 'Daily', seconds: 86_400 },
-] as const;
+/** 主網 USDT。後端的資產清單會回報這條鏈真正的計價幣（`isNumeraire`），拿不到時才用這個。 */
+const MAINNET_USDT = '0x55d398326f99059ff775485246999027b3197955';
+const KINDS: readonly ExecutionKind[] = ['hold', 'stack'];
 
 type Step =
   | 'idle'
@@ -37,7 +37,7 @@ type Step =
 
 const STEP_LABEL: Record<Exclude<Step, 'idle' | 'done'>, string> = {
   'creating-strategy': 'Creating the strategy (mirrors to the on-chain registry)…',
-  'publishing-version': 'Publishing the version (weights + schedule)…',
+  'publishing-version': 'Publishing the version (weights and how it runs)…',
   enrolling: 'Deploying the smart account (enroll)…',
   'topping-up-gas': 'Sending gas to the new account and waiting for it to arrive…',
   approving: 'Signing the approval (one wallet signature)…',
@@ -85,7 +85,22 @@ export function ActivateFundPage(): ReactNode {
   const [name, setName] = useState(draft?.name||'');
   const [description, setDescription] = useState('');
   const [weights, setWeights] = useState<Record<string, number>>(draft?.weights||{});
-  const [intervalSeconds, setIntervalSeconds] = useState<number>(3600);
+  /**
+   * 執行模式（cre8-app#79）：整檔基金一種。從設計器來的草稿帶著它的模式；收斂不了（混合、還沒開放的策略）
+   * 就回設計器改，這裡不替它選。快速設定預設 Buy & hold。換模式要重新勾確認。
+   */
+  const [kind, setKindState] = useState<ExecutionKind>(draft?.execution ?? 'hold');
+  const [kindAgreed, setKindAgreed] = useState(false);
+  const setKind = (next: ExecutionKind): void => {
+    if (next === kind) return;
+    setKindState(next);
+    setKindAgreed(false);
+  };
+  /**
+   * 失敗後重試：策略已經建好（名稱沒改）就沿用，從發版或 enroll 接著做，不再建第二個策略。
+   * 同一份設定重發，後端讀回原版本（BE-1 的冪等規則）。
+   */
+  const createdStrategy = useRef<{ id: number; name: string } | null>(null);
   const [step, setStep] = useState<Step>('idle');
   /**
    * 同步的「已有請求在飛」旗標。
@@ -110,7 +125,13 @@ export function ActivateFundPage(): ReactNode {
   /** Accumulate in bps, not floating percentages: `33.3 + 33.3 + 33.4` is not 100 in binary floating point. */
   const totalBps = selected.reduce((sum, [, percent]) => sum + Math.round(percent * 100), 0);
   const unavailableAssets=selected.filter(([address])=>!assets.data?.some(asset=>asset.address.toLowerCase()===address.toLowerCase()&&asset.tradable!==false));
-  const valid = name.trim().length > 0 && totalBps === 10_000 && unavailableAssets.length===0 && (draft===null||allocationAgreed);
+  const usdt = (assets.data?.find((asset) => asset.isNumeraire)?.address ?? CHAIN.contracts?.usdt ?? MAINNET_USDT).toLowerCase();
+  /** stack 每期照比例買非現金成分：全部是 USDT 的話沒有東西可買，後端也會拒絕。 */
+  const stackWithoutAssets = kind === 'stack' && selected.every(([address]) => address.toLowerCase() === usdt);
+  const draftProblem = draft?.executionProblem ?? null;
+  const valid = name.trim().length > 0 && totalBps === 10_000 && unavailableAssets.length===0 && (draft===null||allocationAgreed)
+    && draftProblem === null && !stackWithoutAssets && kindAgreed;
+  const idleLock = featureLock('idleYield');
   const busy = step !== 'idle' && step !== 'done';
 
   const toggle = (asset: PriceableAsset): void => {
@@ -130,23 +151,28 @@ export function ActivateFundPage(): ReactNode {
     setError(null);
     setCreated(null);
     try {
-      setStep('creating-strategy');
-      const strategy = await createStrategy(token, {
-        name: name.trim(),
-        ...(description.trim() === '' ? {} : { description: description.trim() }),
-      });
-
-      setStep('publishing-version');
-      await publishVersion(token, strategy.id, {
-        allocation: {
-          assets: selected.map(([address, percent]) => ({
-            address,
-            weightBps: Math.round(percent * 100),
-          })),
-        },
-        schedule: { kind: 'interval', intervalSeconds },
+      // 先組好要發的版本：組不出來（權重不對、stack 只有 USDT）就不建策略。
+      const version = typedVersionBody({
+        chainId: CHAIN.id,
+        kind,
+        usdt,
+        assets: selected.map(([address, percent]) => ({ address, weightBps: Math.round(percent * 100) })),
         changeLog: 'created from the app',
       });
+      const trimmed = name.trim();
+      let strategy = createdStrategy.current?.name === trimmed ? { id: createdStrategy.current.id } : null;
+      if (strategy === null) {
+        setStep('creating-strategy');
+        const made = await createStrategy(token, {
+          name: trimmed,
+          ...(description.trim() === '' ? {} : { description: description.trim() }),
+        });
+        createdStrategy.current = { id: made.id, name: trimmed };
+        strategy = { id: made.id };
+      }
+
+      setStep('publishing-version');
+      await publishVersion(token, strategy.id, version);
 
       setStep('enrolling');
       const portfolio = await enrollPortfolio(token, strategy.id);
@@ -194,6 +220,7 @@ export function ActivateFundPage(): ReactNode {
       }
       setApproval(approval);
 
+      createdStrategy.current = null;
       setCreated({ strategyId: strategy.id, portfolioId: portfolio.id });
       setStep('done');
       await Promise.all([
@@ -251,7 +278,6 @@ export function ActivateFundPage(): ReactNode {
 
   /** 百分比顯示：最多兩位小數，去掉多餘的 0（60.00 → 60、12.50 → 12.5）。 */
   const tidy = (value: number): string => value.toFixed(2).replace(/\.?0+$/, '');
-  const cadenceLabel = INTERVALS.find((option) => option.seconds === intervalSeconds)?.label ?? `${intervalSeconds}s`;
   const symbolFor = (address: string): string =>
     assets.data?.find((asset) => asset.address.toLowerCase() === address.toLowerCase())?.symbol ?? draft?.symbols[address] ?? address;
   /** 已勾選的資產平均分配，合計剛好 100%（餘數給第一個）。只改畫面上的權重，送出的流程不變。 */
@@ -280,16 +306,22 @@ export function ActivateFundPage(): ReactNode {
           ? `Weights add up to ${tidy(totalPercent)}%. Remove ${tidy(((totalBps - 10_000) / 100))}%`
           : unavailableAssets.length > 0
             ? 'Remove the assets that are not available'
-            : draft !== null && !allocationAgreed
-              ? 'Confirm the allocation from your design'
-              : null;
+            : draftProblem !== null
+              ? 'Change your design first'
+              : draft !== null && !allocationAgreed
+                ? 'Confirm the allocation from your design'
+                : stackWithoutAssets
+                  ? 'Stack needs at least one asset besides USDT'
+                  : !kindAgreed
+                    ? `Confirm how ${EXECUTION_COPY[kind].name} runs`
+                    : null;
 
   return (
     <main className="explore-wrap cf">
       <header className="explore-heading cf-head">
         <div>
           <h1>Activate a fund<span>.</span></h1>
-          <p>Pick the assets and set their weights. CRE8 trades through USDT to keep them there.</p>
+          <p>Pick the assets and their weights, then choose how the fund buys them.</p>
         </div>
         <Link className="cf-design-link" to="/create">Open the full designer <span aria-hidden="true">→</span></Link>
       </header>
@@ -299,10 +331,14 @@ export function ActivateFundPage(): ReactNode {
           {draft && (
             <section className="cf-block cf-draft">
               <h2>Allocation from your design</h2>
-              <p>Activate these holdings as a target-weight strategy. Choose the rebalance interval below. Other design rules and fee settings remain in your exported design.</p>
+              {draftProblem !== null ? (
+                <Note tone="warn">{draftProblem} <Link to="/create">Change it in the designer →</Link></Note>
+              ) : (
+                <p>Activate these holdings as {EXECUTION_COPY[draft.execution ?? 'hold'].name}. Fee settings and anything still marked Coming soon stay in your design.</p>
+              )}
               <label className="cf-confirm">
-                <input type="checkbox" checked={allocationAgreed} onChange={(event) => setAllocationAgreed(event.target.checked)} />
-                I want to activate this allocation as a target-weight strategy.
+                <input type="checkbox" checked={allocationAgreed} disabled={draftProblem !== null} onChange={(event) => setAllocationAgreed(event.target.checked)} />
+                I want to activate this allocation.
               </label>
               {assets.data && unavailableAssets.length > 0 && (
                 <div className="cf-unavailable">
@@ -442,24 +478,40 @@ export function ActivateFundPage(): ReactNode {
           </section>
 
           <section className="cf-block">
-            <h2><b>3</b>How often to rebalance</h2>
-            <div className="seg public-periods cf-cadence" role="group" aria-label="Rebalance cadence">
-              {INTERVALS.map((option) => (
+            <h2><b>3</b>How it buys</h2>
+            <div className="seg public-periods cf-cadence" role="group" aria-label="How the fund buys">
+              {KINDS.map((option) => { const lock = playLock(option); return (
                 <button
-                  key={option.seconds}
+                  key={option}
                   type="button"
-                  className={intervalSeconds === option.seconds ? 'on' : ''}
-                  aria-pressed={intervalSeconds === option.seconds}
-                  onClick={() => setIntervalSeconds(option.seconds)}
+                  className={kind === option && draftProblem === null ? 'on' : ''}
+                  aria-pressed={kind === option && draftProblem === null}
+                  disabled={draft !== null || !openKinds().includes(option)}
+                  title={lock?.note}
+                  onClick={() => setKind(option)}
                 >
-                  {option.label}
+                  {EXECUTION_COPY[option].name}
+                  {lock && <> <FeatureBadge lock={lock} /></>}
                 </button>
-              ))}
+              ); })}
             </div>
             <p className="cf-help">
-              CRE8 checks the weights on this schedule. It only trades when they have drifted past the threshold, and each
-              trade is capped by the price-impact budget.
+              {draftProblem !== null
+                ? 'Your design has to settle on one way first.'
+                : <>{EXECUTION_COPY[kind].line}{draft !== null && ' It comes from your design; change it there.'}</>}
             </p>
+            {idleLock && (
+              <p className="cf-help" data-locked={idleLock.state}>
+                <b>{idleLock.name}</b> <FeatureBadge lock={idleLock} /> Off. {idleLock.note}
+              </p>
+            )}
+            {CHAIN.testnet && <p className="cf-help">Testnet: the USDT, the assets and their prices are simulated.</p>}
+            {draftProblem === null && (
+              <label className="cf-confirm">
+                <input type="checkbox" checked={kindAgreed} onChange={(event) => setKindAgreed(event.target.checked)} />
+                {EXECUTION_COPY[kind].confirm}
+              </label>
+            )}
           </section>
         </div>
 
@@ -484,8 +536,10 @@ export function ActivateFundPage(): ReactNode {
             )}
 
             <dl className="cf-summary-facts">
-              <dt>Rebalance</dt>
-              <dd>{cadenceLabel}</dd>
+              <dt>Buys</dt>
+              <dd>{draftProblem !== null ? '—' : EXECUTION_COPY[kind].name}</dd>
+              <dt>Earn on idle USDT</dt>
+              <dd>Off</dd>
             </dl>
 
             {step !== 'idle' && step !== 'done' ? (

@@ -8,8 +8,10 @@
  * 四種狀態：
  * - `on`      可以用。畫面上沒有任何標記。
  * - `mainnet` 主網才開放（刷卡入金、其他鏈轉入、Ondo 冷門股）。標「Mainnet」。
- * - `soon`    第二批功能，還沒做好（定期定額、限價／停利停損、逢低買、閒置 USDT 生息、績效費、24 小時生效）。標「Coming soon」。
- * - `later`   設計稿裡有、但 v1 不做（區間、順勢、做市、借貸；產品架構 P09、P10）。標「Later」。
+ * - `soon`    還沒做好（限價／停利停損、逢低買、區間、順勢、做市、借貸、持有期間出借、閒置 USDT 生息、績效費、24 小時生效）。標「Coming soon」。
+ * - `later`   設計稿裡有、但 v1 不做。標「Later」（目前沒有項目在這個狀態）。
+ *
+ * 2026-11-15 使用者決定（cre8-app#79）：這次只開純持有與定期定額；其他六種策略一律灰色「Coming soon」、不可點。
  *
  * ⚠ 開關只管「入口鎖不鎖」。`depositCard`、`depositCrossChain`、`ondoStocks`、`settingsDelay`
  * 背後的功能還沒做：把它們改成 `on` 只會拿掉灰色與標記，要等功能接上才真的能用。
@@ -27,7 +29,6 @@ export type Feature = {
 
 const MAINNET = 'Opens on mainnet.';
 const SOON = 'Coming soon to testnet.';
-const LATER = 'Planned for a later release.';
 
 export const FEATURES = {
   // ---- 入金（產品架構第 4 節） ----
@@ -49,9 +50,11 @@ export const FEATURES = {
   },
   // ---- 第二批：策略與基金規則（第 7、8 節） ----
   strategyDca: {
+    // 2026-11-15 使用者決定：定期定額的參數由創作者設定（每天或每週、每期買每筆投入的固定比例），買的人只決定投多少。
+    // 後端的 typed 版本還不收創作者的定期參數（BE-1 是持有人各自設定），等後端改好再開。
     state: 'soon',
     name: 'Recurring buys',
-    note: `Buy the same slice on a fixed schedule. ${SOON}`,
+    note: `You set daily or weekly buys of a fixed share of each deposit. ${SOON}`,
   },
   strategyDips: {
     state: 'soon',
@@ -62,6 +65,18 @@ export const FEATURES = {
     state: 'soon',
     name: 'Limit, take-profit and stop-loss',
     note: `Set the prices an asset is bought and sold at. ${SOON}`,
+  },
+  /** 純持有期間把資產出借或質押（設計器 Buy & hold 的「While it's held」）。不是閒置 USDT 生息。 */
+  holdEarn: {
+    state: 'soon',
+    name: 'Earn while held',
+    note: `Lend or stake an asset while the fund holds it. ${SOON}`,
+  },
+  /** 設計器的整檔規則（再平衡、留強、配對網格、整檔停損）。閒置生息另有 `idleYield`。 */
+  fundRules: {
+    state: 'soon',
+    name: 'Whole-fund rules',
+    note: `Rebalance, keep the strongest, trade a pair or stop out the whole fund. ${SOON}`,
   },
   idleYield: {
     state: 'soon',
@@ -78,11 +93,11 @@ export const FEATURES = {
     name: '24-hour notice on changes',
     note: `Changes to a fund take effect 24 hours after you publish them, so holders can leave first. ${SOON}`,
   },
-  // ---- 設計稿有、v1 不做 ----
-  strategyRange: { state: 'later', name: 'Range trade', note: `Buy low and sell high between two prices. ${LATER}` },
-  strategyTrend: { state: 'later', name: 'Ride the trend', note: `Buy breakouts and exit when the trend turns. ${LATER}` },
-  strategyLp: { state: 'later', name: 'Earn fees', note: `Provide liquidity in a PancakeSwap pool. ${LATER}` },
-  strategyCarry: { state: 'later', name: 'Borrow & earn', note: `Borrow against an asset and lend the proceeds. ${LATER}` },
+  // ---- 原本標「Later」的四種策略：使用者決定一律顯示「Coming soon」（cre8-app#79） ----
+  strategyRange: { state: 'soon', name: 'Range trade', note: `Buy low and sell high between two prices. ${SOON}` },
+  strategyTrend: { state: 'soon', name: 'Ride the trend', note: `Buy breakouts and exit when the trend turns. ${SOON}` },
+  strategyLp: { state: 'soon', name: 'Earn fees', note: `Provide liquidity in a PancakeSwap pool. ${SOON}` },
+  strategyCarry: { state: 'soon', name: 'Borrow & earn', note: `Borrow against an asset and lend the proceeds. ${SOON}` },
 } as const satisfies Record<string, Feature>;
 
 export type FeatureKey = keyof typeof FEATURES;
@@ -128,7 +143,7 @@ export function featureLock(key: FeatureKey, overrides?: Partial<Record<FeatureK
   return { feature: key, state, label: LABEL[state], name: FEATURES[key].name, note: FEATURES[key].note };
 }
 
-/** 設計器的每種策略對應哪個開關。`hold`（買進持有）是現在唯一真的會跑的，不受開關管。 */
+/** 設計器的每種策略對應哪個開關。`hold`（買進持有）一直開著，不受開關管；`stack` 跟 `strategyDca`。 */
 const PLAY_FEATURE: Record<string, FeatureKey> = {
   stack: 'strategyDca',
   dips: 'strategyDips',
