@@ -20,7 +20,7 @@ import { underlyingSlug } from "../../reference/lib/asset-navigation";
 import { LAUNCH_COPY, POPULAR_ASSET_KEYS, isLaunchAsset } from "../../lib/launch-admission";
 import { IS_TESTNET, isTestnetSymbol } from "../../lib/testnet-catalogue";
 import { featureLock, playLock } from "../../lib/feature-flags";
-import { EXECUTION_COPY, STACK_SLICES, describeExecutionProblem, designExecution, rowExtras, stackExecution } from "../../lib/fund-execution";
+import { EXECUTION_COPY, REBALANCE_COPY, REBALANCE_STACK_NOTE, STACK_SLICES, describeExecutionProblem, designExecution, rebalanceOf, rowExtras, stackExecution, type Rebalance } from "../../lib/fund-execution";
 // 測試網上 ZEC 與 #89 的 8 個加密資產改成可交易（只限測試網）。要在任何畫面讀目錄之前跑。
 import "../../lib/testnet-assets";
 import { FeatureBadge } from "../../components/FeatureLock";
@@ -115,11 +115,11 @@ function Chart({ kind, w, h, mini = false }: { kind: ChartKind; w: number; h: nu
   return <span className={cx(styles.chart, mini && styles.chartMini)} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-function Seg<T extends string | number | boolean>({ value, options, onChange, label }: { value: T; options: [T, string][]; onChange: (value: T) => void; label: string }) {
+function Seg<T extends string | number | boolean>({ value, options, onChange, label, disabled }: { value: T; options: [T, string][]; onChange: (value: T) => void; label: string; disabled?: (option: T) => boolean }) {
   return (
     <span className={styles.seg} role="group" aria-label={label}>
       {options.map(([option, text]) => (
-        <button key={String(option)} type="button" aria-pressed={option === value} onClick={() => onChange(option)}>{text}</button>
+        <button key={String(option)} type="button" aria-pressed={option === value} disabled={disabled?.(option)} onClick={() => onChange(option)}>{text}</button>
       ))}
     </span>
   );
@@ -1084,7 +1084,7 @@ function Settings({ row, set }: { row: B.Row; set: (field: string, value: unknow
       const p = row.p;
       return <>
         <Field label="How often" note={`Your local time${testnet ? ` (${testnet.timeZone})` : ""}. A missed buy is skipped, not made up later.`}><Schedule p={p} set={set} /></Field>
-        <Field label="Fill its share in" note="Each buy spends what's left for it divided by the buys remaining, so new deposits spread over the rest."><Range label="Number of buys" value={p.buys} limit={B.LIMITS.stack.buys} unit={unit.buys} onChange={(value) => set("buys", value)} /></Field>
+        <Field label="Fill its share in" note="Each buy spends what's left for it divided by the buys remaining, so new deposits spread over the rest."><Range label="Number of buys" value={p.buys} limit={STACK_SLICES} unit={unit.buys} onChange={(value) => set("buys", value)} /></Field>
         <More>
           <ExitField row={row} p={p} set={set} />
           <Field label="Pause buying above (USD)" note={`0 leaves the limit to CRE8, which sets one above the launch price: ${B.LAUNCH_PRICE}.`}><input className={styles.numInput} type="number" min={0} value={p.ceiling} aria-label="Pause buying above" onChange={(event) => set("ceiling", Math.max(0, Number(event.target.value) || 0))} /></Field>
@@ -1186,6 +1186,28 @@ function Settings({ row, set }: { row: B.Row; set: (field: string, value: unknow
   }
 }
 
+const REBALANCE_OPTIONS: readonly Rebalance[] = ["none", "monthly", "drift"];
+
+/**
+ * 整檔再平衡（app）：不再平衡（預設）／每月／任一資產偏離超過 5 點，都回到創作者設的比例。
+ * 只有全部資產都是 Buy & hold 才能開；有 Stack 資產時另外兩個選項灰掉並寫出原因。舊草稿的其他設定（每季、
+ * 其他門檻、等權重）不會被偷偷改掉：哪個選項都不亮，摘要那邊會說要改。
+ */
+function RebalanceRow({ state, setRule }: { state: B.Builder; setRule: <K extends keyof B.FundRules>(key: K, patch: Partial<B.FundRules[K]>) => void }) {
+  const mode = rebalanceOf(state.rules.rebalance), hasStack = state.rows.some((row) => row.play === "stack");
+  const pick = (next: Rebalance) => {
+    if (next === "none") setRule("rebalance", { on: false });
+    else if (!hasStack) setRule("rebalance", next === "monthly" ? { on: true, how: "schedule", every: "monthly", weight: "custom" } : { on: true, how: "drift", drift: 5, weight: "custom" });
+  };
+  return (
+    <div className={styles.rule}>
+      <Chart kind="rebalance" w={78} h={32} mini />
+      <div><b>Rebalance</b><small>{hasStack ? REBALANCE_STACK_NOTE : REBALANCE_COPY[mode ?? "none"].line}</small></div>
+      <Seg label="Rebalance" value={mode ?? ("" as Rebalance)} options={REBALANCE_OPTIONS.map((option) => [option, REBALANCE_COPY[option].name])} disabled={(option) => hasStack && option !== "none"} onChange={pick} />
+    </div>
+  );
+}
+
 function Rules({ state, update }: { state: B.Builder; update: Update }) {
   const testnet = useContext(Testnet);
   const rules = state.rules, keys = B.assetKeys(state.rows), on = B.rulesOn(rules);
@@ -1237,6 +1259,8 @@ function Rules({ state, update }: { state: B.Builder; update: Update }) {
     <section className={styles.panel} aria-label="Whole-fund rules">
       <div className={styles.ptop}><h2>Whole-fund rules</h2><span className={styles.label}>{on.length ? `${on.length} on` : "All off"}</span></div>
       {list.map(([key, chart, title, line, controls]) => {
+        // 再平衡在 app 裡開放三個選項（使用者決定；backend#93 的 execution.rebalance），其他整檔規則維持 Coming soon。
+        if (!testnet && key === "rebalance") return <RebalanceRow key={key} state={state} setRule={setRule} />;
         const enabled = rules[key].on, needsTwo = (key === "pair" || key === "rotate") && keys.length < 2;
         // On testnet: idle lending the catalog does not admit now, or a rule testnet funds cannot run yet.
         // 閒置 USDT 生息還沒開放（cre8-app#58，lib/feature-flags.ts 的 `idleYield`）：灰色、開不起來，說明就寫在那一行。

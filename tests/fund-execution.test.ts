@@ -7,6 +7,7 @@ import {
   designExecution,
   executionConfirm,
   minimumDeposit,
+  rebalanceOf,
   openKinds,
   rowExtras,
   stackExecution,
@@ -70,11 +71,12 @@ test("the UTC schedule is told back in local time", () => {
 
 test("each asset keeps its own strategy: hold and stack can sit in one fund", () => {
   const result = designExecution(design(["hold", "stack"]).rows, { open: BOTH, now: NOW });
+  expect("assets" in result && result.rebalance).toBe("none");
   expect("assets" in result && Object.fromEntries(result.assets)).toEqual({
     BTC: { kind: "hold" },
     ETH: { kind: "stack", every: "weekly", weekday: 1, timeUtc: "01:00", slices: 12 },
   });
-  expect(designExecution([], { open: BOTH })).toEqual({ assets: new Map() });
+  expect(designExecution([], { open: BOTH })).toEqual({ assets: new Map(), rebalance: "none" });
 });
 
 test("what still blocks activation is named, one thing at a time", () => {
@@ -96,7 +98,7 @@ test("what still blocks activation is named, one thing at a time", () => {
   const stack = { key: "BTC", play: "stack", p: B.defaults("stack") } as B.Row;
   expect(designExecution([hold, stack], { open: BOTH, assetName: () => "BTCB" })).toEqual({ problem: { kind: "split", assets: ["BTCB"] } });
   expect(describeExecutionProblem({ kind: "split", assets: ["BTCB"] })).toBe("BTCB has two different strategies. Give each asset one strategy to activate this fund now.");
-  expect(designExecution([hold, { ...hold, id: 9 }], { open: BOTH })).toEqual({ assets: new Map([["BTC", { kind: "hold" }]]) });
+  expect(designExecution([hold, { ...hold, id: 9 }], { open: BOTH })).toEqual({ assets: new Map([["BTC", { kind: "hold" }]]), rebalance: "none" });
 });
 
 test("old hold/stack extras and whole-fund rules block activation until turned off; the draft keeps its fields", () => {
@@ -107,7 +109,7 @@ test("old hold/stack extras and whole-fund rules block activation until turned o
   expect(rowExtras(stops)).toEqual(["Take profit or stop loss"]);
   expect(rowExtras(ceiling)).toEqual(["Pause buying above a price"]);
   expect(designExecution([lending], { open: BOTH })).toEqual({ problem: { kind: "extras", settings: ["Earn while held"] } });
-  expect(designExecution(design(["hold"]).rows, { rules: { rebalance: { on: true } } })).toEqual({ problem: { kind: "extras", settings: ["Whole-fund rules"] } });
+  expect(designExecution(design(["hold"]).rows, { rules: { rotate: { on: true } } })).toEqual({ problem: { kind: "extras", settings: ["Whole-fund rules"] } });
   expect("assets" in designExecution(design(["hold"]).rows, { rules: { rebalance: { on: false }, idle: { on: false } } })).toBe(true);
   expect(rowExtras({ play: "hold", p: B.defaults("hold") } as B.Row)).toEqual([]);
   expect(rowExtras({ play: "stack", p: B.defaults("stack") } as B.Row)).toEqual([]);
@@ -219,4 +221,39 @@ test("the activation page publishes the typed version only after explicit confir
   expect(page).toContain("createdStrategy.current?.name === trimmed");
   const api = fs.readFileSync("src/lib/api.ts", "utf8");
   expect(api).toContain("body: TypedVersionBody");
+});
+
+test("rebalancing: off, monthly or more than 5 points off, only when every asset is Buy & hold", () => {
+  const rule = B.emptyBuilder().rules.rebalance;
+  expect(rebalanceOf(rule)).toBe("none");
+  expect(rebalanceOf({ ...rule, on: true, how: "schedule", every: "monthly" })).toBe("monthly");
+  expect(rebalanceOf({ ...rule, on: true, how: "drift", drift: 5 })).toBe("drift");
+  // 舊草稿的每季、其他門檻、等權重：不偷偷換成三個選項之一。
+  expect(rebalanceOf({ ...rule, on: true, how: "schedule", every: "quarterly" })).toBeNull();
+  expect(rebalanceOf({ ...rule, on: true, how: "drift", drift: 10 })).toBeNull();
+  expect(rebalanceOf({ ...rule, on: true, how: "drift", drift: 5, weight: "equal" })).toBeNull();
+
+  const holds = design(["hold", "hold"]);
+  const monthly = { ...holds.rules, rebalance: { ...rule, on: true, how: "schedule" as const, every: "monthly" as const } };
+  expect(designExecution(holds.rows, { rules: monthly, open: BOTH })).toEqual({ assets: new Map([["BTC", { kind: "hold" }], ["ETH", { kind: "hold" }]]), rebalance: "monthly" });
+  expect(designExecution(design(["hold", "stack"]).rows, { rules: monthly, open: BOTH })).toEqual({ problem: { kind: "rebalance", reason: "stack" } });
+  expect(describeExecutionProblem({ kind: "rebalance", reason: "stack" })).toMatch(/needs every asset on Buy & hold/);
+  const quarterly = { ...holds.rules, rebalance: { ...rule, on: true, how: "schedule" as const, every: "quarterly" as const } };
+  expect(designExecution(holds.rows, { rules: quarterly, open: BOTH })).toEqual({ problem: { kind: "rebalance", reason: "options" } });
+  const draft = activationDesign({ ...holds, rules: monthly }, false, NOW)!;
+  expect(draft.rebalance).toBe("monthly");
+
+  const body = typedVersionBody({ chainId: 97, usdt: USDT, rebalance: "drift", assets: [{ address: BTC, weightBps: 10_000 }] });
+  expect(body.execution.rebalance).toBe("drift");
+  expect(typedVersionBody({ chainId: 97, usdt: USDT, assets: [{ address: BTC, weightBps: 10_000 }] }).execution.rebalance).toBe("none");
+  expect(() => typedVersionBody({ chainId: 97, usdt: USDT, rebalance: "monthly", assets: [{ address: BTC, weightBps: 10_000, execution: { kind: "stack", every: "daily", weekday: null, timeUtc: "01:00", slices: 2 } }] })).toThrow("Buy & hold");
+  expect(executionConfirm(new Set(["hold"]), "monthly")).toMatch(/once a month CRE8 sells and buys/);
+  expect(executionConfirm(new Set(["hold"]), "drift")).toMatch(/more than 5 points off/);
+  expect(executionConfirm(new Set(["hold"]), "none")).toBe(EXECUTION_COPY.hold.confirm);
+});
+
+test("the stack buys slider stops at 52 in every designer path", () => {
+  const designer = fs.readFileSync("src/features/create/FundDesigner.tsx", "utf8");
+  expect(designer).not.toContain("B.LIMITS.stack.buys");
+  expect(designer.match(/label="Number of buys" value=\{p\.buys\} limit=\{STACK_SLICES\}/g)?.length).toBe(2);
 });

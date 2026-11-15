@@ -18,6 +18,14 @@ export type ExecutionKind = 'hold' | 'stack';
 export type StackExecution = { kind: 'stack'; every: 'daily' | 'weekly'; weekday: number | null; timeUtc: string; slices: number };
 export type AssetExecution = { kind: 'hold' } | StackExecution;
 
+/**
+ * 整檔再平衡（使用者決定，docs TESTNET_PARAMETERS；backend#93 的 `execution.rebalance`）：只在全部資產都是
+ * Buy & hold 時可選。none＝不再平衡（預設）；monthly＝每個 UTC 月一次；drift＝任一資產偏離目標超過 5 個百分點。
+ */
+export type Rebalance = 'none' | 'monthly' | 'drift';
+/** drift 的門檻：5 個百分點（後端 500 bps，固定）。 */
+export const REBALANCE_DRIFT_POINTS = 5;
+
 /** stack 可設的期數（後端 2–52）。 */
 export const STACK_SLICES = { min: 2, max: 52 } as const;
 
@@ -30,10 +38,24 @@ export type ExecutionProblem =
   /** stack 的排程不是每天／每週、或期數不在 2–52（舊草稿可能是每月、或 1000 期）。 */
   | { kind: 'schedule'; assets: string[] }
   /** 同一個資產分成兩列、兩列設定不同：後端一個資產只有一種設定。 */
-  | { kind: 'split'; assets: string[] };
+  | { kind: 'split'; assets: string[] }
+  /** 再平衡開著，但有資產是 Stack（`stack`），或是舊草稿的設定不是每月／偏離 5 點／回到原比例（`options`）。 */
+  | { kind: 'rebalance'; reason: 'stack' | 'options' };
 
 /** `assets`：設計器資產 key → 這個資產的執行設定。 */
-export type DesignExecution = { assets: Map<string, AssetExecution> } | { problem: ExecutionProblem };
+export type DesignExecution = { assets: Map<string, AssetExecution>; rebalance: Rebalance } | { problem: ExecutionProblem };
+
+/** 設計器的再平衡規則（參考設計的欄位）。 */
+export type RebalanceRule = { on: boolean; how?: string; drift?: number; every?: string; weight?: string };
+
+/** 設計器的再平衡規則換成後端的選項；開著但不是三個選項之一（舊草稿）回傳 null。 */
+export function rebalanceOf(rule: RebalanceRule | undefined): Rebalance | null {
+  if (!rule?.on) return 'none';
+  if ((rule.weight ?? 'custom') !== 'custom') return null;
+  if (rule.how === 'schedule') return rule.every === 'monthly' ? 'monthly' : null;
+  if (rule.how === 'drift') return rule.drift === REBALANCE_DRIFT_POINTS ? 'drift' : null;
+  return null;
+}
 
 /** 這次可以啟用的模式：hold 一直開著；stack 跟功能開關 `strategyDca`。 */
 export function openKinds(stackOpen: boolean = playLock('stack') === null): ExecutionKind[] {
@@ -89,7 +111,7 @@ export function stackExecution(
 export function designExecution(
   rows: readonly Pick<Row, 'key' | 'play' | 'p'>[],
   options: {
-    rules?: Partial<Record<keyof FundRules, { on: boolean }>>;
+    rules?: Partial<Record<Exclude<keyof FundRules, 'rebalance'>, { on: boolean }>> & { rebalance?: RebalanceRule };
     playName?: (play: string) => string;
     assetName?: (key: string) => string;
     open?: readonly ExecutionKind[];
@@ -100,8 +122,8 @@ export function designExecution(
   const excluded = [...new Set(rows.filter((row) => !open.includes(row.play as ExecutionKind)).map((row) => playName(row.play)))];
   if (excluded.length > 0) return { problem: { kind: 'excluded', plays: excluded } };
   const extras = [...new Set(rows.flatMap(rowExtras))];
-  // 整檔規則（再平衡、留強、配對網格、整檔停損、閒置生息）都還沒開放。
-  if (Object.values(rules).some((rule) => rule?.on)) extras.push('Whole-fund rules');
+  // 再平衡以外的整檔規則（留強、配對網格、整檔停損、閒置生息）都還沒開放。
+  if (Object.entries(rules).some(([key, rule]) => key !== 'rebalance' && rule?.on)) extras.push('Whole-fund rules');
   if (extras.length > 0) return { problem: { kind: 'extras', settings: extras } };
   const each = rows.map((row) => ({
     key: row.key,
@@ -117,7 +139,10 @@ export function designExecution(
     else assets.set(item.key, item.execution as AssetExecution);
   }
   if (split.size > 0) return { problem: { kind: 'split', assets: [...split] } };
-  return { assets };
+  const rebalance = rebalanceOf(rules.rebalance);
+  if (rebalance === null) return { problem: { kind: 'rebalance', reason: 'options' } };
+  if (rebalance !== 'none' && [...assets.values()].some((setting) => setting.kind === 'stack')) return { problem: { kind: 'rebalance', reason: 'stack' } };
+  return { assets, rebalance };
 }
 
 const list = (names: string[]): string => names.join(', ');
@@ -136,6 +161,10 @@ export function describeExecutionProblem(problem: ExecutionProblem, open: readon
       return `Stack buys daily or weekly, in ${STACK_SLICES.min}–${STACK_SLICES.max} buys. Change the schedule of ${list(problem.assets)} to activate this fund now.`;
     case 'split':
       return `${list(problem.assets)} ${problem.assets.length === 1 ? 'has' : 'have'} two different strategies. Give each asset one strategy to activate this fund now.`;
+    case 'rebalance':
+      return problem.reason === 'stack'
+        ? `${REBALANCE_STACK_NOTE} Turn rebalancing off, or set every asset to Buy & hold, to activate this fund now.`
+        : `Rebalancing runs monthly or when an asset is more than ${REBALANCE_DRIFT_POINTS} points off its share, back to your shares. Pick one of those to activate this fund now.`;
   }
 }
 
@@ -145,7 +174,7 @@ export const EXECUTION_COPY: Record<ExecutionKind, { name: string; short: string
     name: 'Buy & hold',
     short: 'Bought with each deposit and kept.',
     sentence: ', bought with each new deposit and kept.',
-    line: 'Its share of each new deposit is bought at the next buying window and kept. Nothing is sold or rebalanced when prices move.',
+    line: 'Its share of each new deposit is bought at the next buying window and kept. It is only sold if the fund rebalances.',
     confirm: 'I understand: each new deposit is bought at these weights and kept. CRE8 does not sell or rebalance it when prices move.',
   },
   stack: {
@@ -155,6 +184,16 @@ export const EXECUTION_COPY: Record<ExecutionKind, { name: string; short: string
     line: 'You set how often (daily or weekly), when, and how many buys each deposit is split into. Holders only choose how much to put in. A buy without enough USDT is skipped, not made up later.',
     confirm: 'I understand: the Stack assets are bought in the daily or weekly slices I set. A buy without enough USDT is skipped, and nothing is sold when prices move.',
   },
+};
+
+/** 有資產是 Stack 時不能再平衡的原因（設計器與錯誤訊息共用）。 */
+export const REBALANCE_STACK_NOTE = 'Rebalancing needs every asset on Buy & hold: a Stack asset is still being bought in slices.';
+
+/** 三個再平衡選項給人看的名稱與一句說明。 */
+export const REBALANCE_COPY: Record<Rebalance, { name: string; line: string }> = {
+  none: { name: 'Off', line: 'Nothing is sold when prices move.' },
+  monthly: { name: 'Monthly', line: 'Once a month (UTC), assets above their share are sold and those below are bought, back to your shares.' },
+  drift: { name: `More than ${REBALANCE_DRIFT_POINTS} points off`, line: `When any asset is more than ${REBALANCE_DRIFT_POINTS} points off its share, the fund sells what is above and buys what is below, back to your shares.` },
 };
 
 const LOCAL_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
@@ -169,7 +208,8 @@ export function stackWords(stack: StackExecution, now: Date = new Date()): strin
 }
 
 /** 建立頁的確認句：只講這檔基金真的有的那幾種。 */
-export function executionConfirm(kinds: ReadonlySet<ExecutionKind>): string {
+export function executionConfirm(kinds: ReadonlySet<ExecutionKind>, rebalance: Rebalance = 'none'): string {
+  if (rebalance !== 'none') return `I understand: each new deposit is bought at these weights, and ${rebalance === 'monthly' ? 'once a month' : `when an asset is more than ${REBALANCE_DRIFT_POINTS} points off its share`} CRE8 sells and buys to bring every asset back to its share.`;
   if (!kinds.has('stack')) return EXECUTION_COPY.hold.confirm;
   if (!kinds.has('hold')) return EXECUTION_COPY.stack.confirm;
   return 'I understand: Buy & hold assets are bought with each deposit and kept, and Stack assets in the daily or weekly slices I set. A buy without enough USDT is skipped, and CRE8 does not sell or rebalance when prices move.';
@@ -184,7 +224,7 @@ type ExecutionEntry = { asset: string; weightBps: number; execution?: AssetExecu
 export type TypedVersionBody = {
   chainId: number;
   allocation: { assets: { address: string; weightBps: number }[] };
-  execution: { kind: 'per_asset'; numeraire: string; rebalance: 'none'; assets: ExecutionEntry[] };
+  execution: { kind: 'per_asset'; numeraire: string; rebalance: Rebalance; assets: ExecutionEntry[] };
   schedule: { kind: 'funding' };
   idleYield: { enabled: false };
   changeLog?: string;
@@ -193,9 +233,11 @@ export type TypedVersionBody = {
 /**
  * 組出要送的版本。地址一律小寫（後端逐字比對 numeraire）。USDT 一定列出來（沒選就是 0%）：後端會把它補進
  * allocation，execution 要一項一項對得上。非 USDT 資產的設定一定明寫（沒給就是 hold）；USDT 不能有 execution。
- * 不再平衡（rebalance none）、生息關閉（APP-3 之前不開）、排程固定是 `funding`（依投入觸發）。
+ * 再平衡預設不做（none；只有全部 hold 才能 monthly／drift）、生息關閉（APP-3 之前不開）、排程固定是 `funding`（依投入觸發）。
  */
-export function typedVersionBody(input: { chainId: number; usdt: string; assets: VersionAsset[]; changeLog?: string }): TypedVersionBody {
+export function typedVersionBody(input: { chainId: number; usdt: string; assets: VersionAsset[]; rebalance?: Rebalance; changeLog?: string }): TypedVersionBody {
+  const rebalance = input.rebalance ?? 'none';
+  if (rebalance !== 'none' && input.assets.some((asset) => asset.execution?.kind === 'stack')) throw new Error(REBALANCE_STACK_NOTE);
   const usdt = input.usdt.toLowerCase();
   const total = input.assets.reduce((sum, asset) => sum + asset.weightBps, 0);
   if (total !== 10_000) throw new Error(`Weights add up to ${total / 100}%, not 100%.`);
@@ -210,7 +252,7 @@ export function typedVersionBody(input: { chainId: number; usdt: string; assets:
     execution: {
       kind: 'per_asset',
       numeraire: usdt,
-      rebalance: 'none',
+      rebalance,
       assets: all.map((asset) => asset.address === usdt
         ? { asset: asset.address, weightBps: asset.weightBps, yield: null }
         : { asset: asset.address, weightBps: asset.weightBps, execution: asset.execution ?? { kind: 'hold' }, yield: null }),

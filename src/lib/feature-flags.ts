@@ -76,7 +76,8 @@ export const FEATURES = {
   fundRules: {
     state: 'soon',
     name: 'Whole-fund rules',
-    note: `Rebalance, keep the strongest, trade a pair or stop out the whole fund. ${SOON}`,
+    // 再平衡已另外開放（全部 Buy & hold 時可選每月或偏離 5 點），這裡只剩其他整檔規則。
+    note: `Keep the strongest, trade a pair or stop out the whole fund. ${SOON}`,
   },
   idleYield: {
     state: 'soon',

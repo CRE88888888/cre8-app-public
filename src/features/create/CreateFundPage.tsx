@@ -18,7 +18,7 @@ import { openSignIn, usePrivyAuth } from '../../store/privy';
 import { ErrorNote, Note, Spinner } from '../../components/ui';
 import { AssetLogo } from '../../components/AssetLogo';
 import { assetBySymbol } from '../../lib/public-funds';
-import { EXECUTION_COPY, executionConfirm, minimumDeposit, stackWords, typedVersionBody, type AssetExecution, type ExecutionKind } from '../../lib/fund-execution';
+import { EXECUTION_COPY, REBALANCE_COPY, executionConfirm, minimumDeposit, stackWords, typedVersionBody, type AssetExecution, type ExecutionKind } from '../../lib/fund-execution';
 import { featureLock } from '../../lib/feature-flags';
 import { FeatureBadge } from '../../components/FeatureLock';
 
@@ -125,6 +125,8 @@ export function ActivateFundPage(): ReactNode {
   const invested = selected.filter(([address]) => address.toLowerCase() !== usdt);
   const kinds = new Set<ExecutionKind>(invested.map(([address]) => executionOf(address).kind));
   const draftProblem = draft?.executionProblem ?? null;
+  /** 整檔再平衡：從設計器來（全部 hold 才能開）；快速設定不再平衡。 */
+  const rebalance = draft?.rebalance ?? 'none';
   const valid = name.trim().length > 0 && totalBps === 10_000 && unavailableAssets.length===0 && (draft===null||allocationAgreed)
     && draftProblem === null && kindAgreed;
   const idleLock = featureLock('idleYield');
@@ -151,6 +153,7 @@ export function ActivateFundPage(): ReactNode {
       const version = typedVersionBody({
         chainId: CHAIN.id,
         usdt,
+        rebalance,
         assets: selected.map(([address, percent]) => ({
           address,
           weightBps: Math.round(percent * 100),
@@ -495,7 +498,7 @@ export function ActivateFundPage(): ReactNode {
               {draftProblem !== null
                 ? 'Your design has to be changed first.'
                 : draft !== null
-                  ? <>{[...kinds].map((kind) => EXECUTION_COPY[kind].line).join(' ')} It comes from your design; change it there.</>
+                  ? <>{[...kinds].map((kind) => EXECUTION_COPY[kind].line).join(' ')} Rebalancing: {REBALANCE_COPY[rebalance].name.toLowerCase()}. {REBALANCE_COPY[rebalance].line} It comes from your design; change it there.</>
                   : <>{EXECUTION_COPY.hold.line} To stack an asset, set its schedule in the <Link to="/create">full designer</Link>.</>}
             </p>
             {idleLock && (
@@ -507,7 +510,7 @@ export function ActivateFundPage(): ReactNode {
             {draftProblem === null && (
               <label className="cf-confirm">
                 <input type="checkbox" checked={kindAgreed} onChange={(event) => setKindAgreed(event.target.checked)} />
-                {executionConfirm(kinds)}
+                {executionConfirm(kinds, rebalance)}
               </label>
             )}
           </section>
@@ -536,6 +539,8 @@ export function ActivateFundPage(): ReactNode {
             <dl className="cf-summary-facts">
               <dt>Buys</dt>
               <dd>{draftProblem !== null || kinds.size === 0 ? '—' : [...kinds].map((kind) => EXECUTION_COPY[kind].name).join(' and ')}</dd>
+              <dt>Rebalance</dt>
+              <dd>{draftProblem !== null ? '—' : REBALANCE_COPY[rebalance].name}</dd>
               <dt>Minimum deposit</dt>
               <dd>{selected.length === 0 ? '—' : `${minimumDeposit(selected.map(([address, percent]) => ({ address, weightBps: Math.round(percent * 100) })), usdt)} USDT`}</dd>
               <dt>Earn on idle USDT</dt>

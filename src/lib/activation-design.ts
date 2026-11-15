@@ -1,4 +1,4 @@
-import { describeExecutionProblem, designExecution, type AssetExecution } from "./fund-execution";
+import { describeExecutionProblem, designExecution, type AssetExecution, type Rebalance } from "./fund-execution";
 import { PLAYS, type Play } from "../reference/lib/fund-builder";
 import {
   reviveBuilder,
@@ -15,6 +15,8 @@ export type ActivationDesign = {
   symbols: Record<string, string>;
   /** 每個資產（代幣地址，小寫）的執行設定（G0-4）；換不了是 null，原因在 `executionProblem`。USDT 不在裡面。 */
   executions: Record<string, AssetExecution> | null;
+  /** 整檔再平衡（只有全部 hold 才可能不是 none）；換不了是 null。 */
+  rebalance: Rebalance | null;
   /** 要先回設計器改的事（還沒開放的策略、附加設定、排程、同資產兩種設定）；沒有就是 null。 */
   executionProblem: string | null;
 };
@@ -54,6 +56,7 @@ export function activationDesign(value: unknown, testnet: boolean = IS_TESTNET, 
     weights,
     symbols,
     executions: "assets" in execution ? Object.fromEntries([...execution.assets].map(([key, setting]) => [tokenOf(key), setting])) : null,
+    rebalance: "assets" in execution ? execution.rebalance : null,
     executionProblem: "problem" in execution ? describeExecutionProblem(execution.problem) : null,
   };
 }
