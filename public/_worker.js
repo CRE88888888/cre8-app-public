@@ -16,17 +16,17 @@
  *
  * ## 路由規則（`run_worker_first`：每個請求都先進這裡）
  *
- *   cre8.finance、www  /        → App（waitlist 閘門；放行後由 App 換成 `/landing/`）
+ *   cre8.finance、www  /        → App（waitlist 閘門；放行後由 App 轉到 https://tst.cre8.finance）
  *   cre8.finance、www  app 頁面 → 302 到 https://tst.cre8.finance 同一路徑（app 在 tst）
  *   其他網域          /        → App 首頁（waitlist 閘門之後是 Funds）
- *   /landing/*                 → landing 靜態檔
+ *   /landing、/landing/*       → 302 到 `/`（使用者 2026-11-16：所有內容都在 waitlist 後面，不留 landing 入口）
  *   /reference-data/demo-funds → 固定來源的公開資料，只讀
  *   /api、/api/*               → 503 PREVIEW_ONLY
  *   其他                        → 靜態資源（`env.ASSETS`，找不到時回 SPA 的 index.html）
  */
 
 /**
- * Waitlist（使用者 2026-11-16）：cre8.finance 進站先過 X 閘門，放行後看 landing；app 在 tst.cre8.finance。
+ * Waitlist（使用者 2026-11-16）：cre8.finance 打開就是 waitlist，放行後直接進 tst.cre8.finance 的 app。
  * 與 `src/lib/waitlist.ts` 的 LANDING_HOSTS／APP_ORIGIN 同值。
  */
 const LANDING_HOSTS = ['cre8.finance', 'www.cre8.finance'];
@@ -51,6 +51,9 @@ function previewOnly() {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    // 舊的 landing 靜態頁不再對外：任何網域的 /landing 都導回首頁（waitlist 閘門）。
+    if (url.pathname === '/landing' || url.pathname.startsWith('/landing/')) return Response.redirect(url.origin + '/', 302);
 
     // landing 網域：首頁交給 App（waitlist 閘門），app 的頁面導到 tst（landing 的按鈕連到 /vaults、/create、/funds/…）。
     // 其他網域的首頁就是 App（不再改寫成 landing）。

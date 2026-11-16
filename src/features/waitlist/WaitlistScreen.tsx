@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { ApiError, postWaitlistJoin, postWaitlistRedeem } from '../../lib/api';
 import {
-  CRE8_X_HANDLE, FOLLOW_CRE8_URL, INVITES_OPEN, INVITE_FAILED_NOTE, INVITE_REJECTIONS, WAITLIST_LOCKED, gateView, isLandingHost, isUngatedPath,
+  APP_ORIGIN, CRE8_X_HANDLE, FOLLOW_CRE8_URL, INVITES_OPEN, INVITE_FAILED_NOTE, INVITE_REJECTIONS, WAITLIST_LOCKED, gateView, isLandingHost, isUngatedPath,
   normalizeInviteCode, parseWaitlist, savePendingInvite, takePendingInvite, type GateView, type WaitlistRecord,
 } from '../../lib/waitlist';
 import { PRIVY_ENABLED } from '../../lib/privy-config';
@@ -195,13 +195,11 @@ export function WaitlistScreen({ view, handle, avatarUrl, inviteFailed = false }
 }
 
 /**
- * 放行後在 landing 網域（cre8.finance）：換成 landing（`/landing/`）。app 網域（tst.cre8.finance）直接顯示 app。
+ * 放行後在 landing 網域（cre8.finance）：直接轉到 tst.cre8.finance 的 app（使用者 2026-11-16）。app 網域直接顯示 app。
  */
 export function useLandingAfterApproval(view: GateView): void {
   useEffect(() => {
-    if (view === 'approved' && isLandingHost(window.location.hostname) && window.location.pathname === '/') {
-      window.location.replace('/landing/');
-    }
+    if (view === 'approved' && isLandingHost(window.location.hostname)) window.location.replace(`${APP_ORIGIN}/`);
   }, [view]);
 }
 

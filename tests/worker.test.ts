@@ -11,10 +11,14 @@ test("waitlist routing: the landing host gates at / and sends app pages to tst; 
     },
   };
   const get = (url: string) => worker.fetch(new Request(url), env);
-  // cre8.finance：首頁是 App（waitlist 閘門），landing 靜態檔照常；app 頁面 302 到 tst（含查詢參數）。
+  // cre8.finance：首頁是 App（waitlist 閘門）；app 頁面 302 到 tst（含查詢參數）。
   expect(await (await get("https://cre8.finance/")).text()).toBe("cre8.finance/");
-  expect(await (await get("https://cre8.finance/landing/")).text()).toBe("cre8.finance/landing/");
-  expect(await (await get("https://cre8.finance/landing/assets/app.js")).text()).toBe("cre8.finance/landing/assets/app.js");
+  // 使用者 2026-11-16：舊的 landing 不再對外，任何網域的 /landing 都導回首頁（waitlist）。
+  for (const url of ["https://cre8.finance/landing", "https://cre8.finance/landing/", "https://cre8.finance/landing/assets/app.js", "https://tst.cre8.finance/landing/"]) {
+    const response = await get(url);
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(new URL(url).origin + "/");
+  }
   expect(await (await get("https://cre8.finance/logos/cre8-icon.svg")).text()).toBe("cre8.finance/logos/cre8-icon.svg");
   for (const path of ["/vaults", "/create", "/funds/mag7", "/?period=30D"]) {
     const response = await get("https://cre8.finance" + path);

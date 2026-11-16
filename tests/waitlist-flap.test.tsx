@@ -125,3 +125,13 @@ test("the Connect button shows the X logo instead of the word, Follow has an arr
   expect(html).not.toMatch(/>Waitlist</);
   expect(fs.readFileSync("src/features/waitlist/WaitlistScreen.tsx", "utf8")).not.toContain("so we know who the code is for");
 });
+
+test("cre8.finance is the waitlist and sends approved people to the app on tst; only the two domains are public", () => {
+  const gate = fs.readFileSync("src/features/waitlist/WaitlistScreen.tsx", "utf8");
+  // 使用者 2026-11-16：放行後直接進 tst 的 app，不再換成 landing。
+  expect(gate).toContain("if (view === 'approved' && isLandingHost(window.location.hostname)) window.location.replace(`${APP_ORIGIN}/`);");
+  expect(gate).not.toContain("window.location.replace('/landing/')");
+  const wrangler = fs.readFileSync("wrangler.jsonc", "utf8");
+  expect(wrangler).toContain('"workers_dev": false,');
+  expect(wrangler).toContain('"preview_urls": false,');
+});

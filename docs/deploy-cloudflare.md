@@ -1,24 +1,24 @@
 # 前端部署：Cloudflare Worker `cre8-app-migration-preview`
 
 ```
-https://cre8-app-migration-preview.example.workers.dev
-  ├── /                          → landing（public/landing/）
+https://cre8.finance、https://tst.cre8.finance（只有這兩個網址，*.workers.dev 與分支預覽網址關閉）
+  ├── cre8.finance /             → waitlist；放行後轉到 https://tst.cre8.finance
+  ├── cre8.finance 的 app 頁面    → 302 到 tst 同一路徑
+  ├── /landing、/landing/*       → 302 到 /（舊 landing 不再對外）
   ├── /reference-data/demo-funds → 固定來源的公開資料（只讀）
-  ├── /api、/api/*               → 503 PREVIEW_ONLY（A 段不接任何後端）
-  └── 其他                        → dist/ 的靜態檔，找不到時回 SPA 的 index.html
+  ├── /api、/api/*               → 503 PREVIEW_ONLY（還沒接後端）
+  └── 其他                        → dist/ 的靜態檔，找不到時回 SPA 的 index.html（waitlist 閘門之後）
 ```
 
-## 目前的部署目標（A 段）
+## 目前的部署目標
 
-依 docs repo 的 ROADMAP（2026-11-12 使用者決定）：A 段 app 只部署到臨時網址
-`https://cre8-app-migration-preview.example.workers.dev/`，**不用 `cre8.finance` 底下任何網域**，
-`/api/*` 不接任何後端。
+使用者 2026-11-16：只對外用 cre8.finance 與 tst.cre8.finance，兩個都由這個 Worker 提供，所有內容都在 waitlist 後面。
 
 | 項目 | 值 |
 |---|---|
 | Worker 名稱 | `cre8-app-migration-preview` |
-| 網址 | `https://cre8-app-migration-preview.example.workers.dev/` |
-| 自訂網域 | 無（`wrangler.jsonc` 不設 `routes`） |
+| 網址 | `https://cre8.finance`（waitlist）、`https://tst.cre8.finance`（app） |
+| 自訂網域 | 在 Cloudflare dashboard 綁定（`wrangler.jsonc` 不設 `routes`；`workers_dev`、`preview_urls` 都是 false） |
 | `/api/*` | `503 {"error":{"code":"PREVIEW_ONLY","message":"App preview"}}` |
 | 舊的 Pages 專案 `cre8-atp`（`beta.cre8.finance`） | 關掉自動部署，停在目前版本，A 段不再更新 |
 

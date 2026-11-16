@@ -72,8 +72,8 @@
 - Demo 期間，Community 策略（`/funds/strategy/:id`）與 `VITE_LIVE_FUNDS` 列出的範例基金走真實存入／提領；其餘範例基金可操作到送出，送出時顯示 whitelist 提示，不簽名、不送交易。
 - 少讓使用者做決定：同一畫面只放一個 Connect wallet／Create fund；項目少時不顯示搜尋與篩選（Creators 9 位以上才顯示，網址已帶篩選時仍顯示以便清除）；Funds 桌面的篩選收成一顆 Filters（與手機一致），有套用時顯示數量。空狀態在桌面置中。
 - 模式切換按鈕寫出動作：投資模式為「＋ Creator Studio」（品牌藍灰淡色底），Studio 內為「← Exit Studio」（中性文字按鈕），並附 title 說明。
-- **Waitlist（使用者 2026-11-16）**：`.env.production` 的 `VITE_WAITLIST=1` 把整站鎖住，進站只看到「Connect X」與「Follow @CRE8Finance on X」（左邊表單沿用登入頁的膠囊按鈕；右邊是淺色翻牌看板 `FlapBoard`，跟翻牌 8 logo 同一套語言，只寫資產代號與策略名稱、不放數字；手機上看板縮成三排放在上面；系統「減少動態」時不翻）。邀請碼輸入欄由 `VITE_INVITES=1` 打開，後端 `/waitlist/redeem` 上線前關閉。連上 X 後問後端 `POST /waitlist/join`：放行就進去，沒放行（或後端不通）顯示「You’re on the list」並每分鐘再問一次。cre8.finance（landing 網域）放行後換成 landing（`/landing/`），landing 上 app 的連結由 Worker 302 到 `https://tst.cre8.finance` 同一路徑；tst 與其他網域的首頁就是 App。`/operator` 不鎖，營運在那裡看名單、放行（Let in／Revoke）。這是畫面上的鎖，資料與交易仍由後端把關。
-- 首頁 `/`：landing 網域是 waitlist 閘門（放行後 landing），其他網域是 App；帶查詢參數的 `/?…` 交給 App（landing 網域會導到 tst），保留 Funds 篩選深連結。App 內左上 logo 回到首頁。
+- **Waitlist（使用者 2026-11-16）**：`.env.production` 的 `VITE_WAITLIST=1` 把整站鎖住，進站只看到「Connect X」與「Follow @CRE8Finance on X」（左邊表單沿用登入頁的膠囊按鈕；右邊是淺色翻牌看板 `FlapBoard`，跟翻牌 8 logo 同一套語言，只寫資產代號與策略名稱、不放數字；手機上看板縮成三排放在上面；系統「減少動態」時不翻）。邀請碼輸入欄由 `VITE_INVITES=1` 打開，後端 `/waitlist/redeem` 上線前關閉。連上 X 後問後端 `POST /waitlist/join`：放行就進去，沒放行（或後端不通）顯示「You’re on the list」並每分鐘再問一次。cre8.finance 打開就是 waitlist，放行後直接轉到 `https://tst.cre8.finance`；cre8.finance 上 app 的路徑由 Worker 302 到 tst 同一路徑，任何網域的 `/landing` 都導回首頁（不留 landing 入口）。只對外用 cre8.finance 與 tst.cre8.finance，`*.workers.dev` 與分支預覽網址關閉（使用者 2026-11-16）。`/operator` 不鎖，營運在那裡看名單、放行（Let in／Revoke）。這是畫面上的鎖，資料與交易仍由後端把關。
+- 首頁 `/`：cre8.finance 是 waitlist 閘門（放行後轉 tst），其他網域是 App；帶查詢參數的 `/?…` 交給 App（landing 網域會導到 tst），保留 Funds 篩選深連結。App 內左上 logo 回到首頁。
 
 ## 2026-11-13 Funds 頁改版
 
