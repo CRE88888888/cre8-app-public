@@ -211,7 +211,7 @@ export function WaitlistScreen({ view, handle, avatarUrl, inviteFailed = false, 
         </div>
       </section>
       <aside className="waitlist__board" aria-label="CRE8 board">
-        <FlapBoard rows={mobile ? 3 : 8} />
+        <FlapBoard rows={mobile ? 4 : 8} />
       </aside>
     </div>
   );

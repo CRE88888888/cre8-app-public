@@ -1060,18 +1060,66 @@ html body #root .waitlist__avatar { border-radius: 50% !important; }
   to { transform: none; opacity: 1; }
 }
 
+/*
+ * 手機與窄螢幕（使用者 2026-11-16：原本上方色塊與下方斷開、中間大片空白）：iOS 歡迎頁的排法——
+ * 同一個底色，看板在上方當主視覺，標題與說明置中，按鈕貼在底部（拇指按得到）、填滿寬度。
+ */
 @media (max-width: 959px) {
-  .signin-screen.waitlist { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-  .waitlist__board { order: -1; position: static; min-height: 0; padding: max(24px, env(safe-area-inset-top)) 16px 20px; border-left: 0; border-bottom: 0.5px solid rgba(10, 18, 26, 0.08); }
-  .waitlist__panel { min-height: 0; }
-  .waitlist__body { padding: 24px 0 8px; }
+  .signin-screen.waitlist {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+    background:
+      radial-gradient(120% 55% at 50% 0%, rgba(139, 168, 190, 0.26), transparent 70%),
+      #f2f2f7;
+  }
+  /* 多出來的高度上下平分：看板往下靠近標題，標題與按鈕之間不會空一大片。 */
+  .waitlist__board {
+    order: -1;
+    position: static;
+    flex: 1;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    min-height: 0;
+    padding: max(28px, env(safe-area-inset-top)) 16px 0;
+    background: none;
+    border: 0;
+  }
+  .waitlist__panel {
+    flex: 1;
+    min-height: 0;
+    padding: 0 24px max(24px, env(safe-area-inset-bottom));
+  }
+  .waitlist__brand { display: none; }
+  .waitlist__body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 28px;
+    width: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 32px 0 0;
+  }
+  .waitlist__head { justify-items: center; text-align: center; }
+  #root .signin-screen.waitlist .waitlist__head p { margin: 0 auto; }
+  .waitlist__actions { width: 100%; }
 }
 
 @media (max-width: 719px) {
-  .flap-board { --flap-w: 22px; --flap-h: 32px; --flap-gap: 3px; padding: 14px; border-radius: 18px; gap: 6px; }
+  /* 一排 11 格：格寬跟著螢幕寬度走（左右各 16px 外距、看板內距 14px、10 個 3px 間隔、欄間 10px），最寬 34px。 */
+  .flap-board {
+    --flap-w: min(34px, calc((100vw - 100px) / 11));
+    --flap-h: calc(var(--flap-w) * 1.42);
+    --flap-gap: 3px;
+    padding: 14px;
+    gap: 6px;
+  }
   .flap-board__row .flap:nth-child(6) { margin-right: 10px; }
   .flap-board__head { grid-template-columns: calc(6 * var(--flap-w) + 5 * var(--flap-gap) + 10px) auto; font-size: 10px; }
-  .waitlist__brand { display: none; }
+  #root .signin-screen.waitlist h1 { font-size: 30px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

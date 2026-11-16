@@ -151,3 +151,14 @@ test("every failure just says Connect failed with Try again, never that the spot
   expect(gate).toContain("window.setTimeout(() => setTokenTimedOut(true), TOKEN_WAIT_MS)");
   expect(gate).toContain("const failed = query.isError && errorCode === null && !query.isFetching;");
 });
+
+test("on phones the board is the hero, the title is centred and the buttons sit at the bottom at full width", () => {
+  // 使用者 2026-11-16：原本上方色塊與下方斷開、中間大片空白。
+  const css = fs.readFileSync("src/styles/components.css", "utf8");
+  const phone = css.slice(css.indexOf("@media (max-width: 959px) {\n  .signin-screen.waitlist {"));
+  expect(phone).toContain("justify-content: space-between;");
+  expect(phone).toContain(".waitlist__head { justify-items: center; text-align: center; }");
+  expect(phone).toContain(".waitlist__actions { width: 100%; }");
+  expect(phone).toContain("--flap-w: min(34px, calc((100vw - 100px) / 11));");
+  expect(fs.readFileSync("src/features/waitlist/WaitlistScreen.tsx", "utf8")).toContain("<FlapBoard rows={mobile ? 4 : 8} />");
+});
