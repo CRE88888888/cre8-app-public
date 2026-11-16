@@ -4,7 +4,7 @@ import type { FormEvent, ReactNode } from 'react';
 import { ApiError, postWaitlistJoin, postWaitlistRedeem } from '../../lib/api';
 import {
   APP_ORIGIN, CRE8_X_HANDLE, FOLLOW_CRE8_URL, INVITES_OPEN, INVITE_FAILED_NOTE, INVITE_REJECTIONS, WAITLIST_LOCKED, gateView, isLandingHost, isUngatedPath,
-  normalizeInviteCode, parseWaitlist, savePendingInvite, takePendingInvite, type GateView, type WaitlistRecord,
+  TOKEN_WAIT_MS, normalizeInviteCode, parseWaitlist, savePendingInvite, takePendingInvite, type GateView, type WaitlistRecord,
 } from '../../lib/waitlist';
 import { PRIVY_ENABLED } from '../../lib/privy-config';
 import { useMobile } from '../../lib/use-mobile';
@@ -40,9 +40,18 @@ export async function joinWaitlist(
 /**
  * 問後端「這個 X 帳號放行了沒」。連上 X、拿到 identity token 才問；還沒放行每分鐘再問一次，放行了就不再問。
  */
-export function useWaitlistGate(): { view: GateView; handle: string | null; avatarUrl: string | null; inviteFailed: boolean } {
+export function useWaitlistGate(): { view: GateView; handle: string | null; avatarUrl: string | null; inviteFailed: boolean; retry: () => void } {
   const { phase, methods, profile, identityToken } = usePrivyAuth();
   const hasX = methods.some((method) => method.kind === 'x');
+  // 連上 X 之後 15 秒還沒有 identity token：不要一直轉，改成說明（Privy 設定沒開、或登入沒完成）。
+  const [tokenTimedOut, setTokenTimedOut] = useState(false);
+  const waitingForToken = WAITLIST_LOCKED && phase !== 'loading' && phase !== 'signed-out' && phase !== 'unavailable' && hasX && identityToken === null;
+  useEffect(() => {
+    setTokenTimedOut(false);
+    if (!waitingForToken) return;
+    const timer = window.setTimeout(() => setTokenTimedOut(true), TOKEN_WAIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [waitingForToken]);
   const query = useQuery({
     queryKey: ['waitlist', identityToken],
     queryFn: ({ signal }) => joinWaitlist(identityToken as string, INVITES_OPEN ? takePendingInvite() : null, { signal, keep: savePendingInvite }),
@@ -55,7 +64,14 @@ export function useWaitlistGate(): { view: GateView; handle: string | null; avat
   const record = query.data?.record ?? null;
   const checking = hasX && record === null && (identityToken === null || query.isFetching);
   const errorCode = query.error instanceof ApiError && query.error.status === 409 ? query.error.code : null;
-  return { view: gateView({ phase, hasX, record, checking, errorCode }), handle: record?.xHandle ?? profile.handle, avatarUrl: profile.avatarUrl, inviteFailed: query.data?.inviteFailed ?? false };
+  const failed = query.isError && errorCode === null && !query.isFetching;
+  return {
+    view: gateView({ phase, hasX, record, checking, errorCode, failed, tokenTimedOut }),
+    handle: record?.xHandle ?? profile.handle,
+    avatarUrl: profile.avatarUrl,
+    inviteFailed: query.data?.inviteFailed ?? false,
+    retry: () => void query.refetch(),
+  };
 }
 
 function XMark(): ReactNode {
@@ -119,7 +135,7 @@ function InviteCode({ onSubmit, disabled }: { onSubmit: (code: string) => void; 
  * 整站鎖住時唯一的畫面（使用者 2026-11-16）。左邊是表單（Connect X、Follow；後端開了之後還有邀請碼），
  * 右邊是淺色的翻牌看板（FlapBoard，跟翻牌 8 logo 同一套語言）。手機上看板縮成三排放在上面。
  */
-export function WaitlistScreen({ view, handle, avatarUrl, inviteFailed = false }: { view: GateView; handle: string | null; avatarUrl: string | null; inviteFailed?: boolean }): ReactNode {
+export function WaitlistScreen({ view, handle, avatarUrl, inviteFailed = false, onRetry }: { view: GateView; handle: string | null; avatarUrl: string | null; inviteFailed?: boolean; onRetry?: () => void }): ReactNode {
   const actions = usePrivyAuth((state) => state.actions);
   const oauthError = usePrivyAuth((state) => state.oauthError);
   const mobile = useMobile();
@@ -135,6 +151,10 @@ export function WaitlistScreen({ view, handle, avatarUrl, inviteFailed = false }
   };
 
   const waiting = view === 'waiting' || view === 'checking';
+  /** 已連上 X（顯示頭像與換帳號），但名單還沒確認：連不上後端、或沒拿到 identity token。 */
+  const connectedOnly = view === 'not-saved' || view === 'no-token';
+  /** 失敗一律只說「Connect failed」＋重試（使用者 2026-11-16：不要讓人覺得問題很多）。 */
+  const failedView = connectedOnly || view === 'unavailable';
   return (
     <div className="signin-screen waitlist" data-view={view} role="main" aria-labelledby="waitlist-title">
       <section className="waitlist__panel">
@@ -144,21 +164,21 @@ export function WaitlistScreen({ view, handle, avatarUrl, inviteFailed = false }
         </div>
         <div className="waitlist__body">
           <header className="waitlist__head">
-            {waiting && avatarUrl !== null && <img className="waitlist__avatar" src={avatarUrl} alt="" width={64} height={64} />}
+            {(waiting || connectedOnly) && avatarUrl !== null && <img className="waitlist__avatar" src={avatarUrl} alt="" width={64} height={64} />}
             <h1 id="waitlist-title">
-              {view === 'checking' ? 'Checking your spot…' : waiting ? 'You’re on the list' : view === 'switch-to-x' ? 'Connect X to join' : view === 'x-taken' ? 'This X account is already on the list' : 'CRE8 is invite-only'}
+              {view === 'checking' ? 'Checking your spot…' : waiting ? 'You’re on the list' : failedView ? 'Connect failed' : view === 'switch-to-x' ? 'Connect X to join' : view === 'x-taken' ? 'This X account is already on the list' : 'CRE8 is invite-only'}
             </h1>
             <p>
               {view === 'checking'
                 ? 'One moment.'
                 : waiting
                   ? <>{handle !== null && <b>@{handle} · </b>}Follow @{CRE8_X_HANDLE} to hear when your spot opens.</>
+                  : failedView
+                    ? 'Please try again.'
                   : view === 'switch-to-x'
                     ? 'The waitlist uses your X account. Connect X to save your spot.'
                     : view === 'x-taken'
                       ? <>{handle !== null && <b>@{handle} · </b>}It joined with a different sign-in. Sign in the way you did before, or use another X account.</>
-                    : view === 'unavailable'
-                      ? 'Sign-in isn’t available right now. Please try again in a moment.'
                       : 'Connect your X account to join the waitlist.'}
             </p>
             {waiting && inviteFailed && <p className="waitlist__notice" role="status">{INVITE_FAILED_NOTE}</p>}
@@ -176,9 +196,12 @@ export function WaitlistScreen({ view, handle, avatarUrl, inviteFailed = false }
             )}
             <FollowButton />
             {oauthError !== null && oauthError !== undefined && (view === 'connect' || view === 'switch-to-x') && (
-              <p className="signin-screen__error" role="alert">X sign-in could not be started. Please try again.</p>
+              <p className="signin-screen__error" role="alert">Connect failed. Please try again.</p>
             )}
-            {(waiting || view === 'x-taken') && (
+            {failedView && (
+              <button type="button" className="btn block" data-method="x" onClick={view === 'not-saved' && onRetry !== undefined ? onRetry : () => window.location.reload()}>Try again</button>
+            )}
+            {(waiting || connectedOnly || view === 'x-taken') && (
               <button type="button" className="signin-screen__text" onClick={() => void switchToX()}>
                 Use a different X account
               </button>
@@ -214,5 +237,5 @@ export function WaitlistGate({ children }: { children: ReactNode }): ReactNode {
   useLandingAfterApproval(WAITLIST_LOCKED ? view : 'loading');
   if (!WAITLIST_LOCKED || isUngatedPath(window.location.pathname)) return children;
   if (view === 'approved') return isLandingHost(window.location.hostname) ? null : children;
-  return <WaitlistScreen view={view} handle={gate.handle} avatarUrl={gate.avatarUrl} inviteFailed={gate.inviteFailed} />;
+  return <WaitlistScreen view={view} handle={gate.handle} avatarUrl={gate.avatarUrl} inviteFailed={gate.inviteFailed} onRetry={gate.retry} />;
 }

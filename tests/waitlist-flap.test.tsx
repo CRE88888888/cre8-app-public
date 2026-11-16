@@ -135,3 +135,19 @@ test("cre8.finance is the waitlist and sends approved people to the app on tst; 
   expect(wrangler).toContain('"workers_dev": false,');
   expect(wrangler).toContain('"preview_urls": false,');
 });
+
+test("every failure just says Connect failed with Try again, never that the spot is saved", () => {
+  // 使用者 2026-11-16：失敗一律寫 Connect failed，不要讓人覺得問題很多。
+  for (const view of ["not-saved", "no-token", "unavailable"] as const) {
+    const html = renderToStaticMarkup(<WaitlistScreen view={view} handle="alice" avatarUrl={null} onRetry={() => {}} />);
+    expect(html).toContain(">Connect failed</h1>");
+    expect(html).toContain("Please try again.");
+    expect(html).toContain(">Try again</button>");
+    expect(html).not.toContain("You’re on the list");
+    expect(html).not.toMatch(/couldn’t be reached|didn’t finish|isn’t available|Reload/);
+  }
+  expect(fs.readFileSync("src/features/waitlist/WaitlistScreen.tsx", "utf8")).toContain("Connect failed. Please try again.");
+  const gate = fs.readFileSync("src/features/waitlist/WaitlistScreen.tsx", "utf8");
+  expect(gate).toContain("window.setTimeout(() => setTokenTimedOut(true), TOKEN_WAIT_MS)");
+  expect(gate).toContain("const failed = query.isError && errorCode === null && !query.isFetching;");
+});

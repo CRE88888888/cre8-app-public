@@ -97,8 +97,12 @@ export type GateView =
   | 'switch-to-x'
   /** 已連 X，在問後端名單。 */
   | 'checking'
-  /** 已連 X、還沒放行（或後端不通）。 */
+  /** 已連 X、後端確認排上了、還沒放行。 */
   | 'waiting'
+  /** 已連 X，但後端連不上（不是 409）：還沒排上，每分鐘再試，也可以馬上重試。不能說成「已在名單上」。 */
+  | 'not-saved'
+  /** 已連 X，但 15 秒內沒拿到 Privy 的 identity token：登入沒完成，請重新整理。 */
+  | 'no-token'
   /** 這個 X 帳號已經被另一個登入方式拿去排隊了（後端 409 X_ALREADY_JOINED）。 */
   | 'x-taken'
   | 'approved'
@@ -107,16 +111,28 @@ export type GateView =
 
 /**
  * 該顯示哪一個畫面。只有後端明確回 `approved` 才放行；後端失敗、還沒回、形狀不對都不放行。
- * Privy 換 CRE8 session 失敗（`error`，例如預覽站的 /api 回 PREVIEW_ONLY）不影響 waitlist：已連上 X 就算加入。
+ * 「You’re on the list」只在後端真的回了名單紀錄時才說：後端連不上是 `not-saved`，拿不到 identity token 是 `no-token`。
  */
-export function gateView(input: { phase: PrivyPhase; hasX: boolean; record: WaitlistRecord | null; checking: boolean; errorCode?: string | null }): GateView {
-  const { phase, hasX, record, checking, errorCode = null } = input;
+export function gateView(input: {
+  phase: PrivyPhase; hasX: boolean; record: WaitlistRecord | null; checking: boolean; errorCode?: string | null;
+  /** 問名單失敗（不是 409）而且還沒有任何紀錄。 */
+  failed?: boolean;
+  /** 連上 X 之後等了 15 秒還沒有 identity token。 */
+  tokenTimedOut?: boolean;
+}): GateView {
+  const { phase, hasX, record, checking, errorCode = null, failed = false, tokenTimedOut = false } = input;
   if (phase === 'unavailable') return 'unavailable';
   if (phase === 'loading') return 'loading';
   if (phase === 'signed-out') return 'connect';
   if (!hasX || errorCode === 'X_REQUIRED') return 'switch-to-x';
   if (errorCode === 'X_ALREADY_JOINED') return 'x-taken';
   if (record?.status === 'approved') return 'approved';
-  if (record === null && checking) return 'checking';
-  return 'waiting';
+  if (record !== null) return 'waiting';
+  if (failed) return 'not-saved';
+  if (tokenTimedOut) return 'no-token';
+  if (checking) return 'checking';
+  return 'not-saved';
 }
+
+/** 等 identity token 多久就當作登入沒完成（毫秒）。 */
+export const TOKEN_WAIT_MS = 15_000;

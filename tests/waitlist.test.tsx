@@ -23,10 +23,14 @@ test("only an explicit approval from the backend lets anyone in", () => {
   expect(gateView({ phase: "signed-in", hasX: true, record: null, checking: true })).toBe("checking");
   expect(gateView({ phase: "signed-in", hasX: true, record: waiting, checking: false })).toBe("waiting");
   expect(gateView({ phase: "signed-in", hasX: true, record: approved, checking: false })).toBe("approved");
-  // 換 CRE8 session 失敗（預覽站 /api 回 PREVIEW_ONLY）不影響：有 X、後端說放行就放行；後端不通就是排隊中。
+  // 換 CRE8 session 失敗不影響：有 X、後端說放行就放行。
   expect(gateView({ phase: "error", hasX: true, record: approved, checking: false })).toBe("approved");
-  expect(gateView({ phase: "error", hasX: true, record: null, checking: false })).toBe("waiting");
-  expect(gateView({ phase: "exchanging", hasX: true, record: null, checking: false })).toBe("waiting");
+  // 2026-11-16 改：後端沒回名單紀錄時不說「You’re on the list」——連不上是 not-saved，等不到 identity token 是 no-token。
+  expect(gateView({ phase: "error", hasX: true, record: null, checking: false })).toBe("not-saved");
+  expect(gateView({ phase: "exchanging", hasX: true, record: null, checking: false, failed: true })).toBe("not-saved");
+  expect(gateView({ phase: "exchanging", hasX: true, record: null, checking: true, tokenTimedOut: true })).toBe("no-token");
+  // 已經排上（有紀錄）之後才連不上：仍是排隊中，不倒退成 not-saved。
+  expect(gateView({ phase: "signed-in", hasX: true, record: waiting, checking: false, failed: true })).toBe("waiting");
 });
 
 test("odd backend answers never count as approved", () => {
@@ -103,8 +107,8 @@ test("the whole app sits behind the gate, except the operator console", () => {
 test("backend 409s: no X means connect X; an X account taken by another sign-in gets its own screen", () => {
   expect(gateView({ phase: "signed-in", hasX: true, record: null, checking: false, errorCode: "X_REQUIRED" })).toBe("switch-to-x");
   expect(gateView({ phase: "signed-in", hasX: true, record: null, checking: false, errorCode: "X_ALREADY_JOINED" })).toBe("x-taken");
-  // 其他錯誤（429、503、網路）一律還在排隊，不放行。
-  expect(gateView({ phase: "signed-in", hasX: true, record: null, checking: false, errorCode: "RATE_LIMITED" })).toBe("waiting");
+  // 其他錯誤（429、503、網路）不放行，也不說已排上。
+  expect(gateView({ phase: "signed-in", hasX: true, record: null, checking: false, failed: true })).toBe("not-saved");
   const html = renderToStaticMarkup(<WaitlistScreen view="x-taken" handle="alice" avatarUrl={null} />);
   expect(html).toContain("This X account is already on the list");
   expect(html).toContain("Use a different X account");
