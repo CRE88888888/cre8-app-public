@@ -82,7 +82,7 @@ test("after connecting, a waiting account sees its spot and can still follow", (
   expect(html).toContain("@alice · ");
   expect(html).toContain("Follow @CRE8Finance on X");
   expect(html).toContain("Use a different X account");
-  expect(html).not.toContain(">Connect X<");
+  expect(html).not.toContain('aria-label="Connect X"');
   expect(html).not.toContain("letting people in");
 });
 

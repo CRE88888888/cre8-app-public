@@ -19,6 +19,43 @@ export function readWaitlistFlag(value: unknown): boolean {
 
 /** CRE8 官方 X 帳號。 */
 export const CRE8_X_HANDLE = 'CRE8Finance';
+
+/**
+ * 邀請碼（使用者 2026-11-16）：營運頁產生一批碼發出去，輸入正確的碼直接放行。後端還沒做（要記得誰發了幾個給誰、
+ * 誰用掉了），所以預設關閉；後端上線後在 .env.production 設 `VITE_INVITES=1` 打開輸入欄。
+ */
+export const INVITES_OPEN = readWaitlistFlag(import.meta.env.VITE_INVITES);
+
+/** 邀請碼的寫法：去掉前後空白、轉大寫；只收英數與連字號，4–32 個字。不合格回 null。 */
+export function normalizeInviteCode(value: string): string | null {
+  const code = value.trim().toUpperCase();
+  return /^[A-Z0-9-]{4,32}$/.test(code) ? code : null;
+}
+
+const PENDING_INVITE = 'cre8.waitlist.invite';
+
+/** 輸入了碼但還沒連 X：先記在這個分頁，連好 X 回來再用。 */
+export function savePendingInvite(code: string, storage: Pick<Storage, 'setItem'> | null = safeSession()): void {
+  try { storage?.setItem(PENDING_INVITE, code); } catch { /* 無痕模式寫不進去：回來後就照一般排隊 */ }
+}
+export function takePendingInvite(storage: Pick<Storage, 'getItem' | 'removeItem'> | null = safeSession()): string | null {
+  try {
+    const code = storage?.getItem(PENDING_INVITE) ?? null;
+    storage?.removeItem(PENDING_INVITE);
+    return code === null ? null : normalizeInviteCode(code);
+  } catch {
+    return null;
+  }
+}
+function safeSession(): Storage | null {
+  try { return typeof window === 'undefined' ? null : window.sessionStorage; } catch { return null; }
+}
+
+/** 後端說「碼本身不能用」的代碼（backend#131）：這些改走一般排隊；其他錯誤（限流、網路、伺服器）照常重試。 */
+export const INVITE_REJECTIONS: readonly string[] = ['INVITE_INVALID', 'INVITE_USED', 'INVITE_EXPIRED', 'ALREADY_APPROVED'];
+
+/** 用碼失敗時給人看的一句話（碼錯、用過、過期都一樣，不透露是哪一種）。 */
+export const INVITE_FAILED_NOTE = 'That invite code didn’t work, so you joined the waitlist instead.';
 /** 「Follow」按鈕：打開 X 的追蹤確認頁。 */
 export const FOLLOW_CRE8_URL = `https://x.com/intent/follow?screen_name=${CRE8_X_HANDLE}`;
 

@@ -531,6 +531,15 @@ export function postWaitlistJoin(identityToken: string, signal?: AbortSignal): P
   return request<unknown>('/waitlist/join', { method: 'POST', body: { identityToken }, ...(signal === undefined ? {} : { signal }) });
 }
 
+/**
+ * 用邀請碼加入（backend#131）：`POST /waitlist/redeem { identityToken, code }`，成功回應同 `/waitlist/join`（approved）。
+ * 碼的問題：404 INVITE_INVALID、409 INVITE_USED、410 INVITE_EXPIRED、409 ALREADY_APPROVED（已放行，不消耗碼）；
+ * 沒有 X 是 409 X_REQUIRED；限流 429。
+ */
+export function postWaitlistRedeem(identityToken: string, code: string, signal?: AbortSignal): Promise<unknown> {
+  return request<unknown>('/waitlist/redeem', { method: 'POST', body: { identityToken, code }, ...(signal === undefined ? {} : { signal }) });
+}
+
 /** 營運看的一列排隊紀錄（backend#127）。 */
 export type WaitlistEntry = { id: string; xHandle: string; xUserId: string | null; joinedAt: string; status: 'waiting' | 'approved' | 'revoked'; approvedAt: string | null };
 

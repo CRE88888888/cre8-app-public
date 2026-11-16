@@ -21,6 +21,8 @@ interface ImportMetaEnv {
   readonly VITE_PRIVY_APP_ID?: string;
   /** `1` = 整站鎖成 waitlist（`lib/waitlist.ts`）。本機開發不設。 */
   readonly VITE_WAITLIST?: string;
+  /** `1` 打開 waitlist 的邀請碼輸入欄（後端 /waitlist/redeem 上線後）。 */
+  readonly VITE_INVITES?: string;
 }
 
 interface ImportMeta {

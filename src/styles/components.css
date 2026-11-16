@@ -892,66 +892,81 @@ html body #root .signin-screen .btn.btn:disabled { opacity: 0.5; }
 
 /*
  * Waitlist（features/waitlist/WaitlistScreen.tsx，使用者 2026-11-16）：整站鎖住時唯一的畫面。
- * iOS 的歡迎頁：淺灰底、置中的大圓角 app icon 與大標題，按鈕放在底部。按鈕沿用上面登入頁的膠囊（X 黑底、Follow 淺灰）。
- * 外層借用 .signin-screen（全螢幕、系統字體、按鈕樣式），這裡只改版面。
+ * 左邊是表單（淺灰底、大標題、膠囊按鈕，沿用登入頁的按鈕樣式），右邊是淺色翻牌看板（FlapBoard）。
+ * 960px 以下改上下排：看板縮成三排放在上面。外層借用 .signin-screen（全螢幕、系統字體、按鈕樣式）。
  */
 .signin-screen.waitlist {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 40px;
-  padding: max(32px, env(safe-area-inset-top)) 24px max(28px, env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: minmax(380px, 0.9fr) 1.1fr;
+  place-items: stretch;
+  gap: 0;
+  padding: 0;
   overflow-y: auto;
-  background:
-    radial-gradient(120% 70% at 50% 0%, rgba(139, 168, 190, 0.28), transparent 62%),
-    #f2f2f7;
+  background: #f2f2f7;
   animation: signin-fade 0.3s ease-out;
 }
 
-.waitlist__body,
-.waitlist__actions {
-  width: min(400px, 100%);
+.waitlist__panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding: max(28px, env(safe-area-inset-top)) clamp(24px, 5vw, 64px) max(28px, env(safe-area-inset-bottom));
+}
+
+.waitlist__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.waitlist__body {
+  flex: 1;
+  display: grid;
+  align-content: center;
+  gap: 32px;
+  width: min(420px, 100%);
+  padding: 40px 0;
 }
 
 .waitlist__head {
   display: grid;
-  justify-items: center;
+  justify-items: start;
   gap: 10px;
-  text-align: center;
 }
 
-.waitlist__icon,
 .waitlist__avatar {
-  width: 88px;
-  height: 88px;
-  margin-bottom: 14px;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 8px;
+  border-radius: 50%;
+  box-shadow: 0 10px 26px rgba(10, 18, 26, 0.16), 0 0 0 0.5px rgba(10, 18, 26, 0.08);
   animation: signin-pop 0.45s cubic-bezier(0.32, 0.72, 0, 1);
 }
-
-/* icon 本身就是圓角方塊（svg），陰影跟著它的形狀走，不另外加框。 */
-.waitlist__icon { filter: drop-shadow(0 12px 22px rgba(10, 18, 26, 0.18)); }
-.waitlist__avatar { border-radius: 50%; box-shadow: 0 12px 30px rgba(10, 18, 26, 0.16), 0 0 0 0.5px rgba(10, 18, 26, 0.08); }
 
 #root .signin-screen.waitlist h1 {
   margin: 0;
   font-family: inherit;
   font-weight: 700;
-  font-size: 34px;
-  line-height: 1.12;
-  letter-spacing: -0.024em;
+  font-size: clamp(32px, 3.4vw, 44px);
+  line-height: 1.08;
+  letter-spacing: -0.028em;
   color: var(--ink);
 }
 
 #root .signin-screen.waitlist .waitlist__head p {
   margin: 0;
-  max-width: 34ch;
+  max-width: 36ch;
   font-size: 17px;
   line-height: 1.42;
   color: var(--steel);
 }
 
 #root .signin-screen.waitlist .waitlist__head p b { color: var(--ink); font-weight: 600; }
+#root .signin-screen.waitlist .waitlist__head .waitlist__notice { color: var(--ink); font-size: 15px; }
 
 /* Follow 是連結（a.btn.ghost）：在淺灰底上用白色膠囊（iOS 分組背景上的次要按鈕）。 */
 html body #root .signin-screen .btn.btn.ghost[data-method='follow'] { background: var(--white, #fff); color: var(--ink); text-decoration: none; box-shadow: 0 1px 2px rgba(10, 18, 26, 0.06), 0 0 0 0.5px rgba(10, 18, 26, 0.08); }
@@ -959,13 +974,108 @@ html body #root .signin-screen .btn.btn.ghost[data-method='follow']:hover { back
 
 .waitlist__actions .signin-screen__text { justify-self: center; }
 
+/* 邀請碼（VITE_INVITES=1 才出現）。 */
+.waitlist__invite { display: grid; gap: 8px; margin-top: 8px; padding-top: 18px; border-top: 0.5px solid rgba(10, 18, 26, 0.12); }
+.waitlist__invite label { font-size: 15px; font-weight: 600; color: var(--ink); }
+.waitlist__invite-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+html body #root .waitlist__invite input {
+  min-height: 48px; padding: 0 16px; border: 0; border-radius: 14px; background: var(--white, #fff);
+  box-shadow: 0 0 0 0.5px rgba(10, 18, 26, 0.14); font: 500 16px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink);
+}
+html body #root .waitlist__invite input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+html body #root .waitlist__invite input[aria-invalid='true'] { box-shadow: 0 0 0 1px var(--neg); }
+html body #root .signin-screen .waitlist__invite .btn { min-height: 48px; padding: 0 18px; border-radius: 14px; }
+.waitlist__arrow { margin-left: 2px; opacity: 0.85; }
+
+/* 右邊：淺色翻牌看板。 */
+.waitlist__board {
+  position: sticky;
+  top: 0;
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: 48px 32px;
+  background:
+    radial-gradient(90% 70% at 70% 20%, rgba(139, 168, 190, 0.22), transparent 60%),
+    linear-gradient(180deg, #e9edf2, #e2e7ee);
+  border-left: 0.5px solid rgba(10, 18, 26, 0.08);
+}
+
+.flap-board {
+  --flap-w: 34px;
+  --flap-h: 48px;
+  --flap-gap: 4px;
+  display: grid;
+  gap: 8px;
+  padding: 22px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 30px 60px rgba(10, 18, 26, 0.10), 0 0 0 0.5px rgba(10, 18, 26, 0.08);
+}
+
+.flap-board__head {
+  display: grid;
+  grid-template-columns: calc(6 * var(--flap-w) + 5 * var(--flap-gap) + 14px) auto;
+  padding: 0 2px 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--steel);
+}
+
+.flap-board__row { display: flex; gap: var(--flap-gap); }
+.flap-board__row .flap:nth-child(6) { margin-right: 14px; }
+
+.flap {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: var(--flap-w);
+  height: var(--flap-h);
+  border-radius: 5px;
+  background: linear-gradient(180deg, #ffffff 0 50%, #f4f6f9 50% 100%);
+  box-shadow: 0 1px 1px rgba(10, 18, 26, 0.08), 0 0 0 0.5px rgba(10, 18, 26, 0.10);
+  perspective: 240px;
+  overflow: hidden;
+  font: 600 calc(var(--flap-h) * 0.54) / 1 var(--mono);
+  color: var(--ink);
+}
+
+/* 全站預設方角（base 的 border-radius: 0 !important）；看板、翻牌、邀請碼欄維持圓角（iOS 風）。 */
+html body #root .flap-board { border-radius: 22px !important; }
+html body #root .flap { border-radius: 5px !important; }
+html body #root .waitlist__invite input, html body #root .signin-screen .waitlist__invite .btn { border-radius: 14px !important; }
+html body #root .waitlist__avatar { border-radius: 50% !important; }
+@media (max-width: 719px) { html body #root .flap-board { border-radius: 18px !important; } }
+
+/* 中間那條對開線。 */
+.flap::after { content: ''; position: absolute; inset: 50% 0 auto; height: 1px; background: rgba(10, 18, 26, 0.12); }
+.flap[data-blank] { background: linear-gradient(180deg, #f9fafb 0 50%, #f1f3f6 50% 100%); }
+
+/* 每翻一張播一次：上半片往下翻過來。 */
+.flap__face { display: block; transform-origin: 50% 50%; animation: flap-drop 0.11s ease-out; }
+@keyframes flap-drop {
+  from { transform: rotateX(80deg); opacity: 0.35; }
+  to { transform: none; opacity: 1; }
+}
+
+@media (max-width: 959px) {
+  .signin-screen.waitlist { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .waitlist__board { order: -1; position: static; min-height: 0; padding: max(24px, env(safe-area-inset-top)) 16px 20px; border-left: 0; border-bottom: 0.5px solid rgba(10, 18, 26, 0.08); }
+  .waitlist__panel { min-height: 0; }
+  .waitlist__body { padding: 24px 0 8px; }
+}
+
 @media (max-width: 719px) {
-  .signin-screen.waitlist { justify-content: space-between; gap: 24px; }
-  .waitlist__body { flex: 1; display: grid; align-content: center; }
+  .flap-board { --flap-w: 22px; --flap-h: 32px; --flap-gap: 3px; padding: 14px; border-radius: 18px; gap: 6px; }
+  .flap-board__row .flap:nth-child(6) { margin-right: 10px; }
+  .flap-board__head { grid-template-columns: calc(6 * var(--flap-w) + 5 * var(--flap-gap) + 10px) auto; font-size: 10px; }
+  .waitlist__brand { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .signin-screen.waitlist, .waitlist__icon, .waitlist__avatar { animation: none; }
+  .signin-screen.waitlist, .waitlist__avatar, .flap__face { animation: none; }
 }
 
 /*
