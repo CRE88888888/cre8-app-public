@@ -356,8 +356,9 @@ function Bridge(): null {
       emailError: emailState.status === 'error' ? emailState.error : null,
       oauthError,
       actions,
+      identityToken: authenticated ? identityToken : null,
     });
-  }, [phase, failure, initError, methods, profile, ownerEmbedded, signer, emailState, oauthError, actions]);
+  }, [phase, failure, initError, methods, profile, ownerEmbedded, signer, emailState, oauthError, actions, authenticated, identityToken]);
   // 登入完成（Privy 那一側）就把登入頁收起來；後面換 CRE8 session 的進度在標頭的選單裡。
   useEffect(() => {
     if (authenticated) usePrivyAuth.setState({ signInOpen: false, signInFor: null });

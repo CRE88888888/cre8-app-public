@@ -891,6 +891,84 @@ html body #root .signin-screen .btn.btn:disabled { opacity: 0.5; }
 }
 
 /*
+ * Waitlist（features/waitlist/WaitlistScreen.tsx，使用者 2026-11-16）：整站鎖住時唯一的畫面。
+ * iOS 的歡迎頁：淺灰底、置中的大圓角 app icon 與大標題，按鈕放在底部。按鈕沿用上面登入頁的膠囊（X 黑底、Follow 淺灰）。
+ * 外層借用 .signin-screen（全螢幕、系統字體、按鈕樣式），這裡只改版面。
+ */
+.signin-screen.waitlist {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  padding: max(32px, env(safe-area-inset-top)) 24px max(28px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+  background:
+    radial-gradient(120% 70% at 50% 0%, rgba(139, 168, 190, 0.28), transparent 62%),
+    #f2f2f7;
+  animation: signin-fade 0.3s ease-out;
+}
+
+.waitlist__body,
+.waitlist__actions {
+  width: min(400px, 100%);
+}
+
+.waitlist__head {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.waitlist__icon,
+.waitlist__avatar {
+  width: 88px;
+  height: 88px;
+  margin-bottom: 14px;
+  animation: signin-pop 0.45s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* icon 本身就是圓角方塊（svg），陰影跟著它的形狀走，不另外加框。 */
+.waitlist__icon { filter: drop-shadow(0 12px 22px rgba(10, 18, 26, 0.18)); }
+.waitlist__avatar { border-radius: 50%; box-shadow: 0 12px 30px rgba(10, 18, 26, 0.16), 0 0 0 0.5px rgba(10, 18, 26, 0.08); }
+
+#root .signin-screen.waitlist h1 {
+  margin: 0;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 34px;
+  line-height: 1.12;
+  letter-spacing: -0.024em;
+  color: var(--ink);
+}
+
+#root .signin-screen.waitlist .waitlist__head p {
+  margin: 0;
+  max-width: 34ch;
+  font-size: 17px;
+  line-height: 1.42;
+  color: var(--steel);
+}
+
+#root .signin-screen.waitlist .waitlist__head p b { color: var(--ink); font-weight: 600; }
+
+/* Follow 是連結（a.btn.ghost）：在淺灰底上用白色膠囊（iOS 分組背景上的次要按鈕）。 */
+html body #root .signin-screen .btn.btn.ghost[data-method='follow'] { background: var(--white, #fff); color: var(--ink); text-decoration: none; box-shadow: 0 1px 2px rgba(10, 18, 26, 0.06), 0 0 0 0.5px rgba(10, 18, 26, 0.08); }
+html body #root .signin-screen .btn.btn.ghost[data-method='follow']:hover { background: #fafafc; }
+
+.waitlist__actions .signin-screen__text { justify-self: center; }
+
+@media (max-width: 719px) {
+  .signin-screen.waitlist { justify-content: space-between; gap: 24px; }
+  .waitlist__body { flex: 1; display: grid; align-content: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signin-screen.waitlist, .waitlist__icon, .waitlist__avatar { animation: none; }
+}
+
+/*
  * 用戶頁（Profile，features/portfolios/ProfileCard.tsx）。
  * 帳號列與入金方式的卡片同一個樣子（淺灰卡、圖示、名稱與說明），按鈕是既有的 .btn.ghost.sm，標記是 .badge。
  */

@@ -29,6 +29,7 @@ const AssetPage=lazy(()=>import('./features/reference/AssetPage').then(module=>(
 import { VaultsPage } from './features/vaults/VaultsPage';
 import { StudioEarningsPage, StudioFundsPage, StudioTodayPage } from './features/studio/StudioPages';
 import { MODE_HOME, lastMode } from './lib/app-mode';
+import { WaitlistGate } from './features/waitlist/WaitlistScreen';
 
 /**
  * Privy 登入（cre8-app#57）：只在有設定 `VITE_PRIVY_APP_ID` 時載入。
@@ -44,16 +45,20 @@ export function App(): ReactNode {
   // 重新整理後自動接回先前授權過的錢包（`eth_accounts` 不彈窗）。
   useAutoConnect();
   useAccountWatch();
+  const privy = PrivyRoot !== null && (
+    <PrivyBoundary>
+      <Suspense fallback={null}>
+        <PrivyRoot />
+      </Suspense>
+    </PrivyBoundary>
+  );
+  // Waitlist（使用者 2026-11-16）：整站先鎖住，只有 Connect X 與 Follow。放行後 landing 網域換成 landing、app 網域照常。
+  // 閘門是包住頁面的子元件：App 本身不訂閱登入狀態，否則每次狀態變動都會重繪 PrivyRoot（無限迴圈）。
   return (
     <>
       <Toaster />
-      {PrivyRoot !== null && (
-        <PrivyBoundary>
-          <Suspense fallback={null}>
-            <PrivyRoot />
-          </Suspense>
-        </PrivyBoundary>
-      )}
+      {privy}
+      <WaitlistGate>
       <TopBar />
       <TestnetBanner />
       <WrongNetworkNotice />
@@ -96,6 +101,7 @@ export function App(): ReactNode {
         <Route path="*" element={<Navigate to="/vaults" replace />} />
       </Routes>
       </Suspense>
+      </WaitlistGate>
     </>
   );
 }

@@ -75,6 +75,8 @@ export type PrivyAuthState = {
    */
   signInFor: SignInReason | null;
   actions: PrivyActions | null;
+  /** Privy 的 identity token（waitlist 用它向後端證明是哪個 X 帳號）。只在記憶體，不存。 */
+  identityToken: string | null;
 };
 
 export const PRIVY_INITIAL: PrivyAuthState = {
@@ -91,6 +93,7 @@ export const PRIVY_INITIAL: PrivyAuthState = {
   signInOpen: false,
   signInFor: null,
   actions: null,
+  identityToken: null,
 };
 
 export function openSignIn(reason: SignInReason | null = null): void {

@@ -521,6 +521,37 @@ export type OperatorOverview = {
   portfolios: OperatorRow[];
 };
 
+/**
+ * Waitlist（使用者 2026-11-16，backend#127）：用 Privy identity token 加入自己的排隊（冪等，也回目前狀態）。
+ * 排隊的人還沒有 CRE8 session，所以不帶 CRE8 bearer；後端從 Privy 的 X 帳號取 handle，不信任前端。
+ * 回 `{ status: 'waiting' | 'approved', xHandle, joinedAt }`（撤回的對外也是 waiting）；`lib/waitlist.ts` 的 `parseWaitlist` 讀。
+ * 409 `X_REQUIRED`（帳號沒綁 X）、409 `X_ALREADY_JOINED`（這個 X 帳號已被另一個登入方式佔用）。
+ */
+export function postWaitlistJoin(identityToken: string, signal?: AbortSignal): Promise<unknown> {
+  return request<unknown>('/waitlist/join', { method: 'POST', body: { identityToken }, ...(signal === undefined ? {} : { signal }) });
+}
+
+/** 營運看的一列排隊紀錄（backend#127）。 */
+export type WaitlistEntry = { id: string; xHandle: string; xUserId: string | null; joinedAt: string; status: 'waiting' | 'approved' | 'revoked'; approvedAt: string | null };
+
+/** 營運名單：依狀態篩、cursor 分頁（`nextCursor` 為 null 表示沒有下一頁）。 */
+export function getOperatorWaitlist(
+  token: string,
+  status: 'waiting' | 'approved' | 'revoked' | 'all' = 'all',
+  cursor: string | null = null,
+  limit = 100,
+): Promise<{ items: WaitlistEntry[]; nextCursor?: string | null }> {
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (status !== 'all') query.set('status', status);
+  if (cursor !== null) query.set('cursor', cursor);
+  return request(`/operator/waitlist?${query.toString()}`, { token });
+}
+
+/** 放行或撤回一筆排隊紀錄。 */
+export function setOperatorWaitlist(token: string, id: string, action: 'approve' | 'revoke'): Promise<{ ok: true }> {
+  return request(`/operator/waitlist/${encodeURIComponent(id)}/${action}`, { method: 'POST', token, body: {} });
+}
+
 export function getOperatorOverview(token: string): Promise<OperatorOverview> {
   return request<OperatorOverview>('/operator/overview', { token });
 }

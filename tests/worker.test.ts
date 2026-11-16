@@ -1,23 +1,32 @@
 import { test, expect } from "bun:test";
 import worker from "../public/_worker.js";
 
-test("the root serves the landing page on every host, while filtered root links stay in the app", async () => {
+test("waitlist routing: the landing host gates at / and sends app pages to tst; other hosts open the app at /", async () => {
   const env = {
     ASSETS: {
       fetch: (request: Request) => {
-        const { pathname, search } = new URL(request.url);
-        return new Response(pathname + search);
+        const { host, pathname, search } = new URL(request.url);
+        return new Response(host + pathname + search);
       },
     },
   };
-  const app = await worker.fetch(new Request("https://cre8-atp.pages.dev/?period=30D"), env);
-  const pagesRoot = await worker.fetch(new Request("https://cre8-atp.pages.dev/"), env);
-  const marketing = await worker.fetch(new Request("https://beta.cre8.finance/"), env);
-  const landing = await worker.fetch(new Request("https://cre8-atp.pages.dev/landing/"), env);
-  expect(await app.text()).toBe("/?period=30D");
-  expect(await pagesRoot.text()).toBe("/landing/");
-  expect(await marketing.text()).toBe("/landing/");
-  expect(await landing.text()).toBe("/landing/");
+  const get = (url: string) => worker.fetch(new Request(url), env);
+  // cre8.finance：首頁是 App（waitlist 閘門），landing 靜態檔照常；app 頁面 302 到 tst（含查詢參數）。
+  expect(await (await get("https://cre8.finance/")).text()).toBe("cre8.finance/");
+  expect(await (await get("https://cre8.finance/landing/")).text()).toBe("cre8.finance/landing/");
+  expect(await (await get("https://cre8.finance/landing/assets/app.js")).text()).toBe("cre8.finance/landing/assets/app.js");
+  expect(await (await get("https://cre8.finance/logos/cre8-icon.svg")).text()).toBe("cre8.finance/logos/cre8-icon.svg");
+  for (const path of ["/vaults", "/create", "/funds/mag7", "/?period=30D"]) {
+    const response = await get("https://cre8.finance" + path);
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("https://tst.cre8.finance" + path);
+  }
+  expect((await get("https://www.cre8.finance/funds/mag7")).headers.get("location")).toBe("https://tst.cre8.finance/funds/mag7");
+  // tst 與其他網域：首頁就是 App，頁面不導走。
+  expect(await (await get("https://tst.cre8.finance/")).text()).toBe("tst.cre8.finance/");
+  expect(await (await get("https://tst.cre8.finance/create")).text()).toBe("tst.cre8.finance/create");
+  expect(await (await get("https://cre8-app-migration-preview.example.workers.dev/")).text()).toBe("cre8-app-migration-preview.example.workers.dev/");
+  expect(await (await get("https://cre8-atp.pages.dev/?period=30D")).text()).toBe("cre8-atp.pages.dev/?period=30D");
 });
 
 test("public history proxy is fixed, read-only and strips wallet credentials", async () => {

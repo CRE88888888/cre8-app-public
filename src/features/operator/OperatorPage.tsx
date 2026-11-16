@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { ApiError, getOperatorActivity, getOperatorOverview, operatorForceRebalance } from '../../lib/api';
+import { ApiError, getOperatorActivity, getOperatorOverview, getOperatorWaitlist, operatorForceRebalance, setOperatorWaitlist } from '../../lib/api';
 import type { OperatorActivityRow, OperatorOverview, OperatorRow } from '../../lib/api';
 import { venueSummary } from '../../lib/venues';
 import { formatEther } from 'viem';
@@ -551,6 +551,90 @@ function CreatorOperatorPage({ token }: { token: string }): ReactNode {
       ) : overview.data === undefined ? null : (
         <Dashboard overview={overview.data} token={token} refetch={() => overview.refetch()} />
       )}
+      <WaitlistPanel token={token} />
     </main>
+  );
+}
+
+/**
+ * Waitlist 名單與放行（使用者 2026-11-16）：誰用 X 加入了、放行誰。放行後對方下次開網站（最多一分鐘）就進得去。
+ * 後端端點還沒上線時顯示讀取錯誤，不影響上面的儀表板。
+ */
+function WaitlistPanel({ token }: { token: string }): ReactNode {
+  const [filter, setFilter] = useState<'waiting' | 'approved' | 'revoked' | 'all'>('waiting');
+  const [busy, setBusy] = useState<string | null>(null);
+  const list = useQuery({
+    queryKey: ['operator-waitlist', token, filter],
+    queryFn: () => getOperatorWaitlist(token, filter),
+    refetchInterval: 30_000,
+    retry: false,
+  });
+  async function act(id: string, handle: string, action: 'approve' | 'revoke'): Promise<void> {
+    setBusy(id);
+    try {
+      await setOperatorWaitlist(token, id, action);
+      toast.ok(action === 'approve' ? `@${handle} can come in` : `@${handle} is back on the waitlist`);
+      await list.refetch();
+    } catch (cause) {
+      const forbidden = cause instanceof ApiError && cause.status === 403;
+      toast.bad(action === 'approve' ? 'Could not approve' : 'Could not revoke', forbidden ? 'This account is not on the operator list.' : (cause as Error).message.split('\n')[0]?.slice(0, 140) ?? '');
+    } finally {
+      setBusy(null);
+    }
+  }
+  return (
+    <div className="panel" style={{ marginTop: 20 }} id="waitlist">
+      <div className="panel-h">
+        <h2>Waitlist</h2>
+        <div className="row" role="group" aria-label="Show">
+          {(['waiting', 'approved', 'revoked', 'all'] as const).map((value) => (
+            <button key={value} type="button" className={`btn sm${filter === value ? '' : ' ghost'}`} aria-pressed={filter === value} onClick={() => setFilter(value)}>
+              {value === 'waiting' ? 'Waiting' : value === 'approved' ? 'Approved' : value === 'revoked' ? 'Revoked' : 'All'}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="panel-b">
+        {list.isPending ? (
+          <div className="row"><Spinner /> <span className="muted">Loading the waitlist…</span></div>
+        ) : list.error instanceof ApiError && list.error.status === 403 ? (
+          // 後端比對營運錢包白名單（403 OPERATOR_FORBIDDEN）：這個帳號不能看名單、不能放行。
+          <p className="muted" role="status">This account is not on the operator list, so it can’t see or approve the waitlist.</p>
+        ) : list.error !== null && list.error !== undefined ? (
+          <ErrorNote error={list.error} />
+        ) : (list.data?.items ?? []).length === 0 && !list.isFetching ? (
+          <p className="muted">No one here yet.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>X account</TableHead>
+                <TableHead>Joined</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(list.data?.items ?? []).map((entry) => (
+                <TableRow key={entry.id}>
+                  <TableCell>
+                    <a href={`https://x.com/${entry.xHandle}`} target="_blank" rel="noopener noreferrer">@{entry.xHandle}</a>
+                  </TableCell>
+                  <TableCell>{ago(entry.joinedAt)}</TableCell>
+                  <TableCell><Badge tone={entry.status === 'approved' ? 'ok' : entry.status === 'revoked' ? 'neutral' : 'warn'}>{entry.status === 'approved' ? 'Approved' : entry.status === 'revoked' ? 'Revoked' : 'Waiting'}</Badge></TableCell>
+                  <TableCell>
+                    {entry.status === 'approved' ? (
+                      <Button variant="outline" size="sm" disabled={busy === entry.id} onClick={() => void act(entry.id, entry.xHandle, 'revoke')}>Revoke</Button>
+                    ) : (
+                      <Button size="sm" disabled={busy === entry.id} onClick={() => void act(entry.id, entry.xHandle, 'approve')}>Let in</Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </div>
+    </div>
   );
 }

@@ -16,11 +16,29 @@
  *
  * ## 路由規則（`run_worker_first`：每個請求都先進這裡）
  *
- *   /                          → landing（`/landing/`）
+ *   cre8.finance、www  /        → App（waitlist 閘門；放行後由 App 換成 `/landing/`）
+ *   cre8.finance、www  app 頁面 → 302 到 https://tst.cre8.finance 同一路徑（app 在 tst）
+ *   其他網域          /        → App 首頁（waitlist 閘門之後是 Funds）
+ *   /landing/*                 → landing 靜態檔
  *   /reference-data/demo-funds → 固定來源的公開資料，只讀
  *   /api、/api/*               → 503 PREVIEW_ONLY
  *   其他                        → 靜態資源（`env.ASSETS`，找不到時回 SPA 的 index.html）
  */
+
+/**
+ * Waitlist（使用者 2026-11-16）：cre8.finance 進站先過 X 閘門，放行後看 landing；app 在 tst.cre8.finance。
+ * 與 `src/lib/waitlist.ts` 的 LANDING_HOSTS／APP_ORIGIN 同值。
+ */
+const LANDING_HOSTS = ['cre8.finance', 'www.cre8.finance'];
+const APP_ORIGIN = 'https://tst.cre8.finance';
+
+/** app 的頁面（不是 landing、API、公開資料，也不是有副檔名的靜態檔）。 */
+function isAppPage(pathname) {
+  if (pathname === '/landing' || pathname.startsWith('/landing/')) return false;
+  if (pathname === '/api' || pathname.startsWith('/api/') || pathname.startsWith('/reference-data/')) return false;
+  const last = pathname.split('/').pop() ?? '';
+  return !last.includes('.');
+}
 
 /** A 段 `/api/*` 的固定回應。格式與後端錯誤一致：`{ error: { code, message } }`。 */
 function previewOnly() {
@@ -34,12 +52,11 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // 首頁是 landing（所有網域）。帶查詢參數的 `/?…` 仍交給 App：那是 Funds 的篩選深連結，
-    // 已分享出去的連結不能因為首頁換成 landing 而失效。landing 的按鈕都連到 /vaults、/create、/funds/…。
-    if (url.pathname === '/' && url.search === '' &&
-        (request.method === 'GET' || request.method === 'HEAD')) {
-      url.pathname = '/landing/';
-      return env.ASSETS.fetch(new Request(url, request));
+    // landing 網域：首頁交給 App（waitlist 閘門），app 的頁面導到 tst（landing 的按鈕連到 /vaults、/create、/funds/…）。
+    // 其他網域的首頁就是 App（不再改寫成 landing）。
+    if (LANDING_HOSTS.includes(url.hostname.toLowerCase()) && (request.method === 'GET' || request.method === 'HEAD')) {
+      const home = url.pathname === '/' && url.search === '';
+      if (!home && isAppPage(url.pathname)) return Response.redirect(APP_ORIGIN + url.pathname + url.search, 302);
     }
 
     if (url.pathname === '/reference-data/demo-funds') {

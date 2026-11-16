@@ -19,6 +19,8 @@ interface ImportMetaEnv {
    * 沒設或空字串 → 維持原本的錢包登入。見 `lib/privy-config.ts`。
    */
   readonly VITE_PRIVY_APP_ID?: string;
+  /** `1` = 整站鎖成 waitlist（`lib/waitlist.ts`）。本機開發不設。 */
+  readonly VITE_WAITLIST?: string;
 }
 
 interface ImportMeta {
