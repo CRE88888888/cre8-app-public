@@ -9,6 +9,7 @@ import {
 } from "../reference/lib/fund-builder";
 import { IS_TESTNET, testnetToken } from "./testnet-catalogue";
 import "./testnet-assets";
+import { CASH_PICK, readYieldPicks } from "./yield";
 export type ActivationDesign = {
   name: string;
   weights: Record<string, number>;
@@ -19,6 +20,8 @@ export type ActivationDesign = {
   rebalance: Rebalance | null;
   /** 要先回設計器改的事（還沒開放的策略、附加設定、排程、同資產兩種設定）；沒有就是 null。 */
   executionProblem: string | null;
+  /** 每個資產（代幣地址，小寫，含 USDT）選的平台市場 id（APP-3）；沒選的不在裡面。 */
+  yields: Record<string, string>;
 };
 // 草稿僅作為表單輸入；資產仍須與登入後 API 的確切地址核對，不能直接成為交易授權。
 /**
@@ -40,10 +43,16 @@ export function activationDesign(value: unknown, testnet: boolean = IS_TESTNET, 
     symbols[token] = asset.symbol;
   }
   const cash = Math.round(cashShare(design.rows) * 100) / 100;
+  const cashToken = tokenFor("USDT", "0x55d398326f99059ff775485246999027b3197955", testnet);
   if (cash > 0) {
-    const token = tokenFor("USDT", "0x55d398326f99059ff775485246999027b3197955", testnet);
-    weights[token] = (weights[token] || 0) + cash;
-    symbols[token] = "USDT";
+    weights[cashToken] = (weights[cashToken] || 0) + cash;
+    symbols[cashToken] = "USDT";
+  }
+  // 參考設計的 reviveBuilder 不認得 `yieldPicks`，所以從原始 JSON 讀（lib/yield.ts）。只留設計裡還有的資產。
+  const yields: Record<string, string> = {};
+  for (const [key, market] of Object.entries(readYieldPicks(value))) {
+    if (key === CASH_PICK) { if (cash > 0) yields[cashToken] = market; }
+    else if (design.rows.some((row) => row.key === key)) yields[tokenOf(key)] = market;
   }
   const execution = designExecution(design.rows, {
     rules: design.rules,
@@ -58,6 +67,7 @@ export function activationDesign(value: unknown, testnet: boolean = IS_TESTNET, 
     executions: "assets" in execution ? Object.fromEntries([...execution.assets].map(([key, setting]) => [tokenOf(key), setting])) : null,
     rebalance: "assets" in execution ? execution.rebalance : null,
     executionProblem: "problem" in execution ? describeExecutionProblem(execution.problem) : null,
+    yields,
   };
 }
 export function savedActivationDesign(): ActivationDesign | null {

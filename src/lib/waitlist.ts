@@ -26,10 +26,13 @@ export const CRE8_X_HANDLE = 'CRE8Finance';
  */
 export const INVITES_OPEN = readWaitlistFlag(import.meta.env.VITE_INVITES);
 
-/** 邀請碼的寫法：去掉前後空白、轉大寫；只收英數與連字號，4–32 個字。不合格回 null。 */
+/**
+ * 邀請碼的寫法（backend#132 `docs/waitlist-api.zh-TW.md`）：去掉前後空白、轉大寫；8–10 個英數字，
+ * 不含容易看錯的 0、1、I、L、O（後端產生 10 個字）。不合格回 null，輸入框直接提示，不送出。
+ */
 export function normalizeInviteCode(value: string): string | null {
   const code = value.trim().toUpperCase();
-  return /^[A-Z0-9-]{4,32}$/.test(code) ? code : null;
+  return /^[A-HJKMNP-Z2-9]{8,10}$/.test(code) ? code : null;
 }
 
 const PENDING_INVITE = 'cre8.waitlist.invite';
@@ -52,7 +55,7 @@ function safeSession(): Storage | null {
 }
 
 /** 後端說「碼本身不能用」的代碼（backend#131）：這些改走一般排隊；其他錯誤（限流、網路、伺服器）照常重試。 */
-export const INVITE_REJECTIONS: readonly string[] = ['INVITE_INVALID', 'INVITE_USED', 'INVITE_EXPIRED', 'ALREADY_APPROVED'];
+export const INVITE_REJECTIONS: readonly string[] = ['INVITE_INVALID', 'INVITE_USED', 'INVITE_EXPIRED', 'ALREADY_APPROVED', 'INVALID_WAITLIST_TRANSITION'];
 
 /** 用碼失敗時給人看的一句話（碼錯、用過、過期都一樣，不透露是哪一種）。 */
 export const INVITE_FAILED_NOTE = 'That invite code didn’t work, so you joined the waitlist instead.';

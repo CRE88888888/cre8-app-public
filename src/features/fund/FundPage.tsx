@@ -5,7 +5,7 @@ import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { encodeFunctionData, formatEther, formatUnits, parseEther, parseUnits } from 'viem';
 import { tidyAmountInput } from '../../lib/amount-input';
 import type { Address } from 'viem';
-import { closePosition, continueRedeem, enrollPortfolio, getAssets, getPortfolioExecution, getPortfolioStatus, getPortfolios, getRenewalParams, getStrategy, listStrategies, postBuyFunding, postFaucetUsdt, postFundingLot, postRebalance, postRenewalResult, redeemPortfolio } from '../../lib/api';
+import { cancelPendingVersion, closePosition, confirmEnrollment, continueRedeem, enrollPortfolio, prepareEnrollment, getAssets, getPortfolioExecution, getPortfolioStatus, getPortfolios, getRenewalParams, getStrategy, listStrategies, postBuyFunding, postFaucetUsdt, postFundingLot, postRebalance, postRenewalResult, redeemPortfolio } from '../../lib/api';
 import { CHAIN, CHAIN_ID, approveCalldata, assertRpcChain, bsc as appChain, publicClientFor, readOnlyClient, readRpcUrl, sendGasTopUp, sendRenewalUserOp, sendSudoCalls, sendSweep, sendWithdraw } from '../../lib/kernel';
 import type { BuyFunding, PortfolioStatus, RedeemResult } from '../../lib/api';
 import { MOCK_FUNDS } from '../../data/mock-funds';
@@ -18,6 +18,9 @@ import type { TicketAction, TicketProgress } from './TicketReview';
 import {catalogueTargets} from '../../data/public-fund-adapter';
 import { REFERENCE_METADATA, referenceFund } from '../../lib/public-funds';
 import { symbolOf, synthesizeCommunityFund } from '../../lib/community-fund';
+import { STACK_MIN_BUY_NOTE, usdtText, type StackBuy } from '../../lib/fund-execution';
+import { PREVIEW_BLOCK_COPY, previewBody, previewBuys, usdtToRaw } from '../../lib/contribution-preview';
+import { useContributionPreview } from '../../lib/use-contribution-preview';
 import {periodMetrics} from '../../reference/lib/fund-explore';
 import {FundOverview} from '../reference/FundOverview';
 import { shortAddress, withdrawAmountWei } from '../../lib/format';
@@ -29,6 +32,11 @@ import { WalletMenu } from '../../components/WalletMenu';
 import { WHITELIST_COPY } from '../../lib/live-funds';
 import { hasSellablePositions, lowerOf, sweepNativeWei } from '../../lib/close-position';
 import { isPermissionFailure, renewedMessage, tradingPermissionHealth } from '../../lib/trading-permission';
+import { FOLLOW_VERSIONS_PLAIN, FOLLOW_VERSIONS_TERMS_TEXT, FundNotOpenError, firstEnrollCalls, forbiddenSessionGrants } from '../../lib/atp-contracts';
+import { buyingPausedText, effectiveVersion, parseBuyingPaused, sellOnlyAssets } from '../../lib/fund-versions';
+import { assertShownVersion, waitForAccountCode, waitForPreparation } from '../../lib/first-enroll';
+import { FollowVersionsTerms, VersionNotice } from './VersionNotice';
+import { useVersionSchedule } from './use-version-schedule';
 import { buyAllowanceState, buyLimitMessage, checkEnrollment, describePause, explainA10Failure, pauseSourcesFromFlags, sameAllocation, PLATFORM_PAUSED_MESSAGE } from '../../lib/a10';
 import { MAX_SELL_BATCHES, SellBatchError, SellUnfinished, afterSellRun, formatRemainingUsd, runSellBatches } from '../../lib/sell-batches';
 import { cashUsdOf, sellTargetUsd, totalUsdOf, withdrawShortfallNote } from '../../lib/withdraw-plan';
@@ -40,6 +48,7 @@ import { SWAP_FEE, performanceFeeLine } from '../../lib/fees';
 import { SubscriptionLocked, assertSubscriptionOpen, typedVersionLocked } from '../../lib/subscription-lock';
 import { usePrivyAuth } from '../../store/privy';
 import { AccountControls } from './AccountControls';
+import { YieldPanel, usePortfolioYield } from './YieldPanel';
 import { accountOnchainKey, loadAccountOnchain, useAccountOnchain } from './use-account-onchain';
 import { useWallet } from '../../store/wallet';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -143,6 +152,34 @@ function FundPageBody(): ReactNode {
     enabled: token !== null,
   });
 
+  const strategy = useMemo(() => {
+    // id 模式：策略就是這個 id 的那一檔（不再靠名稱對應 —— 名稱對應正是「Elon 同名」的根源）。
+    if (strategyId !== null && communityStrategy.data !== undefined) {
+      // StrategyDetail 是 StrategySummary 的超集，多出來的 versions 用不到，
+      // 這裡直接以 StrategySummary 的形狀回傳（欄位都齊）。
+      return {
+        id: communityStrategy.data.id,
+        provider: communityStrategy.data.provider,
+        name: communityStrategy.data.name,
+        description: communityStrategy.data.description,
+        isPublic: communityStrategy.data.isPublic,
+        swapFeeBps: communityStrategy.data.swapFeeBps,
+        createdAt: communityStrategy.data.createdAt,
+        onchainId: communityStrategy.data.onchainId,
+      };
+    }
+    const fundName = fund?.name;
+    return fundName === undefined ? undefined : (strategies.data?.items ?? []).find((item) => item.name === fundName);
+  }, [fund, strategies.data, strategyId, communityStrategy.data]);
+  const holding = (portfolios.data ?? []).find((portfolio) => portfolio.strategyId === strategy?.id);
+  // P11（cre8-contracts#54）：鏈上的版本排程。待生效版本、只能賣的資產、建立者的取消。chain 56 不讀。
+  const versionSchedule = useVersionSchedule(strategy?.onchainId);
+  const sellOnly = new Set(versionSchedule.data?.active ? sellOnlyAssets(versionSchedule.data.historicalAssets, versionSchedule.data.active.assets) : []);
+  // 預覽、配置、簽名都用生效中的那一版（審查 #95 第 4 項）：chain 97 讀得到鏈上 activeVersion 時以它為準。
+  const effective = effectiveVersion(communityStrategy.data?.versions, versionSchedule.data === undefined ? undefined : (versionSchedule.data.active?.version ?? null));
+  // 生效中這一版的績效費（bps，審查 #95 第 8 項）：鏈上讀得到用鏈上，不然用後端版本的欄位；都沒有是 null（不顯示）。
+  const effectiveFeeBps = versionSchedule.data?.active?.performanceFeeBps ?? effective?.performanceFeeBps ?? null;
+
   /**
    * id 模式（`/funds/strategy/:id`）的合成 fund：Community 策略沒有參考目錄的 slug，
    * 用 `synthesizeCommunityFund` 現場合成一個 ReferenceFund，餵給 FundOverview。
@@ -153,7 +190,9 @@ function FundPageBody(): ReactNode {
   const communityFund = useMemo(() => {
     const detail = communityStrategy.data;
     if (detail === undefined) return undefined;
-    const version = detail.versions[0];
+    // 和預覽、費率、簽名同一份生效版本（`effective`，含鏈上 activeVersion；審查 #95 第 4 項）；
+    // 還沒有生效版時只是展示最新那一版（這時不能加入，見 FundNotOpenError）。
+    const version = effective ?? detail.versions[0];
     const allocation = version?.allocation?.assets ?? [];
     const symbols = allocation.map((asset) => symbolOf(asset.address));
     const positions = allocation.map((asset, i) => ({
@@ -171,14 +210,15 @@ function FundPageBody(): ReactNode {
       positions,
       seed: detail.id,
     });
-  }, [communityStrategy.data]);
+  }, [communityStrategy.data, effective]);
 
   // id 模式（`/funds/strategy/:id`）：用合成值覆寫 slug 模式的 fund / reference，
   // 讓後續的 FundOverview、ticket、facts 抽屜**完全走同一套程式碼**。
   if (strategyId !== null && communityFund !== undefined) {
     reference = communityFund;
     const detail = communityStrategy.data!;
-    const version = detail.versions[0];
+    // 同上：和概覽、預覽、簽名共用 `effective`。
+    const version = effective ?? detail.versions[0];
     fund = {
       slug: communityFund.slug,
       name: communityFund.name,
@@ -196,25 +236,18 @@ function FundPageBody(): ReactNode {
     };
   }
 
-  const strategy = useMemo(() => {
-    // id 模式：策略就是這個 id 的那一檔（不再靠名稱對應 —— 名稱對應正是「Elon 同名」的根源）。
-    if (strategyId !== null && communityStrategy.data !== undefined) {
-      // StrategyDetail 是 StrategySummary 的超集，多出來的 versions 用不到，
-      // 這裡直接以 StrategySummary 的形狀回傳（欄位都齊）。
-      return {
-        id: communityStrategy.data.id,
-        provider: communityStrategy.data.provider,
-        name: communityStrategy.data.name,
-        description: communityStrategy.data.description,
-        isPublic: communityStrategy.data.isPublic,
-        swapFeeBps: communityStrategy.data.swapFeeBps,
-        createdAt: communityStrategy.data.createdAt,
-        onchainId: communityStrategy.data.onchainId,
-      };
-    }
-    return fund === undefined ? undefined : (strategies.data?.items ?? []).find((item) => item.name === fund.name);
-  }, [fund, strategies.data, strategyId, communityStrategy.data]);
-  const holding = (portfolios.data ?? []).find((portfolio) => portfolio.strategyId === strategy?.id);
+  /** 畫面上買家看到、按下買入時確認的版本（chain 97 鏈上讀到的生效版）。簽名前要和後端接受的版本一致。 */
+  const shownVersion = versionSchedule.data?.active ?? null;
+  const [cancellingVersion, setCancellingVersion] = useState(false);
+  // 是不是建立者：以後端為準（帶登入讀 GET /strategies/:id，待生效版本的 `canCancel`）。鏈上的 provider 是平台 operator，
+  // 不能拿連線錢包比對。只有待生效版本時才需要問。
+  const ownStrategy = useQuery({
+    queryKey: ['strategy', 'signed-in', strategy?.id ?? null, token],
+    queryFn: () => getStrategy(token as string, (strategy as { id: number }).id),
+    enabled: token !== null && strategy !== undefined && (versionSchedule.data?.pending ?? null) !== null,
+    staleTime: 30_000,
+  });
+  const canCancelVersion = ownStrategy.data?.versions.some((version) => version.canCancel === true) === true;
 
   const usdt = (assets.data ?? []).find((asset) => asset.isNumeraire);
 
@@ -420,6 +453,8 @@ function FundPageBody(): ReactNode {
   }, [wallet, usdtAddress]);
 
   const live = status.data;
+  // 生息（APP-3）：每資產狀態、估值、待領回與「需要更新授權」。這條鏈沒有生息或基金沒選市場時是 null。
+  const lending = usePortfolioYield(token, holding?.id, live?.targets ?? []);
   // 交易權限（session key）現在的狀態；My position 抽屜用。
   const permission = tradingPermissionHealth(live?.sessionKey);
   // A10（cre8-app#29）：這個帳戶在鏈上的 enroll／暫停／買入額度，以及 executor 的全域暫停。
@@ -620,6 +655,8 @@ function FundPageBody(): ReactNode {
   const dailyMode = buyMode === 'daily';
   /** 主網：typed 基金的認購還沒開（`lib/subscription-lock.ts`）。新買家連帳戶都不建。 */
   const subscriptionLocked = !faucetBuy && holding === undefined && typedVersionLocked(CHAIN, communityStrategy.data?.versions);
+  /** P11：已持有、但新版已生效（加入時的版本不是目前生效版）：暫停買入，賣出與原樣轉出照常（backend#126）。 */
+  const buyingPaused = holding === undefined ? null : parseBuyingPaused(status.data?.buyingPaused);
 
   const cover = reference ? REFERENCE_METADATA[reference.slug]?.cover : undefined;
   const ticketFund = (
@@ -644,6 +681,15 @@ function FundPageBody(): ReactNode {
                   </TabsList>
                 )}
               <div className="panel-b">
+                {versionSchedule.data !== undefined && (
+                  <VersionNotice
+                    schedule={versionSchedule.data}
+                    versions={ownStrategy.data?.versions ?? communityStrategy.data?.versions}
+                    symbolOf={symbolForAsset}
+                    onExit={holding !== undefined && canSell ? () => { setTab('withdraw'); document.getElementById('ticket')?.scrollIntoView({ block: 'start' }); } : null}
+                    creator={canCancelVersion ? { onCancel: () => void cancelVersion(), cancelling: cancellingVersion } : null}
+                  />
+                )}
                 {tab === 'withdraw' ? (
                   !whitelistOnly && token !== null && withdrawLoadError !== null ? (
                     <ErrorNote error={withdrawLoadError} />
@@ -858,6 +904,10 @@ function FundPageBody(): ReactNode {
                       </div>
                     )}
                     </>)}
+                    {/* 第一次買＝加入基金（P11）：你本人簽名同意之後跟隨新版本。chain 56 還是舊合約，不顯示。 */}
+                    {holding === undefined && CHAIN.contracts?.registry !== undefined && <FollowVersionsTerms terms={FOLLOW_VERSIONS_TERMS_TEXT} />}
+                    {effectiveFeeBps !== null && <p className="fine" data-entry="effective-fee" style={{ margin: '6px 0 0' }}>{shownVersion !== null ? `Version ${shownVersion.version} in effect · ` : ''}Performance fee: {performanceFeeLine(effectiveFeeBps / 100, 'the creator')}.</p>}
+                    <StackBuyPreview execution={effective?.execution} amountText={faucetBuy ? (buyMode === 'resume' ? '0' : (dailyMode ? DAILY_TEST_USDT : WELCOME_TEST_USDT)) : amount} />
                     {whitelistOnly ? (
                       connectedAddress === null ? <WalletMenu inline signInFor={{ purpose: 'buy', subject: fund.name }} /> : (
                         <>
@@ -868,11 +918,12 @@ function FundPageBody(): ReactNode {
                         </>
                       )
                     ) : token === null ? <WalletMenu inline signInFor={{ purpose: 'buy', subject: fund.name }} /> : (
-                      <button type="submit" className="btn primary block" disabled={ticketBusy || wallet === null || usdt === undefined || subscriptionLocked || (!faucetBuy && (depositTooLarge || (mobile && depositUnits <= 0n)))}>
+                      <button type="submit" className="btn primary block" disabled={ticketBusy || wallet === null || usdt === undefined || subscriptionLocked || buyingPaused !== null || (!faucetBuy && (depositTooLarge || (mobile && depositUnits <= 0n)))}>
                         {faucetBuy ? (busy ? 'Working…' : buyMode === 'resume' ? 'Finish investing' : dailyMode ? `Claim ${DAILY_TEST_USDT} test USDT and invest` : `Get ${WELCOME_TEST_USDT} test USDT and invest`) : busy ? 'Sending…' : mobile ? 'Review order' : 'Buy'}
                       </button>
                     )}
                     {subscriptionLocked && <p className="fine warn" role="status">{new SubscriptionLocked('mainnet').message.replace(' Nothing was transferred.', '')}</p>}
+                    {buyingPaused !== null && <p className="fine warn" role="status" data-entry="buying-paused">{buyingPausedText(buyingPaused)}</p>}
                     {token !== null && platformPaused && <p className="fine warn" role="status">{PLATFORM_PAUSED_MESSAGE}</p>}
                     {token !== null && !platformPaused && accountPaused && (
                       <p className="fine warn" role="status">
@@ -887,7 +938,10 @@ function FundPageBody(): ReactNode {
                     )}
                     {token !== null && upgradeAvailable && onchainAccount !== null && (
                       <p className="fine" role="status">
-                        Version {onchainAccount.latestVersion} of this fund is available; your account is on version {onchainAccount.version}.{' '}
+                        {CHAIN.contracts?.registry !== undefined
+                          // P11：帳戶已自動跟隨新版；這裡是確認新版並授權它新增的資產。
+                          ? <>This fund now runs version {onchainAccount.latestVersion}; your account follows it automatically (you agreed to version {onchainAccount.version}). Review it to approve any new assets.{' '}</>
+                          : <>Version {onchainAccount.latestVersion} of this fund is available; your account is on version {onchainAccount.version}.{' '}</>}
                         <button type="button" className="link-button" onClick={() => setMyPosition(true)}>Review the update</button>
                       </p>
                     )}
@@ -1099,6 +1153,9 @@ function FundPageBody(): ReactNode {
               symbolOf={symbolForAsset}
               usdtDecimals={usdtDecimals}
               usdtSymbol={usdt?.symbol ?? 'USDT'}
+              yieldPermission={lending.view === 'ready' ? (lending.data?.permission ?? null) : null}
+              onUpdatePermission={renewPermission}
+              updatingPermission={renewing}
               onChanged={async () => {
                 await Promise.all([
                   queryClient.invalidateQueries({ queryKey: accountOnchainKey(live.executorAddress, live.account) }),
@@ -1107,6 +1164,20 @@ function FundPageBody(): ReactNode {
                 ]);
               }}
             />
+
+            {holding !== undefined && (
+              <YieldPanel
+                wallet={wallet}
+                token={token}
+                portfolioId={holding.id}
+                account={live.account}
+                executor={live.executorAddress}
+                dbStrategyId={holding.strategyId ?? strategy?.id ?? 0}
+                lending={lending}
+                usdtDecimals={usdtDecimals}
+                usdtSymbol={usdt?.symbol ?? 'USDT'}
+              />
+            )}
 
             <section className="panel pros-sec">
               <div className="panel-h">
@@ -1204,7 +1275,7 @@ function FundPageBody(): ReactNode {
             <section id="facts-fees" className="panel pros-sec" tabIndex={-1}>
               <div className="panel-h"><h3>Fees &amp; terms</h3></div>
               <div className="panel-b">
-                {modelFees || strategy ? (
+                {modelFees || strategy || effectiveFeeBps !== null ? (
                   <dl className="app-facts-overview">
                     {modelFees && (
                       <>
@@ -1212,6 +1283,7 @@ function FundPageBody(): ReactNode {
                         <div><dt>Model management fee</dt><dd>{modelFees.mgmt}%</dd></div>
                       </>
                     )}
+                    {effectiveFeeBps !== null && <div><dt>Performance fee (in effect)</dt><dd>{performanceFeeLine(effectiveFeeBps / 100, 'the creator')}</dd></div>}
                     {strategy && <div><dt>Swap fee</dt><dd>{pct(strategy.swapFeeBps)} per batch, at least {SWAP_FEE.minUsdt} USDT</dd></div>}
                   </dl>
                 ) : <p className="fine">Fee terms unavailable.</p>}
@@ -1244,8 +1316,8 @@ function FundPageBody(): ReactNode {
                   </tbody>
                 </table>
                 <p className="fine">
-                  A version is immutable: changing weights means publishing a new version, and every follower keeps the
-                  version it pinned until it re-enrolls.
+                  A version is immutable: changing settings means publishing a new version. It is announced at least 24
+                  hours before it takes effect, and every account in the fund then follows it automatically.
                 </p>
               </div>
             </section>
@@ -1279,7 +1351,11 @@ function FundPageBody(): ReactNode {
                     <tbody>
                       {live.holdings.map((row: PortfolioStatus['holdings'][number]) => (
                         <tr key={row.asset}>
-                          <td className="mono">{row.symbol}</td>
+                          <td className="mono">
+                            {row.symbol}
+                            {/* 新版本拿掉的資產（P11）：照常顯示，可以賣、不會再買。 */}
+                            {sellOnly.has(row.asset.toLowerCase()) && <> <span className="badge" title="The current version no longer includes this asset. You can sell it; the fund does not buy more.">Sell only</span></>}
+                          </td>
                           <td className="r">{formatUnits(BigInt(row.amountWei), row.decimals)}</td>
                           <td className="r">${(Number(row.usdValueE8) / 1e8).toFixed(2)}</td>
                         </tr>
@@ -1417,9 +1493,13 @@ function FundPageBody(): ReactNode {
       // 位址是 counterfactual 的：同一個 (owner, strategy) 永遠同一個地址，所以建好之後
       // 之後所有存款都進同一個帳戶。
       // 主網：typed 基金的認購還沒開（cre8-app#93 high）。新買家在建帳戶之前就停。
+      // P11：新版已生效、這個投組暫停買入：不轉錢、不送單（後端送單前也會擋，這裡先講清楚）。
+      if (buyingPaused !== null) throw new Error(`${buyingPausedText(buyingPaused)} Nothing was transferred.`);
       if (!faucetBuy && holding === undefined && typedVersionLocked(CHAIN, communityStrategy.data?.versions)) {
         throw new SubscriptionLocked('mainnet');
       }
+      // P11：第一版也要等 24 小時。還沒有生效版本就不建帳戶。
+      if (holding === undefined && versionSchedule.data !== undefined && versionSchedule.data.active === null) throw new FundNotOpenError();
       let account = holding?.smartAccounts[0]?.address;
       // enroll 後才知道 portfolioId；deposit 結束時要對它跑一輪配置。
       let portfolioIdAfterEnroll: number | null = holding?.id ?? null;
@@ -1429,9 +1509,48 @@ function FundPageBody(): ReactNode {
           title: 'Creating your account',
           body: 'One account per owner and strategy…',
         });
-        const created = await enrollPortfolio(token, strategy.id);
-        account = created.smartAccounts[0]?.address;
-        portfolioIdAfterEnroll = created.id;
+        const registry = CHAIN.contracts?.registry;
+        const registryExecutor = CHAIN.contracts?.executor;
+        if (registry !== undefined && registryExecutor !== undefined && strategy.onchainId !== null) {
+          // P11（cre8-contracts#54、backend#126，chain 97）：加入基金＝帳戶本人同意之後跟隨新版本。
+          // 1. 後端由 operator 先部署帳戶（202 = 還沒好，重試同一個請求）；前端再確認鏈上看得到帳戶程式碼。
+          // 2. owner 簽一個 sudo UserOp：`enroll(帳戶, 策略, 目前生效版本)`＋這一版資產的 approve。
+          //    一律不帶 initCode／factory 資料（公開 chain 97 的 MetaFactory 沒有質押，bundler 會拒絕）。
+          // 3. 後端讀鏈上 enrollments 確認後才建立投組；之後才有 buy-funding。session key 不碰 registry。
+          const prepared = await waitForPreparation(() => prepareEnrollment(token, strategy.id));
+          // 簽名前：後端要簽的版本必須就是畫面上買家確認的那一版（版本號＋configHash）。不同就刷新內容、中止這一次（審查 #95 第二輪 #4）。
+          try {
+            assertShownVersion(shownVersion, prepared);
+          } catch (cause) {
+            await Promise.all([versionSchedule.refetch(), communityStrategy.refetch()]);
+            throw cause;
+          }
+          await waitForAccountCode((address) => readOnlyClient().getCode({ address }), prepared.account);
+          // 只送 enroll＋USDT approve（後端代付只收這兩種）；其他資產的授權在下面配置前分批補（審查 #95 第 2 項）。
+          // 簽名前核對：鏈上生效版＝後端接受的版本、configHash 相同（審查 #95 第 5 項）。
+          const joinCalls = await firstEnrollCalls(readOnlyClient(), {
+            registry: registry as Address,
+            executor: registryExecutor as Address,
+            usdt: CHAIN.contracts?.usdt as Address,
+            account: prepared.account,
+            id: BigInt(strategy.onchainId),
+            expectedVersion: prepared.expectedVersion,
+            configHash: prepared.configHash,
+          });
+          if (joinCalls !== null) {
+            showProgress({ tone: 'pending', title: 'Join this fund', detail: `${FOLLOW_VERSIONS_PLAIN.follow} ${FOLLOW_VERSIONS_PLAIN.feeCut}` });
+            toast.replace(toastId, { tone: 'pending', title: 'Buy', body: 'Sign to join this fund…' });
+            const joined = await sendSudoCalls({ wallet, token, accountAddress: prepared.account, strategyId: strategy.id, calls: joinCalls });
+            if (!joined.success) throw new Error(`Joining the fund landed on-chain but reverted: ${joined.txHash}. Nothing was transferred.`);
+          }
+          const created = await confirmEnrollment(token, strategy.id);
+          account = created.smartAccounts[0]?.address;
+          portfolioIdAfterEnroll = created.id;
+        } else {
+          const created = await enrollPortfolio(token, strategy.id);
+          account = created.smartAccounts[0]?.address;
+          portfolioIdAfterEnroll = created.id;
+        }
         if (account === undefined) throw new Error('the backend returned no smart account address');
         await queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token) });
         toast.replace(toastId, { tone: 'pending', title: 'Buy', body: 'Confirm the transfer in your wallet…' });
@@ -1949,6 +2068,22 @@ function FundPageBody(): ReactNode {
    * 三步都用既有的東西：`GET renewal-params` → `sendRenewalUserOp` → `POST renewal-result`。
    * 這裡只是把入口接回來（原本在 `/portfolios/:id` 頁，那一頁移除後就沒有地方按了）。
    */
+  /** 建立者取消尚未生效的新版本（P11）：後端代送 `cancelVersion`，成功後重讀版本排程。 */
+  async function cancelVersion(): Promise<void> {
+    if (token === null || strategy === undefined || cancellingVersion) return;
+    setCancellingVersion(true);
+    const id = toast.pending('Cancelling the new settings', 'Sending…');
+    try {
+      await cancelPendingVersion(token, strategy.id);
+      toast.replace(id, { tone: 'ok', title: 'New settings cancelled', body: 'The current settings stay. You still can’t publish again until 7 days after the last publish.' });
+      await Promise.all([versionSchedule.refetch(), ownStrategy.refetch()]);
+    } catch (cause) {
+      toast.replace(id, { tone: 'bad', title: 'Could not cancel', body: (cause as Error).message.split('\n')[0]?.slice(0, 140) ?? '' });
+    } finally {
+      setCancellingVersion(false);
+    }
+  }
+
   async function renewPermission(): Promise<void> {
     if (wallet === null || token === null || holding === undefined) return;
     setRenewing(true);
@@ -1959,6 +2094,11 @@ function FundPageBody(): ReactNode {
       const params = await getRenewalParams(token, holding.id);
       if (params.ownerAddress.toLowerCase() !== wallet.address.toLowerCase()) {
         throw new Error('This account belongs to a different wallet. Connect the wallet that created it and try again.');
+      }
+      // P11：交易權限（session key）不能包含加入／同意基金，那只能由你本人簽（cre8-contracts#54）。
+      const forbidden = forbiddenSessionGrants(params.initConfig);
+      if (forbidden.length > 0) {
+        throw new Error(`This trading permission would also allow ${forbidden.join(', ')}, which only you may sign. Nothing was sent. Contact support.`);
       }
       toast.replace(id, { tone: 'pending', title: 'Renewing trading permission', body: 'Confirm it in your wallet…' });
       const receipt = await sendRenewalUserOp({
@@ -1999,6 +2139,8 @@ function FundPageBody(): ReactNode {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.portfolios(token), refetchType: 'all' }),
         queryClient.invalidateQueries({ queryKey: ['fund-status'], refetchType: 'all' }),
+        // 重新授權之後生息權限應該變成 ok（APP-3）。
+        queryClient.invalidateQueries({ queryKey: ['portfolio-yield'], refetchType: 'all' }),
       ]);
     } catch (cause) {
       toast.replace(id, {
@@ -2511,6 +2653,37 @@ void AssetLogo;
 void Spinner;
 
 /** 桌面版：whitelist-only 的基金按下送出後，在按鈕下方說明。手機版改用 TicketReceipt 顯示同一段文字。 */
+/**
+ * 買家頁：這筆投入裡每個 Stack 資產約分幾期、每期約多少（用買的人實際投入的金額；每批至少 STACK_MIN_BUY_USDT，
+ * 不夠時期數變少）。簡化估計，backend#118 的 preview-contribution 上線後改用後端算的。測試網 gas 由平台全付，不顯示 gas 佔比。
+ */
+/**
+ * 這筆投入每個 stack 資產分幾期：chain 97 問後端預覽（backend#123，debounce 400ms），拿不到才用估計並標「about」。
+ * 金額本身不行（422）就說原因，不估計。
+ */
+/** `amountText` 是使用者輸入的原字（或測試網的固定金額）：送預覽的 raw 不經 Number（審查 #95 第 10 項）。 */
+function StackBuyPreview({ execution, amountText }: { execution: unknown; amountText: string }): ReactNode {
+  const deposit = Number(amountText.replace(/,/g, '')) || 0;
+  const state = useContributionPreview(previewBody(CHAIN_ID, execution, usdtToRaw(amountText)));
+  if (state.status === 'blocked') return <p className="fine" data-entry="stack-buys" style={{ margin: '6px 0 0' }}>{PREVIEW_BLOCK_COPY[state.code]}</p>;
+  return <StackBuyHint buys={previewBuys(execution, deposit, state)} />;
+}
+
+function StackBuyHint({ buys }: { buys: StackBuy[] }): ReactNode {
+  const shown = buys.filter((buy) => buy.buys > 0);
+  if (shown.length === 0) return null;
+  return (
+    <div data-entry="stack-buys">
+      <p className="fine" style={{ margin: '6px 0 0' }}>
+        {shown.map((buy, index) => (
+          <span key={buy.asset}>{index > 0 ? ' · ' : ''}{symbolOf(buy.asset)}: {buy.about ? 'about ' : ''}{buy.buys} {buy.every} {buy.buys === 1 ? 'buy' : 'buys'} of {buy.about ? 'about ' : ''}{usdtText(buy.perBuy)} USDT</span>
+        ))}
+      </p>
+      <p className="fine" style={{ margin: '6px 0 0' }}>{STACK_MIN_BUY_NOTE}</p>
+    </div>
+  );
+}
+
 function WhitelistNote({ action }: { action: TicketAction }): ReactNode {
   return (
     <div className="app-whitelist-note" role="status">

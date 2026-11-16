@@ -6,6 +6,8 @@ interface ImportMetaEnv {
    * 狀態是 `on`｜`mainnet`｜`soon`｜`later`。沒設就用預設值。
    */
   readonly VITE_FEATURES?: string;
+  /** `1` = 生息畫面用 `lib/yield-mock.ts` 的資料（後端 BE-3／BE-4 開出來之前，只給本機開發用）。 */
+  readonly VITE_YIELD_MOCK?: string;
   /** API 的 base path。預設 `/api`（dev 由 vite proxy 轉到 127.0.0.1:8081）。 */
   readonly VITE_API_BASE?: string;
   /** 讀鏈用的 RPC。只在 dev 私鑰模式需要（錢包模式借錢包的 transport）。 */

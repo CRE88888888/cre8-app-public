@@ -1,4 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
+import { useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { ApiError, postWaitlistJoin, postWaitlistRedeem } from '../../lib/api';
@@ -9,6 +11,8 @@ import {
 import { PRIVY_ENABLED } from '../../lib/privy-config';
 import { useMobile } from '../../lib/use-mobile';
 import { usePrivyAuth } from '../../store/privy';
+import { useSession } from '../../store/session';
+import { WAITLIST_PENDING_EVENT, signalWaitlistApproved } from '../../lib/waitlist-signal';
 import { FlapBoard } from './FlapBoard';
 
 /**
@@ -126,7 +130,7 @@ function InviteCode({ onSubmit, disabled }: { onSubmit: (code: string) => void; 
         />
         <button type="submit" className="btn" disabled={disabled || text.trim() === ''}>Use code</button>
       </div>
-      {invalid && <p id="waitlist-invite-error" className="signin-screen__error" role="alert">Check the code: letters, numbers and dashes only.</p>}
+      {invalid && <p id="waitlist-invite-error" className="signin-screen__error" role="alert">Check the code: it’s 8 to 10 letters and numbers.</p>}
     </form>
   );
 }
@@ -231,11 +235,44 @@ export function useLandingAfterApproval(view: GateView): void {
  * landing 網域換成 landing。營運後台（/operator）不鎖。
  * 它是包住頁面的子元件，App 本身不訂閱登入狀態（App 重繪會連帶重繪 PrivyRoot，造成無限迴圈）。
  */
+/**
+ * 後端說「還沒放行」（403 WAITLIST_PENDING，backend#134）：清掉 CRE8 session（PrivyRoot 會用 X 重新換，放行了就拿到新的），
+ * 並重新問名單，閘門依結果顯示 waitlist 或照常進入。舊的沒有 Privy 身分的 session 也靠這一步換新。
+ */
+/**
+ * 收到 WAITLIST_PENDING 時：清 session，並**立即撤銷本地的放行**（#95 最後複審第 3 項）。
+ * 用 reset 而不是 invalidate：舊的 approved 快取直接丟掉，閘門回到「確認中」；重查明確回 approved 才再放行，
+ * 重查失敗就是 not-saved（鎖著），不會沿用舊的 approved。
+ */
+export function recoverFromWaitlistPending(queryClient: QueryClient, clearSession: () => void): Promise<void> {
+  clearSession();
+  return queryClient.resetQueries({ queryKey: ['waitlist'] });
+}
+
+export function useWaitlistPendingRecovery(): void {
+  const queryClient = useQueryClient();
+  const clearSession = useSession((state) => state.clear);
+  useEffect(() => {
+    const recover = (): void => {
+      void recoverFromWaitlistPending(queryClient, clearSession).catch(() => undefined);
+    };
+    window.addEventListener(WAITLIST_PENDING_EVENT, recover);
+    return () => window.removeEventListener(WAITLIST_PENDING_EVENT, recover);
+  }, [clearSession, queryClient]);
+}
+
 export function WaitlistGate({ children }: { children: ReactNode }): ReactNode {
+  useWaitlistPendingRecovery();
   const gate = useWaitlistGate();
   const view: GateView = PRIVY_ENABLED ? gate.view : 'unavailable';
   useLandingAfterApproval(WAITLIST_LOCKED ? view : 'loading');
-  if (!WAITLIST_LOCKED || isUngatedPath(window.location.pathname)) return children;
+  // 放行了：告訴 PrivyRoot，之前被 WAITLIST_PENDING 擋下的 session 交換可以重來（#95 最後複審第 2 項）。
+  useEffect(() => {
+    if (WAITLIST_LOCKED && view === 'approved') signalWaitlistApproved();
+  }, [view]);
+  // 訂閱路由（#95 最後複審第 4 項）：從 /operator 換到別頁時要重新判斷，營運頁的例外不能帶到別頁。
+  const { pathname } = useLocation();
+  if (!WAITLIST_LOCKED || isUngatedPath(pathname)) return children;
   if (view === 'approved') return isLandingHost(window.location.hostname) ? null : children;
   return <WaitlistScreen view={view} handle={gate.handle} avatarUrl={gate.avatarUrl} inviteFailed={gate.inviteFailed} onRetry={gate.retry} />;
 }

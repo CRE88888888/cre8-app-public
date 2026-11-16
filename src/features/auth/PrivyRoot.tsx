@@ -44,6 +44,7 @@ import type { PrivyActions, PrivyPhase } from '../../store/privy';
 import { sessionIsLive, useSession } from '../../store/session';
 import { useWallet } from '../../store/wallet';
 import { createExchangeGuard } from '../../lib/exchange-guard';
+import { WAITLIST_APPROVED_EVENT, shouldRetryAfterApproval } from '../../lib/waitlist-signal';
 
 /** 等嵌入式錢包建好、等 identity token 帶到它，最多等這麼久；超過就顯示錯誤與「再試一次」。 */
 const SETUP_TIMEOUT_MS = 25_000;
@@ -92,6 +93,8 @@ function Bridge(): null {
   /** 換 session 的請求：有 timeout、登出或重試時撤銷，舊請求的結果不會寫進新的登入狀態（`lib/exchange-guard.ts`）。 */
   const [exchange] = useState(() => createExchangeGuard(EXCHANGE_TIMEOUT_MS));
   const autoRetries = useRef(0);
+  /** 放行後重換 session 的次數（見下面「放行後重換」）。 */
+  const approvalRetries = useRef(0);
   const refreshedFor = useRef<string | null>(null);
 
   const accounts = (user?.linkedAccounts ?? null) as readonly LinkedAccountLike[] | null;
@@ -116,6 +119,7 @@ function Bridge(): null {
     if (wallet.kind === 'injected') wallet.disconnect();
     setFailure(null);
     autoRetries.current = 0;
+    approvalRetries.current = 0;
     refreshedFor.current = null;
   }, [ready, authenticated, exchange]);
 
@@ -163,6 +167,7 @@ function Bridge(): null {
           via: 'privy',
         });
         autoRetries.current = 0;
+        approvalRetries.current = 0;
       } catch (cause) {
         // 舊的請求（已登出、換了人、或被重試撤銷）失敗：不寫進現在的登入狀態。
         if (!current()) return;
@@ -180,6 +185,19 @@ function Bridge(): null {
       }
     })();
   }, [ready, authenticated, userId, privySession, otherSession, failure, accountWallets, identityToken, attempt, refreshUser, exchange]);
+
+  // ---- 放行後重換（#95 最後複審第 2 項） -------------------------------------------------------
+  // 還沒放行時換 session 會被 403 WAITLIST_PENDING 擋下，`failure` 會擋住上面的交換。名單變成 approved 時
+  // WaitlistGate 發出事件：清掉這次失敗，上面的 effect 就會用同一個 X 登入重新換（最多 APPROVAL_RETRIES 次）。
+  useEffect(() => {
+    const retry = (): void => {
+      if (!shouldRetryAfterApproval(failure, approvalRetries.current)) return;
+      approvalRetries.current += 1;
+      setFailure(null);
+    };
+    window.addEventListener(WAITLIST_APPROVED_EVENT, retry);
+    return () => window.removeEventListener(WAITLIST_APPROVED_EVENT, retry);
+  }, [failure]);
 
   // ---- 嵌入式錢包沒有自動建：自己建 ------------------------------------------------------------
   // `createOnLogin` 在 Privy 的視窗登入時一定會建；用 headless 登入時文件沒有明說，所以登入後

@@ -26,8 +26,80 @@ export type Rebalance = 'none' | 'monthly' | 'drift';
 /** drift 的門檻：5 個百分點（後端 500 bps，固定）。 */
 export const REBALANCE_DRIFT_POINTS = 5;
 
-/** stack 可設的期數（後端 2–52）。 */
-export const STACK_SLICES = { min: 2, max: 52 } as const;
+/**
+ * stack 可設的期數：最長一年，依頻率不同（使用者 2026-11-16 定案；db#52、backend#118）。
+ * 每天 2–365 期、每週 2–52 期。
+ */
+export const STACK_SLICES = { daily: { min: 2, max: 365 }, weekly: { min: 2, max: 52 } } as const;
+
+/** 這個頻率可設的期數範圍；不是每天的（每週、舊草稿的每月）一律用每週的上限。 */
+export function stackSlicesLimit(every: string): { min: number; max: number } {
+  return every === 'daily' ? STACK_SLICES.daily : STACK_SLICES.weekly;
+}
+
+/**
+ * 換頻率時期數要不要夾：每天 365 期換成每週，超過 52 就夾到 52。`clamped` 讓畫面告訴建立者改了什麼（不靜默）。
+ */
+export function clampSlices(every: string, buys: number): { buys: number; clamped: boolean } {
+  const limit = stackSlicesLimit(every);
+  const next = Math.min(limit.max, Math.max(limit.min, buys));
+  return { buys: next, clamped: next !== buys };
+}
+
+/**
+ * 逐資產（per_asset）每批至少買多少 USDT（含費用）：使用者 2026-11-16 由 50 降為 10，測試網、主網同值（backend#118、docs#71）。
+ * 定期定額的期數會自動縮少，讓每期至少這麼多。使用者可能再調，文案一律用這個常數。
+ * 舊版目標比例路徑與生息單次最少（仍 50）不用這個常數。實際期數以 `POST /strategies/preview-contribution` 為準（lib/contribution-preview.ts）。
+ */
+export const STACK_MIN_BUY_USDT = 10;
+
+/** 最小認購（使用者，docs TESTNET_PARAMETERS）：不隨每批最少調整。 */
+export const MIN_SUBSCRIPTION_USDT = 50;
+
+/** 期數旁的規則說明。 */
+export const STACK_MIN_BUY_NOTE = `Each buy is at least ${STACK_MIN_BUY_USDT} USDT. When the amount is too small, it is split into fewer buys automatically.`;
+
+/**
+ * 一筆投入裡這個資產大約分幾期、每期多少（簡化算法，畫面標「約」）：這個資產分到的金額 ÷ 每批最少（10）取整，
+ * 不超過創作者設的期數、至少 1 期。單資產 12 期投 100 → 10 期各 10（docs#71 的例子）。
+ * 不看同一時點其他資產合併的金額，所以只是估計：只在 preview-contribution 拿不到時當退路（lib/contribution-preview.ts）。
+ */
+export function stackPlan(deposit: number, weightBps: number, slices: number): { buys: number; perBuy: number } {
+  if (!(deposit > 0) || !(weightBps > 0) || !(slices > 0)) return { buys: 0, perBuy: 0 };
+  const amount = (deposit * weightBps) / 10_000;
+  const buys = Math.min(slices, Math.max(1, Math.floor(amount / STACK_MIN_BUY_USDT)));
+  return { buys, perBuy: amount / buys };
+}
+
+/**
+ * 一個 stack 資產在這筆投入裡分幾期（`buys`，可能少於創作者設的 `slices`）、每期多少。
+ * `about`：true 是前端簡化估計（畫面標「about」），false 是後端預覽算的期數。
+ */
+export type StackBuy = { asset: string; every: 'daily' | 'weekly'; slices: number; buys: number; perBuy: number; about: boolean };
+
+/**
+ * 買家頁：從後端版本的 `execution`（schema 2 `per_asset`）讀出每個 stack 資產，配上買的人實際投入的金額。
+ * 形狀不對或不是 stack 的資產略過（只是提示，不擋買）。
+ */
+export function stackBuys(execution: unknown, deposit: number): StackBuy[] {
+  if (typeof execution !== 'object' || execution === null) return [];
+  const assets = (execution as { kind?: unknown; assets?: unknown }).kind === 'per_asset' ? (execution as { assets?: unknown }).assets : null;
+  if (!Array.isArray(assets)) return [];
+  const buys: StackBuy[] = [];
+  for (const entry of assets) {
+    const item = entry as { asset?: unknown; weightBps?: unknown; execution?: { kind?: unknown; every?: unknown; slices?: unknown } } | null;
+    const mode = item?.execution;
+    if (typeof item?.asset !== 'string' || typeof item.weightBps !== 'number' || mode?.kind !== 'stack') continue;
+    if ((mode.every !== 'daily' && mode.every !== 'weekly') || typeof mode.slices !== 'number' || !Number.isInteger(mode.slices) || mode.slices < 1) continue;
+    buys.push({ asset: item.asset, every: mode.every, slices: mode.slices, ...stackPlan(deposit, item.weightBps, mode.slices), about: true });
+  }
+  return buys;
+}
+
+/** 每期金額的寫法：1 以上兩位小數，不到 1 四位小數。 */
+export function usdtText(value: number): string {
+  return value.toLocaleString('en-US', { maximumFractionDigits: value < 1 ? 4 : 2, minimumFractionDigits: value < 1 ? 0 : 2 });
+}
 
 /** 設計裡擋住啟用的原因。名稱都是給畫面列出來的（策略名、設定名、資產名）。 */
 export type ExecutionProblem =
@@ -35,7 +107,7 @@ export type ExecutionProblem =
   | { kind: 'excluded'; plays: string[] }
   /** hold／stack 帶了還沒開放的附加設定（持有期間出借、停利停損、價格上限、整檔規則）。 */
   | { kind: 'extras'; settings: string[] }
-  /** stack 的排程不是每天／每週、或期數不在 2–52（舊草稿可能是每月、或 1000 期）。 */
+  /** stack 的排程不是每天／每週、或期數超過上限（每天 2–365、每週 2–52；舊草稿可能是每月、或 1000 期）。 */
   | { kind: 'schedule'; assets: string[] }
   /** 同一個資產分成兩列、兩列設定不同：後端一個資產只有一種設定。 */
   | { kind: 'split'; assets: string[] }
@@ -78,14 +150,15 @@ const pad = (value: number): string => String(value).padStart(2, '0');
  * 設計器的 stack 欄位換成後端的 UTC 排程。設計器的時刻是創作者這台裝置的當地時間、星期 0 是星期一；
  * 後端要 UTC、星期 0 是星期日。以 `now` 那週換算（換算後可能跨到前一天或後一天，星期跟著變）；
  * 固定成 UTC 之後，遇到夏令時間切換，當地看到的時刻會差一小時（後端契約已寫明）。
- * 不是每天／每週、期數不在 2–52、時刻格式不對：回傳 null。
+ * 不是每天／每週、期數不在範圍內（每天 2–365、每週 2–52）、時刻格式不對：回傳 null。
  */
 export function stackExecution(
   p: { every: string; day?: number; time?: string; buys: number },
   now: Date = new Date(),
 ): StackExecution | null {
   if (p.every !== 'daily' && p.every !== 'weekly') return null;
-  if (!Number.isInteger(p.buys) || p.buys < STACK_SLICES.min || p.buys > STACK_SLICES.max) return null;
+  const limit = stackSlicesLimit(p.every);
+  if (!Number.isInteger(p.buys) || p.buys < limit.min || p.buys > limit.max) return null;
   const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(p.time ?? '09:00');
   if (match === null) return null;
   const hour = Number(match[1]);
@@ -172,6 +245,9 @@ const list = (names: string[]): string => names.join(', ');
 const isAre = (names: string[]): string => (names.length === 1 ? 'is' : 'are');
 const itThem = (names: string[]): string => (names.length === 1 ? 'it' : 'them');
 
+/** stack 排程的規則，一句話（錯誤訊息與設計器共用）。 */
+export const STACK_SCHEDULE_RULE = `Stack buys daily (${STACK_SLICES.daily.min}–${STACK_SLICES.daily.max} buys) or weekly (${STACK_SLICES.weekly.min}–${STACK_SLICES.weekly.max} buys), up to a year.`;
+
 /** 給畫面的一句話：要先改什麼。 */
 export function describeExecutionProblem(problem: ExecutionProblem, open: readonly ExecutionKind[] = openKinds()): string {
   const switchTo = open.map((kind) => EXECUTION_COPY[kind].name).join(' or ');
@@ -181,7 +257,7 @@ export function describeExecutionProblem(problem: ExecutionProblem, open: readon
     case 'extras':
       return `${list(problem.settings)} ${isAre(problem.settings)} coming soon. Turn ${itThem(problem.settings)} off to activate this fund now.`;
     case 'schedule':
-      return `Stack buys daily or weekly, in ${STACK_SLICES.min}–${STACK_SLICES.max} buys. Change the schedule of ${list(problem.assets)} to activate this fund now.`;
+      return `${STACK_SCHEDULE_RULE} Change the schedule of ${list(problem.assets)} to activate this fund now.`;
     case 'split':
       return `${list(problem.assets)} ${problem.assets.length === 1 ? 'has' : 'have'} two different strategies. Give each asset one strategy to activate this fund now.`;
     case 'rebalance':
@@ -238,10 +314,11 @@ export function executionConfirm(kinds: ReadonlySet<ExecutionKind>, rebalance: R
   return 'I understand: Buy & hold assets are bought with each deposit and kept, and Stack assets in the daily or weekly slices I set. A buy without enough USDT is skipped, and CRE8 does not sell or rebalance when prices move.';
 }
 
-export type VersionAsset ={ address: string; weightBps: number; execution?: AssetExecution };
+/** `yield`：這個資產選的平台市場 id（APP-3）；沒有就是不生息。 */
+export type VersionAsset = { address: string; weightBps: number; execution?: AssetExecution; yield?: string };
 
 /** 送給後端的逐資產設定（USDT 那一項沒有 execution）。 */
-type ExecutionEntry = { asset: string; weightBps: number; execution?: AssetExecution; yield: null };
+type ExecutionEntry = { asset: string; weightBps: number; execution?: AssetExecution; yield: { market: string } | null };
 
 /** `POST /strategies/:id/versions` 的本文（schema 2，backend BE-2）。 */
 export type TypedVersionBody = {
@@ -256,7 +333,9 @@ export type TypedVersionBody = {
 /**
  * 組出要送的版本。地址一律小寫（後端逐字比對 numeraire）。USDT 一定列出來（沒選就是 0%）：後端會把它補進
  * allocation，execution 要一項一項對得上。非 USDT 資產的設定一定明寫（沒給就是 hold）；USDT 不能有 execution。
- * 再平衡預設不做（none；只有全部 hold 才能 monthly／drift）、生息關閉（APP-3 之前不開）、排程固定是 `funding`（依投入觸發）。
+ * 再平衡預設不做（none；只有全部 hold 才能 monthly／drift）、排程固定是 `funding`（依投入觸發）。
+ * 生息逐資產（APP-3）：有選市場就是 `{ market }`，沒有就是 null；後端再核對市場是否開放給這條鏈與資產。
+ * 整檔的 `idleYield` 維持關閉（逐資產的 `yield` 取代它，USDT 現金也是逐資產選）。
  */
 export function typedVersionBody(input: { chainId: number; usdt: string; assets: VersionAsset[]; rebalance?: Rebalance; changeLog?: string }): TypedVersionBody {
   const rebalance = input.rebalance ?? 'none';
@@ -276,9 +355,12 @@ export function typedVersionBody(input: { chainId: number; usdt: string; assets:
       kind: 'per_asset',
       numeraire: usdt,
       rebalance,
-      assets: all.map((asset) => asset.address === usdt
-        ? { asset: asset.address, weightBps: asset.weightBps, yield: null }
-        : { asset: asset.address, weightBps: asset.weightBps, execution: asset.execution ?? { kind: 'hold' }, yield: null }),
+      assets: all.map((asset) => {
+        const picked = asset.yield === undefined ? null : { market: asset.yield };
+        return asset.address === usdt
+          ? { asset: asset.address, weightBps: asset.weightBps, yield: picked }
+          : { asset: asset.address, weightBps: asset.weightBps, execution: asset.execution ?? { kind: 'hold' }, yield: picked };
+      }),
     },
     schedule: { kind: 'funding' },
     idleYield: { enabled: false },
@@ -287,12 +369,21 @@ export function typedVersionBody(input: { chainId: number; usdt: string; assets:
 }
 
 /**
- * 最低投入（USDT，含費用）：每批至少 50，現金部分不換幣，所以要用非現金比例放大（50% 現金至少 100）。
- * 跟後端 `minimumAssetContribution` 同一個算法；實際以後端回的數字為準（投入頁會讀）。
+ * 最低投入（USDT，含費用）＝ max(50, ceil(10 / (1 − 現金比例)))（backend#118）：最小認購 50；每批至少 10，
+ * 現金部分不換幣，所以用非現金比例放大（90% 現金 → 100）。個別資產權重再小也不抬高最低投入：後端把非最後一期
+ * 不到 1 USDT 的部分留到該資產下一期，最後一期併入整批。實際以後端回的數字為準（投入頁會讀）。
  */
 export function minimumDeposit(assets: readonly { address: string; weightBps: number }[], usdt: string): number {
-  const invested = assets.filter((asset) => asset.address.toLowerCase() !== usdt.toLowerCase()).reduce((sum, asset) => sum + asset.weightBps, 0);
-  return invested === 0 ? 50 : Math.ceil((50 * 10_000) / invested * 100) / 100;
+  return minimumDepositFor(assets.filter((asset) => asset.address.toLowerCase() !== usdt.toLowerCase()).map((asset) => asset.weightBps));
+}
+
+/** 同上，直接用非現金資產的權重（bps）算；設計器沒有地址，用這個。 */
+export function minimumDepositFor(investedBps: readonly number[]): number {
+  const weights = investedBps.filter((bps) => bps > 0);
+  if (weights.length === 0) return MIN_SUBSCRIPTION_USDT;
+  const invested = weights.reduce((sum, bps) => sum + bps, 0);
+  // 整 USDT 向上取整，與後端 minimumAssetContribution 同算法（bigint 的 ceil(10×10000 / 非現金 bps)）。
+  return Math.max(MIN_SUBSCRIPTION_USDT, Math.ceil((STACK_MIN_BUY_USDT * 10_000) / invested));
 }
 
 /** 百分比換成 bps（0.01%）。輸入框與送出用同一個換算（cre8-app#93）。 */

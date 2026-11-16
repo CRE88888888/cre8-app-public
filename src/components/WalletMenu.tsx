@@ -18,6 +18,7 @@ import { AppIcon } from './AppIcon';
 import { WalletConnectPairing } from './WalletConnectPairing';
 import { PRIVY_ENABLED } from '../lib/privy-config';
 import { PrivyWalletMenu } from './PrivyWalletMenu';
+import { isWaitlistPending } from '../lib/waitlist-signal';
 import type { SignInReason } from '../lib/sign-in-reason';
 
 /**
@@ -57,7 +58,15 @@ export function WalletMenu({ signInFor, ...props }: WalletMenuProps): ReactNode 
     : <ClassicWalletMenu {...props} />;
 }
 
-/** 原本的錢包選擇及驗證流程（瀏覽器錢包／WalletConnect＋SIWE）。 */
+/**
+ * 原本的錢包選擇及驗證流程（瀏覽器錢包／WalletConnect＋SIWE）。
+ * backend#134 之後只有營運錢包（OPERATOR_WALLETS）能用錢包簽名登入，所以營運頁直接用它（`OperatorWalletMenu`），
+ * 不走 Privy；一般人一律用 X 登入。
+ */
+export function OperatorWalletMenu(props: Omit<WalletMenuProps, 'signInFor'>): ReactNode {
+  return <ClassicWalletMenu {...props} />;
+}
+
 function ClassicWalletMenu({ inline = false, showIcon = false, iconOnly = false }: Omit<WalletMenuProps, 'signInFor'>): ReactNode {
   const wallet = useWallet();
   const mobile = useMobile();
@@ -262,7 +271,9 @@ function ClassicWalletMenu({ inline = false, showIcon = false, iconOnly = false 
               >
                 {inline && siwe.phase === "idle" ? "Sign message" : siwePhaseLabel(siwe.phase)}
               </button>
-              <ErrorNote error={siwe.error} />
+              {isWaitlistPending(siwe.error)
+                ? <p className="fine warn" role="alert">Wallet sign-in is only for CRE8 operator wallets. Everyone else signs in with X.</p>
+                : <ErrorNote error={siwe.error} />}
               <button type="button" className="wallet-menu__link" onClick={disconnectWallet}>
                 Disconnect
               </button>

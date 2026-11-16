@@ -54,7 +54,7 @@ export const FEATURES = {
     // 分幾期）也逐資產由創作者設定，買的人只決定投多少。後端 BE-2（backend#93）已收這組參數，開放。
     state: 'on',
     name: 'Recurring buys',
-    note: `You set daily or weekly buys for each asset, split over 2–52 buys. ${SOON}`,
+    note: `You set daily or weekly buys for each asset, over up to a year (365 daily / 52 weekly buys). ${SOON}`,
   },
   strategyDips: {
     state: 'soon',

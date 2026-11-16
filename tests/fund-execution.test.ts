@@ -58,7 +58,7 @@ test("a stack row's local schedule becomes the backend's UTC schedule", () => {
   expect(stackExecution({ ...stack, day: 6, time: "12:30" }, NOW)?.weekday).toBe(0);
   expect(stackExecution({ ...stack, every: "daily", buys: 2 }, NOW)).toEqual({ kind: "stack", every: "daily", weekday: null, timeUtc: "01:00", slices: 2 });
   expect(stackExecution({ ...stack, buys: 52 }, NOW)?.slices).toBe(52);
-  // 後端只收每天／每週、2–52 期。
+  // 後端只收每天／每週；最長一年：每天 2–365、每週 2–52 期。
   expect(stackExecution({ ...stack, every: "monthly" }, NOW)).toBeNull();
   expect(stackExecution({ ...stack, buys: 53 }, NOW)).toBeNull();
   expect(stackExecution({ ...stack, buys: 1 }, NOW)).toBeNull();
@@ -93,7 +93,7 @@ test("what still blocks activation is named, one thing at a time", () => {
   // 舊草稿的每月排程或 1000 期。
   const monthly = { key: "ETH", play: "stack", p: { ...B.defaults("stack"), every: "monthly" } } as B.Row;
   expect(designExecution([monthly], { open: BOTH, assetName: () => "ETH" })).toEqual({ problem: { kind: "schedule", assets: ["ETH"] } });
-  expect(describeExecutionProblem({ kind: "schedule", assets: ["ETH"] })).toBe("Stack buys daily or weekly, in 2–52 buys. Change the schedule of ETH to activate this fund now.");
+  expect(describeExecutionProblem({ kind: "schedule", assets: ["ETH"] })).toBe("Stack buys daily (2–365 buys) or weekly (2–52 buys), up to a year. Change the schedule of ETH to activate this fund now.");
   // 同一個資產兩列、設定不同：後端一個資產一種設定。設定相同就合併。
   const hold = { key: "BTC", play: "hold", p: B.defaults("hold") } as B.Row;
   const stack = { key: "BTC", play: "stack", p: B.defaults("stack") } as B.Row;
@@ -159,8 +159,9 @@ test("a version that does not add up, lists an asset twice or stacks USDT is ref
 
 test("the minimum deposit is 50 USDT of buys: cash does not count", () => {
   expect(minimumDeposit([{ address: BTC, weightBps: 10_000 }], USDT)).toBe(50);
-  expect(minimumDeposit([{ address: BTC, weightBps: 5_000 }, { address: USDT, weightBps: 5_000 }], USDT)).toBe(100);
-  expect(minimumDeposit([{ address: BTC, weightBps: 3_000 }, { address: USDT.toUpperCase().replace("0X", "0x"), weightBps: 7_000 }], USDT)).toBe(166.67);
+  // 每批最少 10（backend#118）：50% 現金 → max(50, 20) = 50；70% 現金 → max(50, 33.34) = 50。
+  expect(minimumDeposit([{ address: BTC, weightBps: 5_000 }, { address: USDT, weightBps: 5_000 }], USDT)).toBe(50);
+  expect(minimumDeposit([{ address: BTC, weightBps: 3_000 }, { address: USDT.toUpperCase().replace("0X", "0x"), weightBps: 7_000 }], USDT)).toBe(50);
   expect(minimumDeposit([{ address: USDT, weightBps: 10_000 }], USDT)).toBe(50);
 });
 
@@ -256,8 +257,11 @@ test("rebalancing: off, monthly or more than 5 points off, only when every asset
   expect(executionConfirm(new Set(["hold"]), "none")).toBe(EXECUTION_COPY.hold.confirm);
 });
 
-test("the stack buys slider stops at 52 in every designer path", () => {
+test("the stack buys slider follows the frequency (365 daily, 52 weekly) in every designer path", () => {
   const designer = fs.readFileSync("src/features/create/FundDesigner.tsx", "utf8");
   expect(designer).not.toContain("B.LIMITS.stack.buys");
-  expect(designer.match(/label="Number of buys" value=\{p\.buys\} limit=\{STACK_SLICES\}/g)?.length).toBe(2);
+  expect(designer.match(/label="Number of buys" value=\{p\.buys\} limit=\{stackSlicesLimit\(p\.every\)\}/g)?.length).toBe(2);
+  // 兩條路徑換頻率都經過夾值（useStackSet），不直接 set("every")。
+  expect(designer.match(/onChange=\{\(value\) => setStack\("every", value\)\}/g)?.length).toBe(1);
+  expect(designer).toContain("<Schedule p={p} set={setStack} />");
 });

@@ -5,9 +5,12 @@
  *   - `chainId`：目前這個 build 的鏈（測試網是 97）。
  *   - 每個資產的 `token` 與現金的地址：測試網用地址簿上的測試網地址（與啟用時送給後端的映射同一份，`testnet-catalogue`）。
  *   - 費用：參數總表的換幣費與績效費分潤（`lib/fees.ts`），拿掉舊的 `platformFeeBps`／`depositFeeBps`。
+ *   - 生息（cre8-app#95 審查第 13 項）：有任何市場選擇時，每個資產加 `yield: { market } | null`，現金也是（現金 0% 為 null）。
+ *     沒有選擇就不加欄位，匯出跟以前一樣。
  */
 import { designFeeTerms } from './fees';
 import { testnetToken } from './testnet-catalogue';
+import { CASH_PICK } from './yield';
 
 const MAINNET_USDT = '0x55d398326f99059ff775485246999027b3197955';
 
@@ -16,16 +19,24 @@ type Design = { chainId?: unknown; assets?: unknown; cash?: unknown; [key: strin
 
 export function exportDesign<T extends Design>(
   design: T,
-  options: { chainId: number; testnet: boolean; feePct: number },
+  options: { chainId: number; testnet: boolean; feePct: number; yieldPicks?: Record<string, string> },
 ): Omit<T, 'platformFeeBps' | 'depositFeeBps'> & ReturnType<typeof designFeeTerms> & { chainId: number } {
   const tokenFor = (symbol: unknown, mainnet: unknown): unknown =>
     options.testnet && typeof symbol === 'string' ? (testnetToken(symbol) ?? mainnet) : mainnet;
   const { platformFeeBps: _platform, depositFeeBps: _deposit, ...rest } = design as T & { platformFeeBps?: unknown; depositFeeBps?: unknown };
+  const picks = options.yieldPicks ?? {};
+  const lending = Object.keys(picks).length > 0;
+  const yieldOf = (key: unknown): { yield: { market: string } | null } =>
+    ({ yield: typeof key === 'string' && picks[key] !== undefined ? { market: picks[key] as string } : null });
   const assets = Array.isArray(design.assets)
-    ? (design.assets as DesignAsset[]).map((asset) => ({ ...asset, token: tokenFor(asset.symbol, asset.token) }))
+    ? (design.assets as DesignAsset[]).map((asset) => ({ ...asset, token: tokenFor(asset.symbol, asset.token), ...(lending ? yieldOf(asset.asset) : {}) }))
     : design.assets;
   const cash = design.cash !== null && typeof design.cash === 'object'
-    ? { ...(design.cash as Record<string, unknown>), address: tokenFor('USDT', MAINNET_USDT) }
+    ? {
+        ...(design.cash as Record<string, unknown>),
+        address: tokenFor('USDT', MAINNET_USDT),
+        ...(lending ? yieldOf(Number((design.cash as Record<string, unknown>).shareBps) > 0 ? CASH_PICK : null) : {}),
+      }
     : design.cash;
   return {
     ...(rest as Omit<T, 'platformFeeBps' | 'depositFeeBps'>),

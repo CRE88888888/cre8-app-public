@@ -11,7 +11,7 @@
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
-    // 每個請求都先進 _worker.js（`/` 改寫成 landing、`/api/*` 回 PREVIEW_ONLY），
+    // 每個請求都先進 _worker.js（waitlist 網域路由、`/api/*` 轉發到後端），
     // 與以前 Pages 進階模式的行為一致。
     "run_worker_first": true,
     // 前端是 SPA：/funds/mag7 這類路徑沒有對應檔案時回 index.html。
@@ -19,6 +19,10 @@
   },
   // 使用者的 Cloudflare 帳號對非 main 分支執行 `npx wrangler preview`；沒有這個區塊會建置失敗。
   // 空物件＝分支預覽沿用上面的設定，不影響 main 的正式部署。
+  // `/api/*` 轉發到後端：後端網址（不是秘密）寫在這裡的 `vars.API_ORIGIN`，只寫 `https://主機`、不帶路徑。
+  // 空字串＝還沒接後端，/api 回 PREVIEW_ONLY。不用 dashboard 變數：每次部署以這個檔為準。
+  // 現在是 Railway 上對外的 website 服務（總管 2026-11-17）：它收 /api/*，自己剝掉前綴再私網轉給 API。
+  "vars": { "API_ORIGIN": "https://website-production-d8e9f7cc.up.railway.app" },
   "previews": {},
   // 分支預覽的建置指令在 Cloudflare 上是 None，由 wrangler 自己先建置，否則找不到 dist。
   "build": { "command": "bun run build" }

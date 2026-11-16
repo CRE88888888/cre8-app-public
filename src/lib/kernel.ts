@@ -25,9 +25,13 @@ import { signerToEcdsaValidator } from '@zerodev/ecdsa-validator';
 import { createPublicClient, createWalletClient, custom, encodeFunctionData, encodePacked, http, keccak256 } from 'viem';
 import type { Address, Chain, Hex, LocalAccount, PublicClient, WalletClient } from 'viem';
 
-import { postSponsor } from './api';
+import { getPlatformStatusText, postSponsor } from './api';
+import { assertAddressBook } from './address-book-check';
 import { chainProfile, checkedContract, readChainId, verifyRpcChain } from './chain-config';
 import { SponsorshipError, packForSponsorship, sponsorshipFromResponse, stubPaymasterData } from './paymaster';
+import { userOpReceiptFrom } from './yield-pending';
+import { broadcastPrepared, sendUserOp } from './userop-send';
+import { formatUserOperationRequest, getUserOperationHash } from 'viem/account-abstraction';
 
 const API_BASE: string = import.meta.env.VITE_API_BASE ?? '/api';
 
@@ -165,6 +169,14 @@ export function computeAccountSalt(owner: Address, strategyId: number): bigint {
   );
 }
 
+/** 帳戶還沒部署：不簽、不送（不會帶 initCode）。 */
+export class AccountNotDeployedError extends Error {
+  constructor(readonly account: string) {
+    super('Your fund account is still being set up, so nothing was sent. Please try again in a minute.');
+    this.name = 'AccountNotDeployedError';
+  }
+}
+
 export async function sendSudoCalls(args: {
   wallet: RenewalWallet;
   token: string;
@@ -173,12 +185,19 @@ export async function sendSudoCalls(args: {
   /** 投組對應的策略 id —— 用來算出與後端相同的帳戶 salt（見 `computeAccountSalt`）。 */
   strategyId: number;
   timeoutMs?: number;
+  onSubmitted?: (userOpHash: Hex) => void;
 }): Promise<RenewalReceipt> {
-  // RPC 連到的不是這條鏈（例如測試網的 build 讀主網）：不簽、不送（cre8-app#93）。
-  await assertRpcChain();
+  await assertRpcChain(); // RPC 連到的不是這條鏈（例如測試網的 build 讀主網）：不簽、不送（cre8-app#93）。
+  // 內建地址簿（chain 97）要和後端在用的 registry／executor 一樣，不然不簽、不送（審查 #95 第 1 項）。
+  await assertAddressBook(CHAIN.contracts === null ? null : { chainId: CHAIN.id, registry: CHAIN.contracts.registry, executor: CHAIN.contracts.executor }, getPlatformStatusText);
   const publicClient = publicClientFor(args.wallet);
   const entryPoint = ENTRY_POINT as never;
   const kernelVersion: GetKernelVersion<'0.7'> = KERNEL_V3_3;
+
+  // 帳戶一定要已經部署：sudo UserOp 一律不帶 initCode／factory 資料（P11：公開 chain 97 的 MetaFactory 沒有質押，
+  // bundler 會拒絕帶 initCode 的 UserOp；帳戶由後端 operator 先部署）。還沒部署就不簽、不送。
+  const code = await publicClient.getCode({ address: args.accountAddress });
+  if (code === undefined || code === '0x') throw new AccountNotDeployedError(args.accountAddress);
 
   // 位址**明確傳**：帳戶已經存在，它的位址不該取決於這一次跑出來的 init code。
   const sudoAccount = await createKernelAccount(publicClient, {
@@ -254,12 +273,47 @@ export async function sendSudoCalls(args: {
     },
   });
 
-  let userOpHash: Hex;
-  try {
-    userOpHash = await accountClient.sendUserOperation({ calls: args.calls });
-  } catch (cause) {
-    throw sponsorFailure ?? cause;
-  }
+  // 生息（帶 onSubmitted）而且是 chain 97：自己 prepare → 簽名 → 算 hash → 交給呼叫端存 → 才廣播（cre8-app#95 第三輪複審 R1）。
+  // 其他呼叫者與 chain 56：原本的 sendUserOperation，不變（總管 2026-11-16：新路徑還沒對真的 bundler 送過）。
+  const userOpHash = await sendUserOp({
+    chainId: CHAIN.id,
+    onSubmitted: args.onSubmitted,
+    legacy: async () => {
+      try {
+        return await accountClient.sendUserOperation({ calls: args.calls });
+      } catch (cause) {
+        throw sponsorFailure ?? cause;
+      }
+    },
+    early: async (onSubmitted) => {
+      // 不用 `sendUserOperation`：它會在內部重新 prepare（paymaster 再簽一次），廣播出去的 hash 就不是事先算的那個。
+      let prepared;
+      try {
+        prepared = await accountClient.prepareUserOperation({ calls: args.calls });
+      } catch (cause) {
+        throw sponsorFailure ?? cause;
+      }
+      const signed = { ...prepared, signature: await sudoAccount.signUserOperation(prepared as never) };
+      const computed = getUserOperationHash({
+        userOperation: signed as never,
+        entryPointAddress: ENTRY_POINT_V07,
+        entryPointVersion: '0.7',
+        chainId: CHAIN.id,
+      });
+      // 回應遺失、逾時、斷線：原錯誤丟出，hash 已經存了（待對帳）；bundler 明確拒絕才丟 BundlerRejected。
+      const returned = await broadcastPrepared({
+        userOpHash: computed,
+        onSubmitted,
+        broadcast: () =>
+          accountClient.request(
+            { method: 'eth_sendUserOperation', params: [formatUserOperationRequest(signed as never), ENTRY_POINT_V07] } as never,
+            { retryCount: 0 },
+          ) as Promise<Hex>,
+      });
+      if (returned.toLowerCase() !== computed.toLowerCase()) onSubmitted(returned);
+      return returned;
+    },
+  });
   const receipt = await accountClient.waitForUserOperationReceipt({
     hash: userOpHash,
     timeout: args.timeoutMs ?? 180_000,
@@ -271,6 +325,20 @@ export async function sendSudoCalls(args: {
     success: receipt.success,
     gasUsed: receipt.actualGasUsed?.toString() ?? null,
   };
+}
+
+/**
+ * 用原 userOpHash 問 bundler（後端 relay）這筆 UserOp 的結果：null = 還沒有 receipt。
+ * 生息簽名等 receipt 逾時後對帳用（cre8-app#95 複審 F5）。
+ */
+export async function lookupUserOperation(token: string, userOpHash: Hex): Promise<{ txHash: string; success: boolean } | null> {
+  const response = await fetch(`${API_BASE}/bundler`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getUserOperationReceipt', params: [userOpHash] }),
+  });
+  if (!response.ok) throw new Error(`Could not check the transaction (HTTP ${response.status}).`);
+  return userOpReceiptFrom(await response.json());
 }
 
 /**

@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { infiniteQueryOptions, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ApiError, getOperatorActivity, getOperatorOverview, getOperatorWaitlist, operatorForceRebalance, setOperatorWaitlist } from '../../lib/api';
@@ -15,7 +15,8 @@ import { toast } from '../../components/Toast';
 import { explainTradeFailure } from '../../lib/trade-failure';
 import { Link } from 'react-router-dom';
 import { AppIcon } from '../../components/AppIcon';
-import { WalletMenu } from '../../components/WalletMenu';
+import { OperatorWalletMenu, WalletMenu } from '../../components/WalletMenu';
+import { InvitesPanel } from './InvitesPanel';
 
 /** 相對時間（「12 秒前」）比絕對時間更能回答「現在有沒有在跑」。 */
 function ago(iso: string | null): string {
@@ -509,7 +510,15 @@ export function OperatorPage(): ReactNode {
         <span className="app-icon-tile app-portfolio-hero-icon"><AppIcon name="manage" size={22} /></span>
         <h2 id="ops-guest-title">Operations console</h2>
         <p>This console is for the CRE8 operations team. Creators manage their funds in Studio.</p>
+        {/*
+          使用者 2026-11-17：管理員用 X 帳號登入（@cre8admin 的 Privy 錢包列在後端 OPERATOR_WALLETS，免 waitlist）。
+          backend#134 也允許營運錢包直接用錢包簽名（SIWE）登入，放在下面當備用。
+        */}
         <WalletMenu inline />
+        <details className="fine" style={{ marginTop: 8 }}>
+          <summary>Use an operator wallet instead</summary>
+          <div style={{ marginTop: 8 }}><OperatorWalletMenu inline /></div>
+        </details>
         <Link to="/studio">Go to Studio <AppIcon name="right" size={16} /></Link>
       </section>
     </main>
@@ -552,6 +561,7 @@ function CreatorOperatorPage({ token }: { token: string }): ReactNode {
         <Dashboard overview={overview.data} token={token} refetch={() => overview.refetch()} />
       )}
       <WaitlistPanel token={token} />
+      <InvitesPanel token={token} />
     </main>
   );
 }
@@ -560,15 +570,28 @@ function CreatorOperatorPage({ token }: { token: string }): ReactNode {
  * Waitlist 名單與放行（使用者 2026-11-16）：誰用 X 加入了、放行誰。放行後對方下次開網站（最多一分鐘）就進得去。
  * 後端端點還沒上線時顯示讀取錯誤，不影響上面的儀表板。
  */
-function WaitlistPanel({ token }: { token: string }): ReactNode {
-  const [filter, setFilter] = useState<'waiting' | 'approved' | 'revoked' | 'all'>('waiting');
-  const [busy, setBusy] = useState<string | null>(null);
-  const list = useQuery({
+export type WaitlistFilter = 'waiting' | 'approved' | 'revoked' | 'all';
+
+/**
+ * 營運名單的分頁查詢（#95 最後複審第 5 項）：後端一頁最多 100 筆，接著用 `nextCursor` 往下載（Load more）。
+ * 篩選是 queryKey 的一部分：換篩選就是另一份從第一頁開始的清單。
+ */
+export function operatorWaitlistQuery(token: string, filter: WaitlistFilter) {
+  return infiniteQueryOptions({
     queryKey: ['operator-waitlist', token, filter],
-    queryFn: () => getOperatorWaitlist(token, filter),
+    queryFn: ({ pageParam }) => getOperatorWaitlist(token, filter, pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (page) => page.nextCursor ?? null,
     refetchInterval: 30_000,
     retry: false,
   });
+}
+
+function WaitlistPanel({ token }: { token: string }): ReactNode {
+  const [filter, setFilter] = useState<WaitlistFilter>('waiting');
+  const [busy, setBusy] = useState<string | null>(null);
+  const list = useInfiniteQuery(operatorWaitlistQuery(token, filter));
+  const entries = list.data?.pages.flatMap((page) => page.items) ?? [];
   async function act(id: string, handle: string, action: 'approve' | 'revoke'): Promise<void> {
     setBusy(id);
     try {
@@ -602,9 +625,10 @@ function WaitlistPanel({ token }: { token: string }): ReactNode {
           <p className="muted" role="status">This account is not on the operator list, so it can’t see or approve the waitlist.</p>
         ) : list.error !== null && list.error !== undefined ? (
           <ErrorNote error={list.error} />
-        ) : (list.data?.items ?? []).length === 0 && !list.isFetching ? (
+        ) : entries.length === 0 && !list.isFetching ? (
           <p className="muted">No one here yet.</p>
         ) : (
+          <>
           <Table>
             <TableHeader>
               <TableRow>
@@ -615,7 +639,7 @@ function WaitlistPanel({ token }: { token: string }): ReactNode {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(list.data?.items ?? []).map((entry) => (
+              {entries.map((entry) => (
                 <TableRow key={entry.id}>
                   <TableCell>
                     <a href={`https://x.com/${entry.xHandle}`} target="_blank" rel="noopener noreferrer">@{entry.xHandle}</a>
@@ -633,6 +657,12 @@ function WaitlistPanel({ token }: { token: string }): ReactNode {
               ))}
             </TableBody>
           </Table>
+          {list.hasNextPage && (
+            <Button variant="outline" size="sm" style={{ marginTop: 10 }} disabled={list.isFetchingNextPage} onClick={() => void list.fetchNextPage()}>
+              {list.isFetchingNextPage ? 'Loading…' : 'Load more'}
+            </Button>
+          )}
+          </>
         )}
       </div>
     </div>

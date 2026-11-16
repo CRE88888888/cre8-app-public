@@ -5,6 +5,8 @@ dist/
 .env.*
 !.env.example
 !.env.production
+# 主網建置（bun run build:mainnet）：公開設定，與 .env.production 一樣進版控。
+!.env.mainnet
 
 # bun 的預設快取目錄在這個環境不可寫，shadcn CLI 需要一個可寫的快取
 .bun-cache/

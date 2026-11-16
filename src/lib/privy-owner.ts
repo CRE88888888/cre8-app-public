@@ -311,6 +311,10 @@ export function explainPrivyLoginFailure(error: unknown): PrivyLoginFailure {
         preview: true,
       };
     }
+    // waitlist 閘門（backend#134）：還沒放行。不是錯誤，畫面由 waitlist 閘門接手；這裡只說明、不給技術細節或重試。
+    if (error.status === 403 && error.code === 'WAITLIST_PENDING') {
+      return { message: 'Your spot on the waitlist isn’t open yet. You can sign in once it is.', action: 'none', technical: '' };
+    }
     const technical = `${error.status === 0 ? 'NETWORK' : `${error.status} · ${error.code}`}\n${error.message}`;
     if (error.code === 'PRIVY_NO_WALLET') {
       return { message: 'Your wallet is still being set up. Try again in a moment.', action: 'retry', technical };

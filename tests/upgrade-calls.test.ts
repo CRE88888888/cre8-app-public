@@ -20,7 +20,7 @@ const SOL = "0x570A5D26f7765Ecb712C0924E4De545B89fD43dF" as Address;
 const v1 = [{ asset: USDT, weightBps: 1000 }, { asset: BTCB, weightBps: 4500 }, { asset: WBNB, weightBps: 4500 }];
 const v2 = [{ asset: USDT, weightBps: 1000 }, { asset: BTCB, weightBps: 3000 }, { asset: WBNB, weightBps: 3000 }, { asset: ETH, weightBps: 3000 }];
 const plan = (current: typeof v1, latest: typeof v1) =>
-  upgradeCalls({ registry: REGISTRY, executor: EXECUTOR, account: ACCOUNT, strategyOnchainId: 1n, current, latest });
+  upgradeCalls({ registry: REGISTRY, executor: EXECUTOR, account: ACCOUNT, strategyOnchainId: 1n, expectedVersion: 2, current, latest, p11: true });
 
 test("a version that adds an asset: enroll plus one max approval to the executor, in one batch", () => {
   const { calls, newAssets } = plan(v1, v2);
@@ -28,11 +28,13 @@ test("a version that adds an asset: enroll plus one max approval to the executor
   expect(calls.length).toBe(2);
 
   // 第一筆：registry.enroll(account, 1)
-  expect(calls[0]).toEqual({ to: REGISTRY, data: enrollCalldata(ACCOUNT, 1n), value: 0n });
+  expect(calls[0]).toEqual({ to: REGISTRY, data: enrollCalldata(ACCOUNT, 1n, 2, true), value: 0n });
   const enroll = decodeFunctionData({ abi: REGISTRY_ABI, data: calls[0]!.data });
   expect(enroll.functionName).toBe("enroll");
   expect((enroll.args?.[0] as string).toLowerCase()).toBe(ACCOUNT.toLowerCase());
   expect(enroll.args?.[1]).toBe(1n);
+  // P11：帶上要接受的版本（目前最新已生效版）。
+  expect(enroll.args?.[2]).toBe(2);
 
   // 第二筆：ETH.approve(executor, max)
   expect(calls[1]!.to).toBe(ETH);
@@ -48,7 +50,7 @@ test("a version that adds an asset: enroll plus one max approval to the executor
 test("a version with no new asset: the only call is enroll", () => {
   // 只改權重。
   const reweighted = [{ asset: USDT, weightBps: 2000 }, { asset: BTCB, weightBps: 4000 }, { asset: WBNB, weightBps: 4000 }];
-  expect(plan(v1, reweighted)).toEqual({ calls: [{ to: REGISTRY, data: enrollCalldata(ACCOUNT, 1n), value: 0n }], newAssets: [] });
+  expect(plan(v1, reweighted)).toEqual({ calls: [{ to: REGISTRY, data: enrollCalldata(ACCOUNT, 1n, 2, true), value: 0n }], newAssets: [] });
   // 只移除資產。
   const removed = [{ asset: USDT, weightBps: 1000 }, { asset: BTCB, weightBps: 9000 }];
   expect(plan(v1, removed).calls.length).toBe(1);

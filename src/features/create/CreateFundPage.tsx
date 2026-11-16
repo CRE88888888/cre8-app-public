@@ -19,13 +19,20 @@ import { ErrorNote, Note, Spinner } from '../../components/ui';
 import { AssetLogo } from '../../components/AssetLogo';
 import { assetBySymbol } from '../../lib/public-funds';
 import { EXECUTION_COPY, REBALANCE_COPY, executionConfirm, minimumDeposit, percentToBps, quantizePercent, stackWords, typedVersionBody, zeroBpsAssets, type AssetExecution, type ExecutionKind } from '../../lib/fund-execution';
+import { PUBLISH_RULES, opensAtFrom, whenText } from '../../lib/fund-versions';
 import { sendInBatches } from '../../lib/approval-batches';
 import { featureLock } from '../../lib/feature-flags';
 import { FeatureBadge } from '../../components/FeatureLock';
+import { YieldTag } from '../../components/YieldTag';
+import { useYieldMarkets } from '../../lib/use-yield-markets';
+import { yieldListBlock } from '../../lib/yield';
+import type { YieldMarket } from '../../lib/yield';
 
 /** 主網 USDT。後端的資產清單會回報這條鏈真正的計價幣（`isNumeraire`），拿不到時才用這個。 */
 const MAINNET_USDT = '0x55d398326f99059ff775485246999027b3197955';
 const HOLD: AssetExecution = { kind: 'hold' };
+/** P11 版本通知期的合約（cre8-contracts#54）只在有地址簿 registry 的鏈（97）上；chain 56 不動。 */
+const VERSION_NOTICE_CHAIN = CHAIN.contracts?.registry !== undefined;
 
 type Step =
   | 'idle'
@@ -106,7 +113,8 @@ export function ActivateFundPage(): ReactNode {
    */
   const inFlight = useRef(false);
   const [error, setError] = useState<unknown>(null);
-  const [created, setCreated] = useState<{ strategyId: number; portfolioId: number } | null>(null);
+  /** `portfolioId === null`：P11 鏈上只發了版本，24 小時後才生效、那時才能加入（`opensAt` 是 unix 秒）。 */
+  const [created, setCreated] = useState<{ strategyId: number; portfolioId: number | null; opensAt?: number } | null>(null);
   const [approval, setApproval] = useState<{ tx: string | null; error: unknown } | null>(null);
 
   const assets = useQuery({
@@ -130,9 +138,21 @@ export function ActivateFundPage(): ReactNode {
   const rebalance = draft?.rebalance ?? 'none';
   /** 換成 bps 是 0 的資產（例如 0.001%）：後端會拒絕，建立策略之前先擋（cre8-app#93）。 */
   const tooSmall = zeroBpsAssets(selected, usdt);
+  /** 生息（APP-3）：設計器逐資產選的市場。這條鏈的清單裡找不到、或不是這個資產的市場，就擋住、請回設計器重選。 */
+  const yieldQuery = useYieldMarkets();
+  const yieldList = yieldQuery.isError ? undefined : yieldQuery.data;
+  // 草稿有生息選擇時，市場清單要先成功讀到才能建立；讀取中或失敗都擋住（審查第 6 項）。
+  const yieldBlock = yieldListBlock(Object.keys(draft?.yields ?? {}).length, yieldQuery);
+  const marketOf = (address: string): YieldMarket | null | undefined => {
+    const pick = draft?.yields[address.toLowerCase()];
+    if (pick === undefined) return undefined;
+    return yieldList?.markets.find((market) => market.id === pick && market.asset === address.toLowerCase() && market.supplyOpen) ?? null;
+  };
+  const staleYield = yieldList === undefined ? [] : selected.filter(([address]) => marketOf(address) === null).map(([address]) => symbolFor(address));
+  const lent = selected.map(([address]) => marketOf(address)).filter((market): market is YieldMarket => market !== undefined && market !== null);
   const valid = name.trim().length > 0 && totalBps === 10_000 && unavailableAssets.length===0 && tooSmall.length === 0 && (draft===null||allocationAgreed)
-    && draftProblem === null && kindAgreed;
-  const idleLock = featureLock('idleYield');
+    && draftProblem === null && yieldBlock === null && staleYield.length === 0 && kindAgreed;
+  const idleLock = yieldList === null || yieldList === undefined ? featureLock('idleYield') : null;
   const busy = step !== 'idle' && step !== 'done';
 
   const toggle = (asset: PriceableAsset): void => {
@@ -161,6 +181,7 @@ export function ActivateFundPage(): ReactNode {
           address,
           weightBps: percentToBps(percent),
           ...(address.toLowerCase() === usdt ? {} : { execution: executionOf(address) }),
+          ...(marketOf(address) ? { yield: (marketOf(address) as YieldMarket).id } : {}),
         })),
         changeLog: 'created from the app',
       });
@@ -177,7 +198,17 @@ export function ActivateFundPage(): ReactNode {
       }
 
       setStep('publishing-version');
-      await publishVersion(token, strategy.id, version);
+      const published = await publishVersion(token, strategy.id, version);
+
+      // P11（cre8-contracts#54）：第一版也要等 24 小時才生效，生效前不能加入。發完就停，
+      // 到時候在基金頁第一次買入（會先請你簽同意）。chain 56 還是舊合約，照舊往下建帳戶。
+      if (VERSION_NOTICE_CHAIN) {
+        createdStrategy.current = null;
+        // 開放時間用發版回應的 activeAt，不自己算（審查 #95 第 12 項）；讀不到就不寫時間。
+        setCreated({ strategyId: strategy.id, portfolioId: null, opensAt: opensAtFrom(published.activeAt) });
+        setStep('done');
+        return;
+      }
 
       setStep('enrolling');
       const portfolio = await enrollPortfolio(token, strategy.id);
@@ -317,6 +348,12 @@ export function ActivateFundPage(): ReactNode {
             ? 'Remove the assets that are not available'
             : draftProblem !== null
               ? 'Change your design first'
+              : yieldBlock === 'loading'
+                ? 'Loading lending markets…'
+              : yieldBlock === 'error'
+                ? 'Lending markets could not be loaded. Retry below'
+              : staleYield.length > 0
+                ? `Pick another lending market for ${staleYield.join(', ')} in the designer`
               : draft !== null && !allocationAgreed
                 ? 'Confirm the allocation from your design'
                 : !kindAgreed
@@ -493,14 +530,41 @@ export function ActivateFundPage(): ReactNode {
               <ul className="cf-summary-list" role="list" aria-label="How each asset is bought">
                 {invested.map(([address]) => {
                   const execution = executionOf(address);
+                  const market = marketOf(address);
                   return (
                     <li key={address}>
                       <span>{symbolFor(address)}</span>
-                      <b>{draftProblem !== null ? '—' : execution.kind === 'stack' ? `${EXECUTION_COPY.stack.name} · ${stackWords(execution)}` : EXECUTION_COPY.hold.name}</b>
+                      <b>
+                        {draftProblem !== null ? '—' : execution.kind === 'stack' ? `${EXECUTION_COPY.stack.name} · ${stackWords(execution)}` : EXECUTION_COPY.hold.name}
+                        {market ? <> · lent on <YieldTag market={market} /></> : null}
+                      </b>
                     </li>
                   );
                 })}
+                {(() => {
+                  const cash = selected.find(([address]) => address.toLowerCase() === usdt);
+                  const market = cash === undefined ? undefined : marketOf(cash[0]);
+                  return market ? <li key="cash"><span>USDT</span><b>Cash · lent on <YieldTag market={market} /></b></li> : null;
+                })()}
               </ul>
+            )}
+            {yieldBlock === 'error' && (
+              <Note tone="warn">
+                The lending markets picked in your design could not be loaded, so the fund cannot be created yet.{' '}
+                <button type="button" className="btn ghost sm" onClick={() => void yieldQuery.refetch()}>Retry</button>
+              </Note>
+            )}
+            {yieldBlock === 'loading' && <p className="fine muted">Loading lending markets…</p>}
+            {staleYield.length > 0 && (
+              <Note tone="warn">
+                The lending market picked for {staleYield.join(', ')} is not open on this chain. Pick another one (or none) in the <Link to="/create">designer</Link>.
+              </Note>
+            )}
+            {lent.length > 0 && (
+              <p className="cf-help">
+                Lending: each holder decides whether their share is lent; until they agree, it stays held as the token.
+                The rate is not guaranteed, and a market can pause withdrawals or run short of cash, so part of a position can take time to come back.
+              </p>
             )}
             <p className="cf-help">
               {draftProblem !== null
@@ -515,6 +579,13 @@ export function ActivateFundPage(): ReactNode {
               </p>
             )}
             {CHAIN.testnet && <p className="cf-help">Testnet: the USDT, the assets and their prices are simulated.</p>}
+            {VERSION_NOTICE_CHAIN && (
+              <ul className="cf-help" data-entry="publish-rules" style={{ paddingLeft: 18 }}>
+                <li>{PUBLISH_RULES.delay}</li>
+                <li>{PUBLISH_RULES.interval}</li>
+                <li>{PUBLISH_RULES.feeCut}</li>
+              </ul>
+            )}
             {draftProblem === null && (
               <label className="cf-confirm">
                 <input type="checkbox" checked={kindAgreed} onChange={(event) => setKindAgreed(event.target.checked)} />
@@ -551,8 +622,8 @@ export function ActivateFundPage(): ReactNode {
               <dd>{draftProblem !== null ? '—' : REBALANCE_COPY[rebalance].name}</dd>
               <dt>Minimum deposit</dt>
               <dd>{selected.length === 0 ? '—' : `${minimumDeposit(selected.map(([address, percent]) => ({ address, weightBps: Math.round(percent * 100) })), usdt)} USDT`}</dd>
-              <dt>Earn on idle USDT</dt>
-              <dd>Off</dd>
+              <dt>Lending</dt>
+              <dd>{lent.length === 0 ? 'Off' : `${lent.length} asset${lent.length === 1 ? '' : 's'}`}</dd>
             </dl>
 
             {step !== 'idle' && step !== 'done' ? (
@@ -585,11 +656,23 @@ export function ActivateFundPage(): ReactNode {
 
             {created === null ? null : (
               <Note>
-                <strong>Created</strong>
+                <strong>{created.portfolioId === null ? 'Published' : 'Created'}</strong>
                 <div style={{ marginTop: 6 }}>
-                  Strategy #{created.strategyId} · portfolio #{created.portfolioId}
+                  Strategy #{created.strategyId}{created.portfolioId === null ? '' : ` · portfolio #${created.portfolioId}`}
                 </div>
-                {approval === null ? null : approval.error !== null ? (
+                {/* 首發版本不能取消（backend#126 canCancel=false），不寫取消的承諾（審查 #95 第 11 項）。 */}
+                {created.portfolioId === null && (
+                  <p style={{ margin: '8px 0 0', fontSize: 13 }} data-entry="opens-at">
+                    {created.opensAt !== undefined
+                      ? `Your fund opens for buying on ${whenText(created.opensAt)}.`
+                      : 'Your fund opens for buying once its first version takes effect, at least 24 hours from now.'}
+                  </p>
+                )}
+                {created.portfolioId === null ? (
+                  <div className="row" style={{ marginTop: 10 }}>
+                    <Link className="btn btn--sm" to={`/funds/strategy/${created.strategyId}`}>Open the fund page</Link>
+                  </div>
+                ) : approval === null ? null : approval.error !== null ? (
                   <div style={{ marginTop: 8 }}>
                     <Note tone="warn">
                       Fund created, but the approval did not go through. The account cannot rebalance until it is
@@ -603,7 +686,7 @@ export function ActivateFundPage(): ReactNode {
                     <span className="mono">({approval.tx?.slice(0, 12)}…)</span>
                   </div>
                 )}
-                <div className="row" style={{ marginTop: 10 }}>
+                {created.portfolioId !== null && <div className="row" style={{ marginTop: 10 }}>
                   <button
                     type="button"
                     className="btn btn--sm"
@@ -614,7 +697,7 @@ export function ActivateFundPage(): ReactNode {
                   <Link className="btn btn--sm btn--ghost" to="/portfolios">
                     Open the portfolio
                   </Link>
-                </div>
+                </div>}
               </Note>
             )}
           </section>

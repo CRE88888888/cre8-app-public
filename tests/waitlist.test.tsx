@@ -100,7 +100,7 @@ test("the whole app sits behind the gate, except the operator console", () => {
   // App 本身不訂閱登入狀態（會讓 PrivyRoot 重繪成無限迴圈）。
   expect(app).not.toMatch(/useWaitlistGate|usePrivyAuth/);
   const gate = fs.readFileSync("src/features/waitlist/WaitlistScreen.tsx", "utf8");
-  expect(gate).toContain("if (!WAITLIST_LOCKED || isUngatedPath(window.location.pathname)) return children;");
+  expect(gate).toContain("if (!WAITLIST_LOCKED || isUngatedPath(pathname)) return children;");
   expect(gate).toContain("if (view === 'approved') return isLandingHost(window.location.hostname) ? null : children;");
 });
 

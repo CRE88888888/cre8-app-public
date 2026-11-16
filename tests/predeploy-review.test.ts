@@ -351,10 +351,10 @@ test("L8: CI runs the unit tests a second time with VITE_CHAIN_ID=97", () => {
 
 // ---- N1 設計規格 ----
 
-test("N1: DESIGN.md describes per-asset settings, 2–52 buys and the open rebalance options", () => {
+test("N1: DESIGN.md describes per-asset settings, up to a year of buys and the open rebalance options", () => {
   const design = read("DESIGN.md");
   expect(design).not.toContain("一檔基金一種，Buy & hold 或 Stack，全部資產共用");
   expect(design).toContain("**每個資產各自**選 Buy & hold 或 Stack");
-  expect(design).toContain("2–52 期");
+  expect(design).toContain("每天 2–365 期、每週 2–52 期");
   expect(design).toContain("偏離目標超過 5 點");
 });

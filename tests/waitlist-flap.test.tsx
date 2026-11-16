@@ -64,12 +64,14 @@ test("invite codes stay hidden until the backend is ready", () => {
 });
 
 test("codes are tidied, kept for one round trip through X sign-in, then used once", () => {
-  expect(normalizeInviteCode("  cre8-abcd ")).toBe("CRE8-ABCD");
-  for (const bad of ["", "ab", "has space", "x".repeat(33), "emoji🙂"]) expect(normalizeInviteCode(bad)).toBeNull();
+  // backend#132：8–10 個英數字，不含 0、1、I、L、O；去空白、轉大寫。
+  expect(normalizeInviteCode("  abcdefgh23 ")).toBe("ABCDEFGH23");
+  expect(normalizeInviteCode("ABCDEFGH")).toBe("ABCDEFGH");
+  for (const bad of ["", "ABCDEFG", "ABCDEFGH234", "ABCDEFGH20", "ABCDEFGH21", "ABCDEFGHI2", "ABCDEFGHL2", "ABCDEFGHO2", "ABCD-EFGH2", "ABCD EFGH2", "emoji🙂abcd"]) expect(normalizeInviteCode(bad)).toBeNull();
   const store = new Map<string, string>();
   const storage = { setItem: (k: string, v: string) => void store.set(k, v), getItem: (k: string) => store.get(k) ?? null, removeItem: (k: string) => void store.delete(k) };
-  savePendingInvite("CRE8-ABCD", storage);
-  expect(takePendingInvite(storage)).toBe("CRE8-ABCD");
+  savePendingInvite("ABCDEFGH23", storage);
+  expect(takePendingInvite(storage)).toBe("ABCDEFGH23");
   expect(takePendingInvite(storage)).toBeNull();
 });
 
@@ -82,7 +84,7 @@ test("a code is tried first; a bad code falls back to the normal waitlist and sa
   expect(calls).toEqual(["redeem GOOD"]);
   calls.length = 0;
   // backend#131 的四種「碼不能用」：改走排隊；只有碼真的不能用時才提示（已放行的人不提示）。
-  for (const [status, code] of [[404, "INVITE_INVALID"], [409, "INVITE_USED"], [410, "INVITE_EXPIRED"]] as const) {
+  for (const [status, code] of [[404, "INVITE_INVALID"], [409, "INVITE_USED"], [410, "INVITE_EXPIRED"], [409, "INVALID_WAITLIST_TRANSITION"]] as const) {
     calls.length = 0;
     const bad = await joinWaitlist("t", "USED", { join, redeem: async () => { throw new ApiError(status, code, "x"); } });
     expect(bad).toEqual({ record: { status: "waiting", xHandle: "alice", joinedAt: "2026-11-16T00:00:00Z" }, inviteFailed: true });

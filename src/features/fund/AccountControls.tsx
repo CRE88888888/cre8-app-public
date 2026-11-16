@@ -16,12 +16,13 @@ import {
   PLATFORM_PAUSED_MESSAGE,
 } from '../../lib/a10';
 import type { PauseSource } from '../../lib/a10';
-import { readOnchainAccount, setPausedCalldata, upgradeCalls } from '../../lib/atp-contracts';
+import { P11_REGISTRY, readOnchainAccount, setPausedCalldata, upgradeCalls } from '../../lib/atp-contracts';
 import type { AccountCall, OnchainAccount, OnchainAllocation } from '../../lib/atp-contracts';
 import { publicClientFor, sendSudoCalls } from '../../lib/kernel';
 import { upgradeBatches } from '../../lib/approval-batches';
 import type { RenewalWallet } from '../../lib/kernel';
 import type { AccountOnchain } from './use-account-onchain';
+import type { YieldPermission } from '../../lib/yield';
 
 /**
  * My position 裡的兩個 A10 區塊（cre8-app#29）：
@@ -50,6 +51,9 @@ export function AccountControls({
   usdtDecimals,
   usdtSymbol,
   onChanged,
+  yieldPermission = null,
+  onUpdatePermission,
+  updatingPermission = false,
 }: {
   wallet: RenewalWallet | null;
   token: string | null;
@@ -67,6 +71,14 @@ export function AccountControls({
   usdtSymbol: string;
   /** 送出成功後呼叫：重讀鏈上狀態與後端 status。 */
   onChanged: () => Promise<void>;
+  /**
+   * 生息權限（APP-3）：舊 session 沒有存領 selector，要 owner 重新授權（換一把含新 selector 的 session key）。
+   * 入口放在這裡（與升版同一處，C3 決定）。null = 這個帳戶沒有生息。
+   */
+  yieldPermission?: YieldPermission | null;
+  /** 重新授權：與 Status 的續期同一條（`GET renewal-params` → owner 簽 → `POST renewal-result`）。 */
+  onUpdatePermission?: () => Promise<void>;
+  updatingPermission?: boolean;
 }): ReactNode {
   const [busy, setBusy] = useState<'upgrade' | 'pause' | 'resume' | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -122,6 +134,7 @@ export function AccountControls({
           executor: executor as Address,
           account: account as Address,
           strategyOnchainId: fresh.strategyId,
+          expectedVersion: fresh.latestVersion,
           current: fresh.current,
           latest: fresh.latest,
         });
@@ -176,8 +189,28 @@ export function AccountControls({
         <div className="panel-h">
           <h3>On-chain enrollment</h3>
           {upgradeTo !== null && <Badge tone="warn">Update available</Badge>}
+          {yieldPermission === 'needs_update' && <Badge tone="warn">Permission update needed</Badge>}
         </div>
         <div className="panel-b">
+          {yieldPermission === 'needs_update' && (
+            <div style={{ marginBottom: 12 }}>
+              <Note tone="warn">
+                This account&apos;s trading permission was set up before lending existed, so it cannot lend or withdraw
+                from a lending market for you. Updating it replaces the permission with one that can; the account and
+                its address stay the same.
+              </Note>
+              <button
+                type="button"
+                className="btn sm"
+                style={{ marginTop: 8 }}
+                disabled={wallet === null || token === null || onUpdatePermission === undefined || updatingPermission || busy !== null}
+                onClick={() => void onUpdatePermission?.()}
+              >
+                {updatingPermission ? 'Updating…' : 'Update permission'}
+              </button>
+              <p className="fine" style={{ marginTop: 6 }}>One wallet signature. Nothing is lent until you also tick it under Lending.</p>
+            </div>
+          )}
           {onchain === undefined ? (
             <p className="fine">{wallet === null ? 'Connect your wallet to read this account from the chain.' : loading ? 'Reading the chain…' : 'Not read yet.'}</p>
           ) : state === null ? (
@@ -194,24 +227,37 @@ export function AccountControls({
                 <dd className="mono">registry #{state.strategyId.toString()}</dd>
                 <dt>version</dt>
                 <dd>
-                  v{state.version}
-                  {upgradeTo === null ? ' (latest)' : ` — v${upgradeTo} is available`}
+                  {upgradeTo === null
+                    ? `v${state.version} (latest)`
+                    : P11_REGISTRY
+                      ? `You joined on v${state.version} · v${upgradeTo} is in effect`
+                      : `v${state.version} — v${upgradeTo} is available`}
                 </dd>
-                <dt>assets</dt>
+                <dt>{P11_REGISTRY && upgradeTo !== null ? 'assets when you joined' : 'assets'}</dt>
                 <dd>{allocationLine(state.current)}</dd>
               </dl>
               {upgradeTo !== null && (
                 <div style={{ marginTop: 12 }}>
-                  <Note tone="warn">
-                    The creator published version {upgradeTo}. Your account stays on version {state.version} until you
-                    choose to update — nobody can switch it for you.
-                  </Note>
+                  {/* P11（chain 97）：新版生效後，這個投組（建在加入時那一版）暫停買入，等轉版功能（審查 #95 第二輪 #9；
+                      backend 對舊版投組回 PINNED_VERSION_CHANGED）。不承諾重新授權會恢復買入。chain 56 是舊合約，照舊。 */}
+                  {P11_REGISTRY ? (
+                    <Note tone="warn">
+                      Version {upgradeTo} is now in effect. This portfolio was set up on version {state.version}, so new
+                      buys into it are paused until portfolios can move to the new version (opening within a week). You
+                      can still sell, or take your assets out as they are, at any time.
+                    </Note>
+                  ) : (
+                    <Note tone="warn">
+                      The creator published version {upgradeTo}. Your account stays on version {state.version} until you
+                      choose to update — nobody can switch it for you.
+                    </Note>
+                  )}
                   <table className="dk-table" style={{ marginTop: 10 }}>
                     <thead>
                       <tr>
                         <th>Asset</th>
-                        <th className="num">Now (v{state.version})</th>
-                        <th className="num">New (v{upgradeTo})</th>
+                        <th className="num">{P11_REGISTRY ? `When you joined (v${state.version})` : `Now (v${state.version})`}</th>
+                        <th className="num">{P11_REGISTRY ? `In effect (v${upgradeTo})` : `New (v${upgradeTo})`}</th>
                         <th>Change</th>
                       </tr>
                     </thead>
@@ -231,6 +277,9 @@ export function AccountControls({
                       ))}
                     </tbody>
                   </table>
+                  {/* P11：重新 enroll 不會更新原投組或恢復買入，不提供這顆按鈕。 */}
+                  {!P11_REGISTRY && (
+                    <>
                   <button type="button" className="btn sm" style={{ marginTop: 10 }} disabled={!canSign || busy !== null} onClick={() => void send('upgrade')}>
                     {busy === 'upgrade' ? 'Updating…' : `Update to version ${upgradeTo}`}
                   </button>
@@ -238,6 +287,8 @@ export function AccountControls({
                     {upgradeSummary(addedSymbols)}
                     {paused ? ' Updating also turns trading back on for this account.' : ''}
                   </p>
+                    </>
+                  )}
                 </div>
               )}
             </>

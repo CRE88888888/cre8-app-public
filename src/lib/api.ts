@@ -8,7 +8,12 @@
  * 一律走相對路徑 `/api`（dev 由 vite proxy 轉到 127.0.0.1:8081）。同源就沒有 CORS 與 preflight。
  */
 
+import { checkYieldBook, parseYieldMarkets } from './yield';
+import { yieldBookFor } from './yield-book';
+import type { YieldMarketList } from './yield';
+import { MOCK_MARKETS_97, YIELD_MOCK } from './yield-mock';
 import type { TypedVersionBody } from './fund-execution';
+import { WAITLIST_PENDING, signalWaitlistPending } from './waitlist-signal';
 import type { PackedSponsorOperation, SponsorResponse } from './paymaster';
 
 const BASE: string = import.meta.env.VITE_API_BASE ?? '/api';
@@ -136,6 +141,11 @@ export type PortfolioStatus = {
    */
   pauseFlags?: number | null;
   pauseSources?: ('safe' | 'operator' | 'account')[] | null;
+  /**
+   * P11（backend#126）：這個投組加入時的版本與目前生效版本不同，等轉版前暫停買入；沒暫停是 null 或沒有這個欄位。
+   * 讀之前用 `parseBuyingPaused` 檢查形狀。不影響 complete、估值、持倉或退出。
+   */
+  buyingPaused?: unknown;
 };
 
 /** 續期：後端用 master seed 派生好的那把新 key（含要在鏈上執行的 install calldata）。 */
@@ -175,6 +185,11 @@ type RequestInitLite = {
 };
 
 async function request<T>(path: string, init: RequestInitLite = {}): Promise<T> {
+  return (await requestWithStatus<T>(path, init)).body;
+}
+
+/** 同 `request`，另外回 HTTP 狀態（202 這類「成功但還沒好」要分開處理時用）。 */
+async function requestWithStatus<T>(path: string, init: RequestInitLite = {}): Promise<{ status: number; body: T }> {
   const headers: Record<string, string> = {};
   if (init.body !== undefined) headers['content-type'] = 'application/json';
   if (init.token) headers.authorization = `Bearer ${init.token}`;
@@ -211,10 +226,12 @@ async function request<T>(path: string, init: RequestInitLite = {}): Promise<T> 
         : typeof parsed === 'string' && parsed.length > 0
           ? parsed
           : response.statusText;
+    // waitlist 閘門擋下（backend#134）：通知 WaitlistGate 清 session、重新問名單，畫面回到 waitlist。
+    if (response.status === 403 && code === WAITLIST_PENDING) signalWaitlistPending();
     throw new ApiError(response.status, code, message);
   }
 
-  return parsed as T;
+  return { status: response.status, body: parsed as T };
 }
 
 /** 取得 SIWE challenge（不花錢、不需要認證）。 */
@@ -425,8 +442,54 @@ export type PublishedVersion = {
   /** 放進鏈上 `Version.scheduleHash` 的設定雜湊；舊列是 null。 */
   configHash?: string | null;
   idleYield?: { enabled: boolean };
+  /** 這一版生效的時間（ISO）。P11 是發版時決定的（後端預設＋24h＋60 秒，重試沿用原值）。 */
+  activeAt?: string | null;
   [key: string]: unknown;
 };
+
+/** `POST /strategies/preview-contribution` 的回應（backend#123）。raw 都是 18 decimals 的十進位字串。 */
+export type ContributionPreview = {
+  minimumRaw: string;
+  /** 每個非現金資產（地址）這筆投入實際分幾期；純現金是空的。 */
+  effectiveSlices: Record<string, number>;
+  /** 前三個合併時點與最後一個（UTC ISO）。 */
+  slots: { at: string; budgetRaw: string }[];
+};
+
+/** 預覽的本文：execution 與發布版本同 schema（含完整 cash 項）；amountRaw 是 uint256 十進位字串。 */
+export type ContributionPreviewBody = { chainId: number; execution: TypedVersionBody['execution'] | Record<string, unknown>; amountRaw: string };
+
+/**
+ * 入金期數預覽（不需登入、不讀寫 DB）。目前後端只收 chain 97 的 schema 2；其他鏈由呼叫端擋（lib/contribution-preview.ts）。
+ * 錯誤：422 BELOW_MINIMUM_ALLOCATION／PREVIEW_AMOUNT_TOO_LARGE／BELOW_MIN_BATCH、400 格式、429 RATE_LIMITED、
+ * 503 PREVIEW_TIMEOUT／PREVIEW_UNAVAILABLE／MIN_FEE_UNAVAILABLE。
+ */
+export function postPreviewContribution(body: ContributionPreviewBody, signal?: AbortSignal): Promise<unknown> {
+  return request<unknown>('/strategies/preview-contribution', { method: 'POST', body, ...(signal === undefined ? {} : { signal }) });
+}
+
+/**
+ * 取消這檔策略尚未生效的新版本（P11，cre8-contracts#54 `cancelVersion`）。鏈上的 provider 是平台 operator，
+ * 所以由後端代送；只有建立者能叫。路徑照 backend#124 暫定，定案後只改這裡。
+ * 生效前才能取消；取消不重設 7 天發版間隔。
+ */
+export function cancelPendingVersion(token: string, strategyId: number): Promise<{ ok: true; [key: string]: unknown }> {
+  return request(`/strategies/${strategyId}/versions/cancel`, { method: 'POST', token, body: {} });
+}
+
+/**
+ * P11 首次加入（chain 97，backend#126）第一步：後端由 operator 先部署帳戶（地址不變、owner 仍是使用者），
+ * 回帳戶地址、預期版本等。還沒部署好回 202，要重試同一個請求（`lib/first-enroll.ts` 的 `waitForPreparation`）。
+ * 欄位以 backend#126 為準；這裡只讀前端用得到的。
+ */
+export function prepareEnrollment(token: string, strategyId: number): Promise<{ status: number; body: unknown }> {
+  return requestWithStatus<unknown>('/portfolios/enrollment-params', { method: 'POST', token, body: { strategyId } });
+}
+
+/** P11 首次加入最後一步：本人的 enroll UserOp 上鏈後，請後端讀鏈上 enrollments 確認並建立投組。 */
+export function confirmEnrollment(token: string, strategyId: number): Promise<Portfolio> {
+  return request<Portfolio>('/portfolios/enrollment-confirm', { method: 'POST', token, body: { strategyId } });
+}
 
 /** 把策略 enroll 成一個投組（會部署 smart account、上鏈）。 */
 export function enrollPortfolio(token: string, strategyId: number): Promise<Portfolio> {
@@ -439,6 +502,44 @@ export function enrollPortfolio(token: string, strategyId: number): Promise<Port
  */
 export function getPortfolioExecution(token: string, id: number): Promise<{ automation?: 'enabled' | 'testnet_only' | string; [key: string]: unknown }> {
   return request(`/portfolios/${id}/execution`, { token });
+}
+
+/**
+ * 生息（APP-3）。BE-3／BE-4 還沒開出來，路徑與欄位照 C3 在 backend#84 的留言暫定，後端定案後只改這裡與 `lib/yield.ts` 的 parse。
+ *
+ * - `GET /yield/markets?chainId=`（公開，不用登入：設計器不用登入）→ `{ chainId, registry, markets[] }`
+ * - 每資產生息狀態在 `GET /portfolios/:id/execution` 的 `yield`（見 `parsePortfolioYield`）
+ * - `POST /portfolios/:id/yield/consent`、`/yield/exit`：owner 在鏈上簽完之後告訴後端（帶 txHash），後端據此排存入／領回。
+ *
+ * 後端還沒有這些端點時回 404：市場清單當成「這條鏈沒有生息」，畫面維持「Coming soon」。
+ */
+export async function getYieldMarkets(chainId: number, signal?: AbortSignal): Promise<YieldMarketList | null> {
+  // 只有 chain 97 有生息（審查第 2 項）：其他鏈不發請求；回應也要是這條鏈、而且整份對得上地址簿（第 1 項）。
+  const book = yieldBookFor(chainId);
+  if (book === null) return null;
+  if (YIELD_MOCK) return checkYieldBook(MOCK_MARKETS_97, book);
+  let body: unknown;
+  try {
+    body = await request<unknown>(`/yield/markets?chainId=${chainId}`, signal === undefined ? {} : { signal });
+  } catch (cause) {
+    if (cause instanceof ApiError && cause.status === 404) return null;
+    throw cause;
+  }
+  const list = parseYieldMarkets(body);
+  return list === null ? null : checkYieldBook(list, book);
+}
+
+export function postYieldConsent(token: string, id: number, body: { markets: string[]; txHash: string }): Promise<{ ok: true }> {
+  return request(`/portfolios/${id}/yield/consent`, { method: 'POST', token, body });
+}
+
+/** 取消同意（只停新存入，不領回）：owner 先簽 `setYieldPolicy(..., false)`，再通知後端（backend#103）。 */
+export function postYieldRevoke(token: string, id: number, body: { markets: string[]; txHash: string }): Promise<{ ok: true }> {
+  return request(`/portfolios/${id}/yield/revoke`, { method: 'POST', token, body });
+}
+
+export function postYieldExit(token: string, id: number, body: { markets: string[]; txHash: string }): Promise<{ ok: true }> {
+  return request(`/portfolios/${id}/yield/exit`, { method: 'POST', token, body });
 }
 
 /** 這個端點會掃 Transfer 日誌、讀池子、定價 —— 實測 2–3 秒，不是卡住。 */
@@ -556,6 +657,47 @@ export function getOperatorWaitlist(
   return request(`/operator/waitlist?${query.toString()}`, { token });
 }
 
+/** 一批剛產生的邀請碼（backend#132）：明碼只在這一次回應出現，之後查不到。 */
+export type InviteBatch = { batchId: string; issuedTo: string | null; batchNote: string | null; expiresAt: string | null; items: { id: string; code: string }[] };
+export type InviteStatus = 'unused' | 'used' | 'revoked' | 'expired';
+/** 營運列表的一筆邀請碼（碼一律遮罩，不回明碼或雜湊）。 */
+export type InviteRow = {
+  id: string; codeMasked: string; batchId: string; batchNote: string | null; issuedTo: string | null; status: InviteStatus;
+  createdBy: string | null; createdAt: string; expiresAt: string | null; usedByWaitlistId: string | null; xHandle: string | null;
+  usedAt: string | null; revokedAt: string | null; revokedBy: string | null;
+};
+
+/** 產生一批邀請碼：count 1–500；issuedTo、batchNote 可空；expiresAt 是未來的 UTC ISO 時間或 null。 */
+export function createOperatorInvites(
+  token: string,
+  body: { count: number; issuedTo?: string | null; batchNote?: string | null; expiresAt?: string | null },
+): Promise<InviteBatch> {
+  return request('/operator/waitlist/invites', { method: 'POST', token, body });
+}
+
+/** 列出邀請碼：依狀態、批次篩，cursor 分頁（最多 100 筆一頁）。 */
+export function getOperatorInvites(
+  token: string,
+  options: { status?: InviteStatus | 'all'; batch?: string | null; cursor?: string | null; limit?: number } = {},
+): Promise<{ items: InviteRow[]; nextCursor: string | null }> {
+  const { status = 'all', batch = null, cursor = null, limit = 100 } = options;
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (status !== 'all') query.set('status', status);
+  if (batch !== null) query.set('batch', batch);
+  if (cursor !== null) query.set('cursor', cursor);
+  return request(`/operator/waitlist/invites?${query.toString()}`, { token });
+}
+
+/** 依 issuedTo 彙總：發了幾個、用掉幾個（計數是十進位字串）。 */
+export function getOperatorInviteSummary(token: string, batch: string | null = null): Promise<{ items: { issuedTo: string | null; issued: string; used: string }[] }> {
+  return request(`/operator/waitlist/invites/summary${batch === null ? '' : `?batch=${encodeURIComponent(batch)}`}`, { token });
+}
+
+/** 作廢一個還沒用掉的碼（不影響已放行的人）。 */
+export function revokeOperatorInvite(token: string, id: string): Promise<{ id: string; status: 'revoked' }> {
+  return request(`/operator/waitlist/invites/${encodeURIComponent(id)}/revoke`, { method: 'POST', token, body: {} });
+}
+
 /** 放行或撤回一筆排隊紀錄。 */
 export function setOperatorWaitlist(token: string, id: string, action: 'approve' | 'revoke'): Promise<{ ok: true }> {
   return request(`/operator/waitlist/${encodeURIComponent(id)}/${action}`, { method: 'POST', token, body: {} });
@@ -578,9 +720,17 @@ export type StrategyVersion = {
   executionSchemaVersion?: number;
   allocation: { assets: StrategyAllocationAsset[] };
   schedule: { kind: 'interval'; intervalSeconds: number } | { kind: 'cron'; cron: string };
+  /** typed 版本的執行設定（schema 2 是 `per_asset`，逐資產 hold／stack）；買家頁讀 stack 期數算每期金額（`stackBuys`）。 */
+  execution?: unknown;
   changeLog: string | null;
   activeAt: string | null;
   createdAt: string;
+  /** P11（backend#124）：還沒生效的版本。後端欄位未上線前不存在。 */
+  pending?: boolean;
+  /** P11：登入的人（建立者本人）現在能不能取消這一版。 */
+  canCancel?: boolean;
+  /** P11：這一版的績效費（bps）。 */
+  performanceFeeBps?: number;
 };
 
 export type StrategyDetail = {
@@ -738,6 +888,12 @@ export function platformPausedFrom(status: number, text: string): boolean | null
   } catch {
     return null;
   }
+}
+
+/** `GET /platform/status` 的原始回應（地址簿一致性檢查用，`lib/address-book-check.ts`）。網路失敗會丟錯。 */
+export async function getPlatformStatusText(): Promise<{ status: number; text: string }> {
+  const response = await fetch(`${BASE}/platform/status`);
+  return { status: response.status, text: await response.text() };
 }
 
 /** 平台現在是不是全域暫停：`true`／`false` = 確定，`null` = 不知道（含網路失敗）。不丟錯。 */

@@ -11,7 +11,8 @@ import {
   sameAllocation,
   PLATFORM_PAUSED_MESSAGE,
 } from "../src/lib/a10";
-import { REGISTRY_ABI, enrollCalldata, setPausedCalldata } from "../src/lib/atp-contracts";
+import { LEGACY_REGISTRY_ABI, P11_REGISTRY, REGISTRY_ABI, enrollCalldata, setPausedCalldata } from "../src/lib/atp-contracts";
+import { CHAIN } from "../src/lib/kernel";
 
 const ACCOUNT = "0x1111111111111111111111111111111111111111" as const;
 const USDT = "0x55d398326f99059fF775485246999027B3197955";
@@ -20,9 +21,17 @@ const WBNB = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
 const ETH = "0x2170Ed0880ac9A755fd29B2688956BD959F933F8";
 
 test("calldata matches the registry signatures in cre8-contracts", () => {
-  const enroll = enrollCalldata(ACCOUNT, 7n);
-  expect(enroll.startsWith(toFunctionSelector("enroll(address,uint256)"))).toBe(true);
-  expect(decodeFunctionData({ abi: REGISTRY_ABI, data: enroll }).args).toEqual([ACCOUNT, 7n]);
+  // P11（cre8-contracts#54）：只有三參數 enroll（帶預期版本）。
+  const enroll = enrollCalldata(ACCOUNT, 7n, 3, true);
+  expect(enroll.startsWith(toFunctionSelector("enroll(address,uint256,uint16)"))).toBe(true);
+  expect(decodeFunctionData({ abi: REGISTRY_ABI, data: enroll }).args).toEqual([ACCOUNT, 7n, 3]);
+  // 審查 #95 第 3 項：chain 56 的舊合約仍是二參數 enroll。
+  const legacy = enrollCalldata(ACCOUNT, 7n, 3, false);
+  expect(legacy.startsWith(toFunctionSelector("enroll(address,uint256)"))).toBe(true);
+  expect(decodeFunctionData({ abi: LEGACY_REGISTRY_ABI, data: legacy }).args).toEqual([ACCOUNT, 7n]);
+  // 預設跟這次 build 的鏈走：只有 chain 97 是 P11。
+  expect(P11_REGISTRY).toBe(CHAIN.id === 97);
+  expect(enrollCalldata(ACCOUNT, 7n, 3)).toBe(CHAIN.id === 97 ? enroll : legacy);
 
   const pause = setPausedCalldata(ACCOUNT, true);
   expect(pause.startsWith(toFunctionSelector("setPaused(address,bool)"))).toBe(true);
