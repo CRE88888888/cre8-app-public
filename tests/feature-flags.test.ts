@@ -94,7 +94,10 @@ test("a locked entry only toggles its own explanation: no navigation, no request
   expect(lock).toContain("onClick={() => setShown((current) => !current)}");
   expect(lock).not.toMatch(/fetch\(|href=|navigate\(|<Link|<a\s|lib\/api/);
   const funding = fs.readFileSync("src/components/FundingMethods.tsx", "utf8");
-  expect(funding).not.toMatch(/fetch\(|href=|navigate\(|<Link|<a\s|lib\/api|onClick/);
+  // 唯一的連結是測試網 Test USDT 卡片帶到基金列表（使用者 2026-11-17），不送請求。
+  expect(funding).not.toMatch(/fetch\(|href=|navigate\(|<a\s|lib\/api|onClick/);
+  expect(funding.match(/<Link /g)?.length).toBe(1);
+  expect(funding).toContain('<Link className="feature-locked__row feature-locked__row--link" to="/vaults">');
   expect(funding).toContain('feature="depositCard"');
   expect(funding).toContain('feature="depositCrossChain"');
 });

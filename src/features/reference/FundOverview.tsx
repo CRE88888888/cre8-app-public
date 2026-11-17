@@ -1,4 +1,5 @@
-import { useState, type Ref } from "react";
+import { useLayoutEffect, useRef, useState, type Ref } from "react";
+import { longestWordLength } from "../../lib/cover-title";
 import { AppIcon } from "../../components/AppIcon";
 import { toast } from "../../components/Toast";
 import { ReferenceSheet } from "./ReferenceSheet";
@@ -51,6 +52,12 @@ export function FundOverview({
     }
   }
 
+  // 封面名稱的字級依最長的字縮放（styles/covers.css 的 --title-word），名稱才不會壓到人像。
+  const coverTitle = useRef<HTMLHeadingElement>(null);
+  useLayoutEffect(() => {
+    const title = coverTitle.current;
+    if (title !== null) title.style.setProperty("--title-word", String(longestWordLength(title.textContent ?? "")));
+  }, [fund.slug]);
   return (
     <>
       <div className="vault-top">
@@ -92,7 +99,7 @@ export function FundOverview({
                   <AppIcon name="share" size={21} />
                 </button>
               </nav>
-              <h1>
+              <h1 ref={coverTitle}>
                 <FundName fund={fund} />
               </h1>
             </div>

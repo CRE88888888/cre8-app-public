@@ -22,12 +22,15 @@
   body.atp-asset-page #root [class*="_identity_"] { margin: 0; }
   body.atp-asset-page #root [class*="_identity_"] h1 { font: 600 36px/1.1 var(--sans); letter-spacing: -1px; }
   body.atp-asset-page #root [class*="_main_"] h2 { font: 600 20px/1.25 var(--sans); letter-spacing: -.3px; }
-  body.atp-asset-page #root [class*="_side_"] { position: sticky; top: 88px; display: grid; gap: 16px; }
+  body.atp-asset-page #root [class*="_side_"] { position: sticky; top: calc(var(--masthead-h, 64px) + 24px); display: grid; gap: 16px; }
   body.atp-asset-page #root [class*="_side_"] > section[class*="_create_"] { display: grid; gap: 14px; background: var(--night); border-color: var(--night); color: var(--night-text); }
   body.atp-asset-page #root [class*="_side_"] > section[class*="_create_"] h2 { margin: 0; color: var(--white); font: 600 18px/1.25 var(--sans); }
   html body.atp-asset-page #root [class*="_side_"] > section[class*="_create_"] .btn { width: 100%; border-color: var(--white); background: var(--white); color: var(--ink); }
   html body.atp-asset-page #root [class*="_side_"] > section[class*="_create_"] .btn:hover { border-color: var(--snow); background: var(--snow); color: var(--ink); }
   body.atp-asset-page #root [class*="_priceHeader_"] strong { font: 500 40px/1 var(--mono); letter-spacing: -1.4px; }
+  /* 主欄窄時 40px 的價格加「USD」放不下：價格保持一行，右邊的漲跌換到下一行，不再超出欄位。 */
+  body.atp-asset-page #root [class*="_priceHeader_"] { flex-wrap: wrap; }
+  body.atp-asset-page #root [class*="_priceHeader_"] > div { min-width: max-content; }
   body.atp-asset-page #root [class*="_tags_"] > :is(span, a) { padding: 5px 11px; border: 0; background: var(--snow); color: var(--deep); font: 500 12px/1.2 var(--sans); }
   body.atp-asset-page #root [class*="_fund_"] { min-height: 52px; }
 }
@@ -144,7 +147,7 @@ html body #root .cf-cadence button { min-width: 0; padding: 0 16px; font: 500 14
 #root .cf-total[data-state="over"] :is(strong, span) { color: var(--negative); }
 #root .cf-total[data-state="over"] .cf-total-bar i { background: var(--negative); }
 
-#root .cf-side { position: sticky; top: 88px; min-width: 0; }
+#root .cf-side { position: sticky; top: calc(var(--masthead-h, 64px) + 24px); min-width: 0; }
 #root .cf-summary { display: grid; gap: 14px; padding: 22px; border: 1px solid var(--hair); background: var(--white); box-shadow: 0 1px 2px rgba(12, 23, 34, .04), 0 8px 24px rgba(12, 23, 34, .06); }
 #root .cf-summary-label { color: var(--steel); font: 500 13px/1 var(--sans); }
 #root .cf-summary-name { margin-top: -6px; overflow-wrap: anywhere; color: var(--ink); font: 600 22px/1.2 var(--sans); letter-spacing: -.4px; }

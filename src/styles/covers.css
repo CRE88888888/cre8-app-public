@@ -29,10 +29,51 @@ body.atp-formal-fund #root #atp-fund-cover.is-hedcut h1 :is(a, button, span) { c
   /* 物件不出血：整個留在框內、上下留白。 */
   body.atp-formal-fund #root #atp-fund-cover.is-hedcut.is-object > img { height: 100%; inset: 0 7% 0 auto; object-position: 50% 50%; }
 }
+/*
+ * 桌機但主欄窄（約 720–1100px 寬的視窗，右邊還有下單面板）：封面只剩 260–540px 寬，
+ * 名稱放在人像左邊一定會壓到臉，兩顆按鈕折行後也會蓋住名稱（使用者 2026-11-17）。
+ * 這時改成上下排：人像在上、名稱在下，按鈕排在封面下面一行，什麼都不疊。
+ * 主欄夠寬時維持左右排，但名稱只用到人像左緣再進去 30% 的地方（人像左邊是留白），字太長就縮小。
+ */
+@media (min-width: 720px) {
+  body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-hedcut) { container: fund-heading / inline-size; }
+  @container fund-heading (min-width: 560px) {
+    body.atp-formal-fund #root #atp-fund-cover.is-hedcut:not(.is-object) h1 {
+      max-width: calc(94% - 243px);
+      /* --title-word：最長那個字的字元數（FundOverview 設定）；一個字元約 0.55em 寬。 */
+      font-size: clamp(24px, calc((94cqi - 243px) / (var(--title-word, 13) * 0.55)), 40px);
+    }
+  }
+  @container fund-heading (max-width: 559.98px) {
+    body.atp-formal-fund #root #atp-fund-cover.is-hedcut { display: flex; flex-direction: column; height: auto; }
+    body.atp-formal-fund #root #atp-fund-cover.is-hedcut > img { position: relative; inset: auto; align-self: center; width: auto; height: 200px; object-position: 50% 0; }
+    body.atp-formal-fund #root #atp-fund-cover.is-hedcut.is-object > img { inset: auto; height: 200px; }
+    body.atp-formal-fund #root #atp-fund-cover.is-hedcut h1 {
+      position: static;
+      max-width: none;
+      margin: 0;
+      padding: 16px 20px 20px;
+      border-top: 1px solid var(--hair);
+      background: var(--white);
+      font-size: clamp(24px, 8cqi, 32px);
+    }
+    body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-hedcut) .atp-fund-byline { position: static; flex-wrap: wrap; justify-content: flex-start; margin-top: 12px; padding-top: 0; }
+  }
+}
 @media (max-width: 719px) {
   body.atp-formal-fund #root #atp-fund-cover.is-hedcut { border-inline: 0; }
   body.atp-formal-fund #root #atp-fund-cover.is-hedcut > img { inset: 0 0 0 auto; }
   body.atp-formal-fund #root #atp-fund-cover.is-hedcut h1 { max-width: 50%; }
+  /*
+   * 手機封面是 16:9、人像是右邊一個正方形，肩膀在下緣幾乎貼到人像左緣。人像往右推出 8%（切掉一點右肩），
+   * 名稱最多到封面 55% 處；最長的字放不下就縮小字級，不壓到肩膀。
+   */
+  body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-hedcut) { container: fund-heading / inline-size; }
+  body.atp-formal-fund #root #atp-fund-cover.is-hedcut:not(.is-object) > img { inset: 0 -8% 0 auto; }
+  body.atp-formal-fund #root #atp-fund-cover.is-hedcut:not(.is-object) h1 {
+    max-width: calc(55% - 14px);
+    font-size: clamp(20px, calc((55cqi - 14px) / (var(--title-word, 13) * 0.55)), 35px);
+  }
 }
 
 /* ── 縮圖與頭像：白底，加一圈細線才不會跟白色頁面糊在一起 ── */

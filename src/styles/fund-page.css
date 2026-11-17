@@ -8,7 +8,7 @@
   body.atp-formal-fund #root .wrap.vault-content { padding-top: 20px; }
   body.atp-formal-fund #root .vgrid { grid-template-columns: minmax(0, 1fr) 384px; gap: 24px; }
   body.atp-formal-fund #root .vgrid > .main { gap: 20px; }
-  body.atp-formal-fund #root .vgrid > .side { top: 88px; display: grid; gap: 16px; }
+  body.atp-formal-fund #root .vgrid > .side { top: calc(var(--masthead-h, 64px) + 24px); display: grid; gap: 16px; }
 
   /* 封面：留著當這一頁的門面，但壓矮，讓報酬與圖表回到第一屏。 */
   body.atp-formal-fund #root .vault-top { margin: 0; }
@@ -97,6 +97,23 @@
   body.atp-formal-fund #root #keyfig.public-kpis dt { color: var(--steel); font: 400 13px/1.2 var(--sans); }
   body.atp-formal-fund #root #keyfig.public-kpis dd { margin: 0; color: var(--ink); font: 500 20px/1.1 var(--mono); letter-spacing: -.3px; }
   body.atp-formal-fund #root #keyfig.public-kpis dd small { color: var(--steel); font-size: 12px; }
+  /* 持股表在最窄的桌機寬度（主欄約 260px）放不下四欄，「24H」被切掉、表頭互相壓到：跟手機一樣收起 24H 欄。 */
+  body.atp-formal-fund #root .vault-allocation .dk-wrap { container: holdings / inline-size; }
+  @container holdings (max-width: 340px) {
+    body.atp-formal-fund #root .holdings-table :is(th, td):nth-child(4) { display: none; }
+  }
+  /* 主欄窄（約 720–900px 寬的視窗）：三格各剩不到 120px，「100.84%」會超出格子。字小一點、間距收窄。 */
+  body.atp-formal-fund #root #keyfig.public-kpis { container: fund-kpis / inline-size; }
+  @container fund-kpis (max-width: 420px) {
+    body.atp-formal-fund #root #keyfig.public-kpis > div { padding-inline: 12px !important; }
+    body.atp-formal-fund #root #keyfig.public-kpis > div:first-child { padding-left: 0 !important; }
+    body.atp-formal-fund #root #keyfig.public-kpis dd { font-size: 17px; }
+  }
+  @container fund-kpis (max-width: 300px) {
+    body.atp-formal-fund #root #keyfig.public-kpis > div { padding-inline: 8px !important; }
+    body.atp-formal-fund #root #keyfig.public-kpis > div:first-child { padding-left: 0 !important; }
+    body.atp-formal-fund #root #keyfig.public-kpis dd { font-size: 15px; letter-spacing: -.4px; }
+  }
   body.atp-formal-fund #root .performance-details-open { margin-top: 12px; color: var(--steel); font: 500 13px/1 var(--sans); }
   body.atp-formal-fund #root .performance-details-open:hover { color: var(--ink); }
 }

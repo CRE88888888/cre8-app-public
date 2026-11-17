@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { AppIcon } from './AppIcon';
 import { LockedFeature } from './FeatureLock';
 import { CHAIN } from '../lib/kernel';
@@ -12,6 +13,9 @@ import { CHAIN } from '../lib/kernel';
  *
  * 測試網第一批的「領測試 USDT」與「交易所提幣地址」屬於現金帳戶那一批，做好後加在這個清單最前面。
  * 這個元件不送任何請求。
+ *
+ * 測試網的「Test USDT」卡片點了會帶到基金列表（使用者 2026-11-17：原本只是說明、點不動，看起來像壞了）。
+ * 測試 USDT 只能領進已加入的基金帳戶（後端 `POST /faucet/usdt`），所以領取仍在基金頁的 Buy 上。
  */
 export function FundingMethods({ variant }: {
   /** `ticket`＝基金頁 Buy 表單下方（有標題與分隔線）；`sheet`＝Add money 面板裡（面板自己有標題）。 */
@@ -22,16 +26,16 @@ export function FundingMethods({ variant }: {
       {variant === 'ticket' && <h3 className="funding-methods__title">Ways to add money</h3>}
       {CHAIN.faucetFunded ? variant === 'ticket' ? null : (
         // 測試網：錢由水龍頭直接打進基金帳戶，領取就在基金頁的 Buy 按鈕上（cre8-app#62）。
-        // 這裡只說明，不放第二顆按鈕；也不列「從錢包轉 USDT」，測試網不走那條路。
+        // 這裡不放第二顆領取按鈕，整張卡片帶到基金列表，選一檔按 Buy 就會領；也不列「從錢包轉 USDT」，測試網不走那條路。
         // 基金頁（ticket）上面就是那顆按鈕與同一句說明，所以不重複。
         <div className="feature-locked" data-state="on" data-entry="faucet">
-          <div className="feature-locked__row">
+          <Link className="feature-locked__row feature-locked__row--link" to="/vaults">
             <span className="feature-locked__text">
               <span className="feature-locked__title"><b>Test USDT</b><span className="badge badge--ok feature-badge">Free</span></span>
-              <small>Testnet only. Your first purchase comes with 10,000 test USDT, once per person; then claim 1,000 a day. Straight into the fund. No value.</small>
+              <small>Testnet only. Pick a fund and press Buy: your first purchase comes with 10,000 test USDT, once per person; then claim 1,000 a day. No value.</small>
             </span>
-            <span className="feature-locked__icon" aria-hidden="true"><AppIcon name="wallet" size={22} /></span>
-          </div>
+            <span className="feature-locked__icon" aria-hidden="true"><AppIcon name="right" size={22} /></span>
+          </Link>
         </div>
       ) : (
         <div className="feature-locked" data-state="on">

@@ -619,6 +619,10 @@
   margin: 0;
 }
 
+/* 能點的列（測試網 Test USDT → 基金列表）：同一張卡片，連結不畫底線，滑過時底色深一點。 */
+a.feature-locked__row--link { color: var(--ink); text-decoration: none; cursor: pointer; }
+a.feature-locked__row--link:hover { background: var(--hair, #e6e9ec); }
+
 .feature-locked__note {
   margin: 8px 4px 0;
   font-size: 12px;

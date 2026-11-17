@@ -145,6 +145,15 @@ body.atp-complete-create #root [class*="_main_"] > section > :first-child h2::be
   }
   body.atp-complete-create #root section[aria-label="Fund cover"] > [class*="_controls_"] { grid-area: controls; padding-top: 6px; }
   body.atp-complete-create #root section[aria-label="Fund cover"] > [class*="_error_"] { grid-area: error; margin: 0; }
+  /*
+   * 主欄窄（約 720–1000px 寬的視窗）：右邊 248px 的預覽一放，左欄只剩一百多 px，
+   * 「Fund cover」標題被擠成 0 寬、「Change cover」蓋在上面（使用者 2026-11-17）。這時改成單欄：標題、預覽、名稱依序往下。
+   */
+  body.atp-complete-create #root section[aria-label="Fund cover"] { container: cover-editor / inline-size; }
+  @container cover-editor (max-width: 559.98px) {
+    body.atp-complete-create #root section[aria-label="Fund cover"] > [class] { grid-area: auto; grid-column: 1 / -1; }
+    body.atp-complete-create #root section[aria-label="Fund cover"] > [class*="_preview_"] { width: 100%; min-height: 140px; margin-top: 14px; }
+  }
   body.atp-complete-create #root section[aria-label="Fund cover"] [class*="_preview_"] > strong {
     left: 14px;
     right: 14px;
@@ -162,7 +171,7 @@ body.atp-complete-create #root [class*="_main_"] > section > :first-child h2::be
   }
   body.atp-complete-create #root section[aria-label="Fund collection and X profile"] > :is(:first-child, :nth-child(n + 4)) { grid-column: 1 / -1; margin: 0; }
   body.atp-complete-create #root section[aria-label="Fund collection and X profile"] > label { margin: 0; }
-  body.atp-complete-create #root aside[class*="_side_"] { position: sticky; top: 88px; }
+  body.atp-complete-create #root aside[class*="_side_"] { position: sticky; top: calc(var(--masthead-h, 64px) + 24px); }
 }
 
 /* 手機：區塊不加外框，用上方細線分段；封面收成一條矮橫幅。 */

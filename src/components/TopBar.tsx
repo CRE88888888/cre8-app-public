@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { MouseEvent, ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
@@ -6,6 +6,7 @@ import { AppIcon, type AppIconName } from './AppIcon';
 import { WalletMenu } from './WalletMenu';
 import { MODE_HOME, modeOf, rememberMode, type AppMode } from '../lib/app-mode';
 import { useMobile } from '../lib/use-mobile';
+import { useMastheadHeight } from '../lib/masthead-height';
 
 /**
  * CRE8 字標：`CRE` + 一個滾動的骰子轉盤停在 8。
@@ -128,6 +129,8 @@ export function TopBar(): ReactNode {
   const mode = modeOf(path);
   const rootTitle = mobile ? tabRootTitles[path] : undefined;
   const scrolled = useScrolledPast(56, rootTitle !== undefined);
+  const masthead = useRef<HTMLElement>(null);
+  useMastheadHeight(masthead);
 
   // 模式寫在 body 上，Studio 的視覺差異（深色分頁列、Studio 標記）全由 CSS 處理。
   useEffect(() => {
@@ -147,7 +150,7 @@ export function TopBar(): ReactNode {
           </div>
         </header>
       ) : (
-        <header className="masthead app-masthead">
+        <header ref={masthead} className="masthead app-masthead">
           <div className="wrap">
             <a className="brand" href="/" aria-label="CRE8 home">
               <C8Logo />

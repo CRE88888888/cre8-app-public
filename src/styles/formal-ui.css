@@ -77,7 +77,7 @@ body.atp-formal-fund .atp-fund-secondary dt { margin-bottom: 4px; color: var(--s
 body.atp-formal-fund .atp-fund-secondary dd { margin: 0; font: 500 20px/1.4 var(--sans); font-variant-numeric: tabular-nums; }
 body.atp-formal-fund .atp-holding-identity { display: inline-flex; align-items: center; gap: 7px; }
 body.atp-formal-fund .atp-holding-identity img { width: 20px; height: 20px; object-fit: contain; flex: none; }
-body.atp-formal-fund #ticket { border: 1px solid rgba(22, 34, 45, .08); border-radius: 16px !important; overflow: hidden; background: var(--white); scroll-margin-top: 110px; }
+body.atp-formal-fund #ticket { border: 1px solid rgba(22, 34, 45, .08); border-radius: 16px !important; overflow: hidden; background: var(--white); scroll-margin-top: calc(var(--masthead-h, 64px) + 24px); }
 body.atp-formal-fund #ticket [data-slot="tabs-list"] { display: flex; width: 100%; padding: 0; min-height: 56px; background: var(--white); border-bottom: 1px solid var(--hair); }
 body.atp-formal-fund #ticket [data-slot="tabs-trigger"] { min-height: 56px; border: 0; border-radius: 0 !important; background: transparent; color: var(--steel); font: 500 16px var(--sans); }
 body.atp-formal-fund #ticket [data-slot="tabs-trigger"][data-state="active"] { color: var(--ink); border-bottom: 2px solid var(--ink); box-shadow: none; }
