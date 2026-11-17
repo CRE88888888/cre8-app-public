@@ -180,6 +180,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 列表持股欄的代號前面加小 logo（跟 .mkt-chip img 同樣的圓形白底）。 */
+#fund-explore .mkt-row-token img { width: 14px; height: 14px; margin: 0 4px 0 0; border-radius: 50%; background: var(--white); object-fit: contain; vertical-align: -3px; }
 #fund-explore .mkt-row-trend { display: block; height: 36px; }
 #fund-explore .mkt-row-return { display: grid; justify-items: end; gap: 3px; }
 #fund-explore .mkt-row-return strong { font: 500 16px/1 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.2px; }

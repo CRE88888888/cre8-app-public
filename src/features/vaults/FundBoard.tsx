@@ -209,11 +209,20 @@ export function BoardRow({ fund, period, url, rank, meta, fullDays }: {
         </span>
         <span className="mkt-row-holdings">
           <AllocationBar holdings={holdings} />
+          {/* 使用者 2026-11-17：「token 也要有 icon」。跟上方精選卡片的 chip 用同一個 logo（row.logo）。 */}
           <small>
             {holdings.length === 0
               ? "Allocation loading"
-              : holdings.slice(0, 3).map((row) => `${row.label} ${whole(row.weight)}`).join(" · ") +
-                (holdings.length > 3 ? ` · +${holdings.length - 3}` : "")}
+              : <>
+                  {holdings.slice(0, 3).map((row, index) => (
+                    <span key={row.symbol} className="mkt-row-token">
+                      {index > 0 && " · "}
+                      {row.logo && <img src={row.logo} alt="" width="14" height="14" loading="lazy" />}
+                      {row.label} {whole(row.weight)}
+                    </span>
+                  ))}
+                  {holdings.length > 3 && ` · +${holdings.length - 3}`}
+                </>}
           </small>
         </span>
         <span className={`mkt-row-trend ${tone}`}>
