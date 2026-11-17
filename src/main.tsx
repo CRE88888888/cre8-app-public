@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { queryClient } from './lib/query';
+import { dropDeadOAuthCallback } from './lib/privy-oauth-callback';
 // 載入順序是刻意的：先設計稿的系統（tokens + 全域 reset + 既有元件規則），
 // 再我自己的三支去覆蓋。反過來的話，他們的 `button { background:none }` 之類會蓋掉我的元件。
 import './styles/vendor/fonts.css';
@@ -17,6 +18,10 @@ import './styles/base.css';
 import './styles/components.css';
 // 公開市集的新版版面獨立疊加；vendor 設計稿與 sx- 工具頁 token 保持原樣。
 import './styles/formal-ui.css';
+
+// X／Google 登入用過的 code 還留在網址上時先拿掉，Privy 才不會再兌換一次、跳出「Authentication failed」（cre8-app#107）。
+// 必須在 React Router 與 Privy 讀網址之前。
+dropDeadOAuthCallback();
 
 const container = document.getElementById('root');
 if (container === null) throw new Error('#root is missing: index.html was modified');
