@@ -55,12 +55,11 @@ test("the screen shows the form beside the board; the board is decorative for sc
   expect(fs.readFileSync("src/features/waitlist/FlapBoard.tsx", "utf8")).toContain("matchMedia('(prefers-reduced-motion: reduce)')");
 });
 
-test("invite codes stay hidden until the backend is ready", () => {
+test("the production build turns invite codes on (backend#132 is live); local builds keep them off", () => {
   expect(INVITES_OPEN).toBe(false);
   const html = renderToStaticMarkup(<WaitlistScreen view="connect" handle={null} avatarUrl={null} />);
-  expect(html).not.toContain("invite code");
   expect(html).not.toContain("waitlist__invite");
-  expect(fs.readFileSync(".env.production", "utf8")).not.toMatch(/^VITE_INVITES=/m);
+  expect(fs.readFileSync(".env.production", "utf8")).toMatch(/^VITE_INVITES=1$/m);
 });
 
 test("codes are tidied, kept for one round trip through X sign-in, then used once", () => {
