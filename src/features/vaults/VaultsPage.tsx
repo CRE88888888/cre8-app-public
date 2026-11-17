@@ -352,10 +352,11 @@ export function VaultsPage() {
               const yours = wallet !== null && strategy?.provider?.toLowerCase() === wallet.toLowerCase();
               return (
                 <BoardRow
-                  key={fund.slug}
+                  key={strategy?.id ?? fund.slug}
                   fund={fund}
                   period={filters.period}
-                  url={`/strategies/${fund.slug.replace("community-", "")}`}
+                  // 用策略 id 連結：有同名參考基金時 fund.slug 是參考目錄的 slug，不是 community-<id>。
+                  url={`/strategies/${strategy?.id ?? fund.slug.replace("community-", "")}`}
                   rank={null}
                   meta={
                     <>

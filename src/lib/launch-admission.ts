@@ -101,6 +101,6 @@ export const LAUNCH_COPY = {
   fundOpen: 'Open to invest',
   fundPreview: 'Preview',
   /** 基金頁的說明。 */
-  fundOpenLong: 'Open to invest. Every asset in this fund is available at launch.',
+  fundOpenLong: 'Open to invest.',
   fundPreviewLong: 'Preview only. This fund is not open for investment yet.',
 } as const;

@@ -104,6 +104,9 @@ export const FOLLOW_VERSIONS_PLAIN = {
   feeCut: 'Only a lower performance fee can take effect right away.',
 } as const;
 
+/** 下單面板上預設看得到的那一句（點開才看完整白話版與簽名原文）。 */
+export const FOLLOW_VERSIONS_SHORT = 'Fund updates apply automatically, with 24h notice to exit.';
+
 /**
  * session key 絕對不能拿到的 registry 函式（P11）：加入、同意都要帳戶本人（owner 簽的 sudo UserOp）。
  * 前端不組 session key 的 CallPolicy（後端組），這份清單給檢查用：`assertSessionPolicySafe`。

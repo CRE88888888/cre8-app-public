@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { StrategyVersion } from '../../lib/api';
 import type { VersionSchedule } from '../../lib/atp-contracts';
-import { FOLLOW_VERSIONS_PLAIN } from '../../lib/atp-contracts';
+import { FOLLOW_VERSIONS_PLAIN, FOLLOW_VERSIONS_SHORT } from '../../lib/atp-contracts';
 import { PUBLISH_RULES, assetPlays, changeLine, nextPublishAt, versionChanges, whenText, type AssetPlay } from '../../lib/fund-versions';
 
 /** 後端版本裡 activeAt 跟鏈上（unix 秒）相同的那一版的逐資產買法。找不到就 null（只說「買法有變」）。 */
@@ -80,10 +80,12 @@ export function VersionNotice({
 export function FollowVersionsTerms({ terms }: { terms: string }): ReactNode {
   return (
     <div data-entry="follow-versions-terms">
-      <p className="fine">{FOLLOW_VERSIONS_PLAIN.follow}</p>
-      <p className="fine">{FOLLOW_VERSIONS_PLAIN.feeCut}</p>
+      {/* 使用者 2026-11-17：提示太吵。只留一句重點，完整白話版與簽名原文收在 Details 裡。 */}
       <details className="fine">
-        <summary>What you sign</summary>
+        <summary>{FOLLOW_VERSIONS_SHORT}</summary>
+        <p className="fine">{FOLLOW_VERSIONS_PLAIN.follow}</p>
+        <p className="fine">{FOLLOW_VERSIONS_PLAIN.feeCut}</p>
+        <p className="fine">What you sign:</p>
         <p className="mono">{terms}</p>
       </details>
     </div>

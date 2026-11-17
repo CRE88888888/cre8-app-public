@@ -1,4 +1,6 @@
+import { REFERENCE_FUNDS } from './public-funds';
 import type { ReferenceFund } from './public-funds';
+import { TESTNET_97 } from './testnet-97';
 
 /**
  * 主網可交易資產的地址 → 代號。
@@ -16,8 +18,26 @@ const KNOWN_ASSETS: Record<string, string> = {
   '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c': 'WBNB',
 };
 
+/**
+ * 測試網（chain 97）的模擬資產：地址 → 代號（`testnet-97.ts` 的地址簿反查）。
+ * 沒有這張表時，測試網基金的持股全部顯示成 0x…（使用者 2026-11-17：「看起來很 lo」）。
+ */
+const TESTNET_ASSETS: Record<string, string> = Object.fromEntries([
+  [TESTNET_97.contracts.usdt.toLowerCase(), 'USDT'],
+  ...Object.entries(TESTNET_97.assets).map(([symbol, address]) => [address.toLowerCase(), symbol]),
+]);
+
 export function symbolOf(address: string): string {
-  return KNOWN_ASSETS[address.toLowerCase()] ?? `${address.slice(0, 4)}…${address.slice(-2)}`;
+  const key = address.toLowerCase();
+  return KNOWN_ASSETS[key] ?? TESTNET_ASSETS[key] ?? `${address.slice(0, 4)}…${address.slice(-2)}`;
+}
+
+/**
+ * 鏈上策略在參考目錄裡的同名基金（使用者 2026-11-17：測試網可以買的基金要跟正式的一樣，圖片與內容都用正式的）。
+ * 參考目錄的基金頁本來就用同一個名稱找到要買的鏈上策略（FundPage 的 slug 模式），兩邊對應的是同一檔。
+ */
+export function catalogueTwin(name: string): ReferenceFund | undefined {
+  return REFERENCE_FUNDS.find((fund) => fund.name === name);
 }
 
 /** 確定性亂數：同一個 seed 永遠得到同一個序列（重整不會讓數字跳動）。 */
@@ -48,6 +68,9 @@ export function synthesizeCommunityFund(args: {
   positions: readonly { p: string; loc: string; w: number }[];
   seed: number;
 }): ReferenceFund {
+  // 有同名的參考基金：整檔沿用（封面、人物介紹、說明、模型報酬、持股更新），畫面跟正式的一樣。
+  const twin = catalogueTwin(args.name);
+  if (twin !== undefined) return twin;
   const rand = seeded(args.seed);
   const drift = args.positions.reduce((sum, p) => sum + p.w * (rand() - 0.45), 0);
   const oneYear = Math.round(drift * 10) / 10;

@@ -341,7 +341,7 @@ test("nothing outside the chain config hard-codes mainnet for the wallet, the ch
 test("the testnet banner and the wrong-network notice only show on the testnet", () => {
   const banners = fs.readFileSync("src/components/NetworkBanners.tsx", "utf8");
   expect(banners).toContain("if (!CHAIN.testnet) return null;");
-  expect(banners).toContain("have no value");
+  expect(banners).toContain("Test tokens only, no real value.");
   expect(banners).toContain("if (!CHAIN.testnet || provider === null || !isWrongNetwork(CHAIN, walletChainId)) return null;");
   const app = fs.readFileSync("src/App.tsx", "utf8");
   expect(app).toContain("<TestnetBanner />");

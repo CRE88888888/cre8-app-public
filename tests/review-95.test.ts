@@ -193,7 +193,8 @@ test("13. a real backend preview for a Hold + Stack fund is accepted: Hold asset
 test("8. the buy ticket and the fee section show the performance fee of the version in effect", () => {
   const page = fs.readFileSync("src/features/fund/FundPage.tsx", "utf8");
   expect(page).toContain("const effectiveFeeBps = versionSchedule.data?.active?.performanceFeeBps ?? effective?.performanceFeeBps ?? null;");
-  expect(page).toContain("Performance fee: {performanceFeeLine(effectiveFeeBps / 100, 'the creator')}.");
+  // 下單面板只留費率（使用者 2026-11-17：提示太吵）；分潤明細在 Fund facts。
+  expect(page).toContain("Performance fee {effectiveFeeBps / 100}% of profit.");
   expect(page).toContain("<dt>Performance fee (in effect)</dt><dd>{performanceFeeLine(effectiveFeeBps / 100, 'the creator')}</dd>");
   // 模型費用另列，名稱寫明是模型的。
   expect(page).toContain("<dt>Model performance fee</dt>");

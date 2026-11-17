@@ -183,8 +183,11 @@ export function FundOverview({
       <RecentTrades fund={fund} />
       <Assets fund={fund} />
       <section className="vault-about vault-disclaimer">
-        <h2>Disclaimer</h2>
-        <p>{copy.disclaimer}</p>
+        {/* 使用者 2026-11-17：提示太吵。免責聲明收起來，點開才看。 */}
+        <details className="vault-details">
+          <summary>Disclaimer</summary>
+          <p>{copy.disclaimer}</p>
+        </details>
         <details className="vault-details public-cover-credits">
           <summary>Cover image credits</summary>
           <p>

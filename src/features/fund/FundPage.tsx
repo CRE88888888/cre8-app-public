@@ -843,11 +843,12 @@ function FundPageBody(): ReactNode {
                       <div className="swap-box" data-entry="faucet-buy" data-mode={buyMode}>
                         <div className="swap-head"><span className="swap-label">Test USDT</span><span className="badge">Testnet</span></div>
                         <p className="fine" style={{ margin: 0 }}>
+                          {/* 使用者 2026-11-17：提示太吵，每種情況濃縮成一句。 */}
                           {buyMode === 'resume'
-                            ? 'Your test USDT is already in this fund’s account. Press the button to finish buying the fund’s holdings with it.'
+                            ? 'Your test USDT is in this fund. Press the button to finish buying.'
                             : dailyMode
-                            ? `Claim ${DAILY_TEST_USDT} test USDT once a day. It goes straight into this fund’s account and is invested for you. Test tokens have no value.`
-                            : `Your first purchase comes with ${WELCOME_TEST_USDT} test USDT, once per person. It goes straight into this fund’s account and is invested for you. After that, claim ${DAILY_TEST_USDT} test USDT a day. Test tokens have no value.`}
+                            ? `${DAILY_TEST_USDT} free test USDT a day, straight into this fund.`
+                            : `First buy comes with ${WELCOME_TEST_USDT} free test USDT, then ${DAILY_TEST_USDT} a day.`}
                         </p>
                         {holding !== undefined && live !== undefined && (
                           <span className="swap-sub">In this fund now: {formatUsd(totalUsd())} · cash {formatUsd(cashUsd())}</span>
@@ -906,7 +907,7 @@ function FundPageBody(): ReactNode {
                     </>)}
                     {/* 第一次買＝加入基金（P11）：你本人簽名同意之後跟隨新版本。chain 56 還是舊合約，不顯示。 */}
                     {holding === undefined && CHAIN.contracts?.registry !== undefined && <FollowVersionsTerms terms={FOLLOW_VERSIONS_TERMS_TEXT} />}
-                    {effectiveFeeBps !== null && <p className="fine" data-entry="effective-fee" style={{ margin: '6px 0 0' }}>{shownVersion !== null ? `Version ${shownVersion.version} in effect · ` : ''}Performance fee: {performanceFeeLine(effectiveFeeBps / 100, 'the creator')}.</p>}
+                    {effectiveFeeBps !== null && <p className="fine" data-entry="effective-fee" style={{ margin: '6px 0 0' }}>{shownVersion !== null ? `Version ${shownVersion.version} in effect · ` : ''}Performance fee {effectiveFeeBps / 100}% of profit.</p>}
                     <StackBuyPreview execution={effective?.execution} amountText={faucetBuy ? (buyMode === 'resume' ? '0' : (dailyMode ? DAILY_TEST_USDT : WELCOME_TEST_USDT)) : amount} />
                     {whitelistOnly ? (
                       connectedAddress === null ? <WalletMenu inline signInFor={{ purpose: 'buy', subject: fund.name }} /> : (

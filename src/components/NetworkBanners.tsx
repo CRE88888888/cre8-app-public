@@ -13,7 +13,8 @@ export function TestnetBanner(): ReactNode {
   if (!CHAIN.testnet) return null;
   return (
     <div className="platform-banner" role="note" data-banner="testnet">
-      <strong>Testnet.</strong> You are on {CHAIN.name}. Tokens here are for testing only and have no value.
+      {/* 使用者 2026-11-17：提示太吵，濃縮成一句。 */}
+      <strong>Testnet.</strong> Test tokens only, no real value.
     </div>
   );
 }

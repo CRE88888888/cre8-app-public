@@ -107,7 +107,7 @@ test("anything that is not a showcase fund has no launch status", () => {
 });
 
 test("the fund page sentence says plainly whether the fund is open and what is missing", () => {
-  expect(describeFundLaunch({ status: "open", missing: [] })).toBe("Open to invest. Every asset in this fund is available at launch.");
+  expect(describeFundLaunch({ status: "open", missing: [] })).toBe("Open to invest.");
   expect(describeFundLaunch({ status: "preview", missing: ["IEFon"] }, (symbol) => symbol.replace(/on$/, ""))).toBe(
     "Preview only. This fund is not open for investment yet. One of its assets (IEF) is not available at launch.",
   );
