@@ -2,10 +2,10 @@
  * BSC 測試網（chain 97）的合約地址簿（cre8-app#62）。
  *
  * **產生的檔案，不要手改。** 來源：`CRE8Finance/cre8-contracts` 的 `deployments/testnet-97.json`
- *   - repo commit：`6b9b6a45391eb3afa70ffc880a59ef3bfa10e3ec`
- *   - 檔案 sha256：`55dd26ee08d5e97ee768918006f830957fa467a7a6c746ec2949cba2d13014a7`
- *   - manifest 自己記的合約程式 commit（`gitCommit`）：`92e6963848d106ab9dc86334928af11b708c1dfa`
- *   - `mode: "public"`、`verifiedAtBlock: 143098069`、`generatedAt: 2026-11-16T16:42:07Z`
+ *   - repo commit：`a23afbfccbd449ec141bea06ab35f40ca6c1b1eb`
+ *   - 檔案 sha256：`816e0061059981d86837c39b2126bff8f69665e0590fe90ae9514e4c9da5c766`
+ *   - manifest 自己記的合約程式 commit（`gitCommit`）：`8864bdd46996ef4629cf9ac46ff161b3d3b04d8e`
+ *   - `mode: "public"`、`verifiedAtBlock: 143191994`、`generatedAt: 2026-11-17T04:29:01Z`
  *
  * `mode: "public"` 表示這些地址已公開部署在 chain 97，並逐一用 eth_getCode 驗證過（cre8-contracts manifest）。
  * 合約重新部署（程式或建構參數有變）地址就會換：那時要重新產生這個檔案。
@@ -18,16 +18,16 @@ export const TESTNET_97 = {
   source: {
     repo: 'CRE8Finance/cre8-contracts',
     path: 'deployments/testnet-97.json',
-    commit: '6b9b6a45391eb3afa70ffc880a59ef3bfa10e3ec',
-    sha256: '55dd26ee08d5e97ee768918006f830957fa467a7a6c746ec2949cba2d13014a7',
+    commit: 'a23afbfccbd449ec141bea06ab35f40ca6c1b1eb',
+    sha256: '816e0061059981d86837c39b2126bff8f69665e0590fe90ae9514e4c9da5c766',
     mode: 'public',
-    verifiedAtBlock: 143098069,
+    verifiedAtBlock: 143191994,
   },
   contracts: {
-    registry: '0x8b970a9C5DF5B54EC9Db677fD78B6CeC77C1631f',
+    registry: '0x7ff384fC959bf70fF7b2f011C6A84a36244264EA',
     router: '0x8e9371550fC397144D198A7C159C2DA5D143239E',
-    executor: '0x35477567b09f760C82981612379011edea540451',
-    yieldRegistry: '0x37Bd15E1Df1178b07Ca5Eb223f63d5b51DCecD5d',
+    executor: '0xB65Ec2EC6f5aB0a345b50cAA454cf792C1EF2bB9',
+    yieldRegistry: '0xA234531b1ace7B7106562A5554f1F8b173F7087b',
     yieldView: '0xC8EEBa84f9C74B2D879dFaEdb02a0a523aA02657',
     usdt: '0x7Ad6E310B0F6744B66d97Cb7cb525BD974501cb5',
     paymaster: '0x797bB6961A570BD68b0550C7F0e9F16D12101b1b',

@@ -98,10 +98,10 @@ test("the chain 97 mock has the 30 simulated markets of cre8-contracts#49: USDT 
   expect(markets.find((item) => item.id === "aave_v3_usdt")?.aprBps).toBe(300);
   // 與地址簿同一份 manifest（cre8-contracts 公開部署的 manifest）：registry 是地址簿的 yieldRegistry。
   expect(MOCK_MARKETS_97.registry).toBe(TESTNET_97.contracts.yieldRegistry.toLowerCase());
-  expect(TESTNET_97.contracts.yieldRegistry).toBe("0x37Bd15E1Df1178b07Ca5Eb223f63d5b51DCecD5d");
+  expect(TESTNET_97.contracts.yieldRegistry).toBe("0xA234531b1ace7B7106562A5554f1F8b173F7087b");
   expect(TESTNET_97.contracts.yieldView).toBe("0xC8EEBa84f9C74B2D879dFaEdb02a0a523aA02657");
-  expect(TESTNET_97.contracts.executor).toBe("0x35477567b09f760C82981612379011edea540451");
-  expect(TESTNET_97.source.commit).toBe("6b9b6a45391eb3afa70ffc880a59ef3bfa10e3ec");
+  expect(TESTNET_97.contracts.executor).toBe("0xB65Ec2EC6f5aB0a345b50cAA454cf792C1EF2bB9");
+  expect(TESTNET_97.source.commit).toBe("a23afbfccbd449ec141bea06ab35f40ca6c1b1eb");
   // 平台市場 id 照後端 yield-domain.ts 的 `${protocol}_${symbol}`。
   for (const item of markets) expect(item.id).toBe(`${item.protocol}_${item.symbol.toLowerCase()}`);
 });
