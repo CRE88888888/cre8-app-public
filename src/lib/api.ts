@@ -290,8 +290,21 @@ export function postBuyFunding(token: string, portfolioId: number): Promise<BuyF
 }
 
 /** `POST /portfolios/:id/funding-lots`：把每日領取的那一筆（claimId）記成這檔基金的投入。重送同一個 claim 不會重記。 */
-export function postFundingLot(token: string, portfolioId: number, source: { kind: 'faucet_claim'; claimId: string }): Promise<FundingLot> {
+export function postFundingLot(
+  token: string,
+  portfolioId: number,
+  // wallet_transfer：測試網用錢包 USDT 轉進基金帳戶的那一筆（cre8-app#114；後端從收據驗證 from／to／金額）。
+  source: { kind: 'faucet_claim'; claimId: string } | { kind: 'wallet_transfer'; txHash: string },
+): Promise<FundingLot> {
   return request(`/portfolios/${portfolioId}/funding-lots`, { method: 'POST', token, body: { source } });
+}
+
+/**
+ * 測試網：替登入者的主人錢包補一點 tBNB，好付「錢包 → 基金帳戶」那一筆 USDT 轉帳的手續費（cre8-app#114）。
+ * 餘額夠時後端回 `txHash: null`。只在測試網。
+ */
+export function postGasFaucet(token: string): Promise<{ txHash: string | null; amountWei: string }> {
+  return request('/faucet/gas', { method: 'POST', token, body: {} });
 }
 
 /**

@@ -26,7 +26,7 @@ export function FundingMethods({ variant }: {
       {variant === 'ticket' && <h3 className="funding-methods__title">Ways to add money</h3>}
       {CHAIN.faucetFunded ? variant === 'ticket' ? null : (
         // 測試網：錢由水龍頭直接打進基金帳戶，領取就在基金頁的 Buy 按鈕上（cre8-app#62）。
-        // 這裡不放第二顆領取按鈕，整張卡片帶到基金列表，選一檔按 Buy 就會領；也不列「從錢包轉 USDT」，測試網不走那條路。
+        // 這裡不放第二顆領取按鈕，整張卡片帶到基金列表，選一檔按 Buy 就會領。
         // 基金頁（ticket）上面就是那顆按鈕與同一句說明，所以不重複。
         <div className="feature-locked" data-state="on" data-entry="faucet">
           <Link className="feature-locked__row feature-locked__row--link" to="/vaults">
@@ -37,12 +37,14 @@ export function FundingMethods({ variant }: {
             <span className="feature-locked__icon" aria-hidden="true"><AppIcon name="right" size={22} /></span>
           </Link>
         </div>
-      ) : (
+      ) : null}
+      {/* 錢包裡的 USDT：主網一直有；測試網也可以用了（cre8-app#114，例如賣出後回到錢包的 USDT）。下單面板上已經有切換，ticket 不重複。 */}
+      {(!CHAIN.faucetFunded || variant === 'sheet') && (
         <div className="feature-locked" data-state="on">
           <div className="feature-locked__row">
             <span className="feature-locked__text">
               <span className="feature-locked__title"><b>USDT from your wallet</b><span className="badge badge--ok feature-badge">Available</span></span>
-              <small>On BNB Chain. Choose a fund and press Buy.</small>
+              <small>{CHAIN.faucetFunded ? 'USDT already in your wallet. Choose a fund, pick Wallet USDT and press Buy.' : 'On BNB Chain. Choose a fund and press Buy.'}</small>
             </span>
             <span className="feature-locked__icon" aria-hidden="true"><AppIcon name="wallet" size={22} /></span>
           </div>

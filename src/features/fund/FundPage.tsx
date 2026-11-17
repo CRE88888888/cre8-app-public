@@ -5,9 +5,10 @@ import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { encodeFunctionData, formatEther, formatUnits, parseEther, parseUnits } from 'viem';
 import { tidyAmountInput } from '../../lib/amount-input';
 import type { Address } from 'viem';
-import { cancelPendingVersion, closePosition, confirmEnrollment, continueRedeem, enrollPortfolio, prepareEnrollment, getAssets, getPortfolioExecution, getPortfolioStatus, getPortfolios, getRenewalParams, getStrategy, listStrategies, postBuyFunding, postFaucetUsdt, postFundingLot, postRebalance, postRenewalResult, redeemPortfolio } from '../../lib/api';
+import { cancelPendingVersion, closePosition, confirmEnrollment, continueRedeem, enrollPortfolio, prepareEnrollment, getAssets, getPortfolioExecution, getPortfolioStatus, getPortfolios, getRenewalParams, getStrategy, listStrategies, postBuyFunding, postFaucetUsdt, postFundingLot, postGasFaucet, postRebalance, postRenewalResult, redeemPortfolio } from '../../lib/api';
 import { CHAIN, CHAIN_ID, approveCalldata, assertRpcChain, bsc as appChain, publicClientFor, readOnlyClient, readRpcUrl, sendGasTopUp, sendRenewalUserOp, sendSudoCalls, sendSweep, sendWithdraw } from '../../lib/kernel';
 import type { BuyFunding, PortfolioStatus, RedeemResult } from '../../lib/api';
+import { defaultPayWith, ensureOwnerGas, walletBuyMinimum, walletBuyProblem, type TestnetPayWith } from '../../lib/testnet-wallet-buy';
 import { MOCK_FUNDS } from '../../data/mock-funds';
 import {safePublicReturn} from '../../lib/public-navigation';
 import {useMobile} from '../../lib/use-mobile';
@@ -385,8 +386,17 @@ function FundPageBody(): ReactNode {
   // 現在的行為：按下去就是真的簽名、真的送交易。要擋真錢請用後端或合約層，
   // 不要用一個「看起來像 UI」的開關去鎖既有資金。
   const whitelistOnly = false;
-  /** 測試網：買入的錢由水龍頭直接打進基金帳戶，不從錢包轉（cre8-app#62）。 */
-  const faucetBuy = CHAIN.faucetFunded && !whitelistOnly;
+  /**
+   * 測試網的錢從哪裡來（cre8-app#114）：錢包裡的 USDT，或免費測試 USDT（水龍頭直接打進基金帳戶，cre8-app#62）。
+   * 沒選過時：錢包有 USDT 就用錢包。
+   */
+  const [payWithChoice, setPayWith] = useState<TestnetPayWith | null>(null);
+  const testnetPay = CHAIN.faucetFunded && !whitelistOnly;
+  const payWith: TestnetPayWith = payWithChoice ?? defaultPayWith(walletUsdt);
+  /** 測試網、用免費測試 USDT：錢由水龍頭直接打進基金帳戶，不從錢包轉。 */
+  const faucetBuy = testnetPay && payWith === 'faucet';
+  /** 測試網、用錢包 USDT：跟主網一樣輸入金額轉帳，轉帳前補 tBNB、確認後記成投入。 */
+  const testnetWalletBuy = testnetPay && payWith === 'wallet';
   /**
    * 測試網（backend#94）：第一次買入用迎新 10,000（每人一次，後端在 buy-funding 自動發）；之後每天領 1,000。
    * 這檔已經有部位，或後端說迎新已經用掉（DAILY_FAUCET_REQUIRED），按鈕就改成每日領取。
@@ -430,6 +440,9 @@ function FundPageBody(): ReactNode {
       return false;
     }
   })();
+  /** 測試網用錢包 USDT 時，金額不能送出的原因（最低金額、超過餘額）。 */
+  const walletMinimum = walletBuyMinimum(effective?.allocation?.assets, usdtAddress);
+  const walletBuyBlock = testnetWalletBuy ? walletBuyProblem({ amount, decimals: usdtDecimals, walletUsdt, minimum: walletMinimum }) : null;
   useEffect(() => {
     setWalletUsdt(null);
     if (wallet === null || usdtAddress === undefined) return;
@@ -630,7 +643,7 @@ function FundPageBody(): ReactNode {
     }
     if (mobile) {
       if (token === null || wallet === null || usdt === undefined) return;
-      if (action === 'deposit' && (depositUnits <= 0n || depositTooLarge || strategy === undefined)) return;
+      if (action === 'deposit' && (depositUnits <= 0n || depositTooLarge || walletBuyBlock !== null || strategy === undefined)) return;
       if (action === 'withdraw' && (!withdrawValid || live === undefined || !live.complete || withdrawLimit <= 0.000001)) return;
       if (!reviewMatches) {
         setReviewKey(reviewId);
@@ -837,6 +850,13 @@ function FundPageBody(): ReactNode {
                       submitTicket('deposit');
                     }}
                   >
+                    {testnetPay && token !== null && (
+                      // 測試網兩種錢都可以用（cre8-app#114）：錢包裡的 USDT（例如賣出後回到錢包的），或免費測試 USDT。
+                      <div className="seg" role="group" aria-label="Pay with" data-entry="testnet-pay-with" style={{ marginBottom: 10 }}>
+                        <button type="button" className={payWith === 'wallet' ? 'on' : ''} aria-pressed={payWith === 'wallet'} onClick={() => setPayWith('wallet')}>Wallet USDT</button>
+                        <button type="button" className={payWith === 'faucet' ? 'on' : ''} aria-pressed={payWith === 'faucet'} onClick={() => setPayWith('faucet')}>Free test USDT</button>
+                      </div>
+                    )}
                     {faucetBuy ? (
                       // 測試網：錢直接打進這檔基金的帳戶，不用填金額、不用從錢包轉（cre8-app#62）。
                       // 第一次買入是迎新 10,000（每人一次），之後每天領 1,000（backend#94）。都是測試幣，沒有價值。
@@ -889,8 +909,11 @@ function FundPageBody(): ReactNode {
                           </span>}
                         </span>
                       )}
-                      {depositTooLarge ? (
-                        <p className="fine neg" style={{ margin: '6px 0 0' }}>
+                      {/* 訊息佔滿整行，放在輸入框下面（swap-box 是格狀版面，不設會被擠到輸入框右邊）。 */}
+                      {walletBuyBlock !== null ? (
+                        <p className="fine neg" style={{ margin: '6px 0 0', gridColumn: '1 / -1' }}>{walletBuyBlock}</p>
+                      ) : depositTooLarge ? (
+                        <p className="fine neg" style={{ margin: '6px 0 0', gridColumn: '1 / -1' }}>
                           This amount exceeds your wallet balance.
                         </p>
                       ) : null}
@@ -919,7 +942,7 @@ function FundPageBody(): ReactNode {
                         </>
                       )
                     ) : token === null ? <WalletMenu inline signInFor={{ purpose: 'buy', subject: fund.name }} /> : (
-                      <button type="submit" className="btn primary block" disabled={ticketBusy || wallet === null || usdt === undefined || subscriptionLocked || buyingPaused !== null || (!faucetBuy && (depositTooLarge || (mobile && depositUnits <= 0n)))}>
+                      <button type="submit" className="btn primary block" disabled={ticketBusy || wallet === null || usdt === undefined || subscriptionLocked || buyingPaused !== null || (!faucetBuy && (depositTooLarge || walletBuyBlock !== null || (testnetWalletBuy && depositUnits <= 0n) || (mobile && depositUnits <= 0n)))}>
                         {faucetBuy ? (busy ? 'Working…' : buyMode === 'resume' ? 'Finish investing' : dailyMode ? `Claim ${DAILY_TEST_USDT} test USDT and invest` : `Get ${WELCOME_TEST_USDT} test USDT and invest`) : busy ? 'Sending…' : mobile ? 'Review order' : 'Buy'}
                       </button>
                     )}
@@ -1708,6 +1731,16 @@ function FundPageBody(): ReactNode {
           }
         }
       } else {
+        if (testnetWalletBuy) {
+          // 測試網：錢包要有 tBNB 才能轉 USDT（嵌入式錢包通常是 0）。不夠就請後端補，補不到就不轉（cre8-app#114）。
+          showProgress({ tone: 'pending', title: 'Getting the network fee', detail: 'Testnet covers the fee for this transfer.' });
+          const reader = publicClientFor(wallet);
+          await ensureOwnerGas({
+            readBalance: () => reader.getBalance({ address: wallet.address as Address }),
+            requestGas: () => postGasFaucet(token),
+            waitForTx: async (gasHash) => { await waitForConfirmations(wallet, gasHash, 1); },
+          });
+        }
         showProgress({ tone: 'pending', title: 'Approve the USDT transfer in your wallet', detail: enrollmentLine });
         hash = await sendUsdt(wallet, usdt.address as Address, account as Address, value);
         sent = `${formatUnits(value, usdt.decimals)} ${usdt.symbol}`;
@@ -1764,6 +1797,14 @@ function FundPageBody(): ReactNode {
           void queryClient.invalidateQueries({ queryKey: ['fund-status'], refetchType: 'all' });
           return;
         }
+      }
+      if (testnetWalletBuy && hash !== undefined && transferState === 'confirmed' && portfolioIdAfterEnroll !== null) {
+        // 測試網：錢包轉進來的 USDT 要記成這檔的投入，後端才會排進買入（cre8-app#114）。
+        await postFundingLot(token, portfolioIdAfterEnroll, { kind: 'wallet_transfer', txHash: hash })
+          .then(() => { funded = true; })
+          .catch(() => {
+            claimNote = 'Your USDT arrived in this fund’s account, but it could not be scheduled to buy yet. Contact support with the transfer link.';
+          });
       }
       if (transferState === 'reverted') {
         showProgress({ tone: 'error', title: 'Transfer reverted', detail: 'The network rejected the transfer.', hash });
