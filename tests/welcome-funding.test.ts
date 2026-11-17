@@ -64,8 +64,8 @@ test("the testnet purchase asks buy-funding first and records the daily claim as
   const api = fs.readFileSync("src/lib/api.ts", "utf8");
   expect(api).toContain("`/portfolios/${portfolioId}/buy-funding`, { method: 'POST', token, body: {} }");
   expect(api).toContain("`/portfolios/${portfolioId}/funding-lots`, { method: 'POST', token, body: { source } }");
-  expect(page).toContain("await postBuyFunding(token, target)");
-  expect(page).toContain("postFundingLot(token, target, { kind: 'faucet_claim', claimId })");
+  expect(page).toContain("retryWhileBusy(() => postBuyFunding(token, target), busyRetry)");
+  expect(page).toContain("postFundingLot(token, target, { kind: 'faucet_claim', claimId: claimId as string })");
   expect(page).toMatch(/if \(!needsDailyFaucet\(cause\)\) throw cause;\s*\/\/[^\n]*\n\s*forgetPendingWelcome\(target\);\s*rememberWelcomeUsed\(target\);/);
   expect(page).toContain("setDailyNeeded(true);");
   expect(page).toContain("funding?.state === 'pending'");

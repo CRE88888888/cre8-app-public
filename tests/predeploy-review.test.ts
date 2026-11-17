@@ -54,7 +54,7 @@ test("H1: after a 202 welcome, the next press asks buy-funding again instead of 
   expect(afterBuyFunding({ funding: "welcome_grant", lot: { replayed: false } }, false)).toBe("invest");
   expect(afterBuyFunding({ funding: "existing_cash", lot: null }, false)).toBe("existing");
   // 原始碼：buy-funding 在每日領取之前，202 時記下 grantId。
-  expect(FUND_PAGE.indexOf("await postBuyFunding(token, target)")).toBeLessThan(FUND_PAGE.indexOf("await postFaucetUsdt(token, account as string)"));
+  expect(FUND_PAGE.indexOf("retryWhileBusy(() => postBuyFunding(token, target), busyRetry)")).toBeLessThan(FUND_PAGE.indexOf("await postFaucetUsdt(token, account as string)"));
   expect(FUND_PAGE).toContain("rememberPendingWelcome(target, funding.grantId);");
 });
 
@@ -73,7 +73,7 @@ test("H2: on chain 56 a typed fund cannot be bought before the mainnet funding p
   // 讀不到：不轉。
   await expect(assertSubscriptionOpen(mainnet, async () => { throw new ApiError(503, "EXECUTION_STORAGE_UNAVAILABLE", "x"); })).rejects.toBeInstanceOf(SubscriptionLocked);
   // 原始碼：檢查在補 gas 與轉 USDT 之前；新買家在建帳戶之前。
-  const check = FUND_PAGE.indexOf("await assertSubscriptionOpen(CHAIN, () => getPortfolioExecution(token, target));");
+  const check = FUND_PAGE.indexOf("await assertSubscriptionOpen(CHAIN, () => retryWhileBusy(() => getPortfolioExecution(token, target), busyRetry));");
   expect(check).toBeGreaterThan(0);
   expect(check).toBeLessThan(FUND_PAGE.indexOf("await sendGasTopUp({ wallet, to: account as Address"));
   expect(check).toBeLessThan(FUND_PAGE.indexOf("hash = await sendUsdt(wallet"));

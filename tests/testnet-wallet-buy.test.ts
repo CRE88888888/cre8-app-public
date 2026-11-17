@@ -61,7 +61,7 @@ test("the fund page offers both on testnet and records the wallet transfer as a 
   const transfer = page.indexOf("hash = await sendUsdt(wallet, usdt.address as Address, account as Address, value);");
   expect(gas).toBeGreaterThan(0);
   expect(gas).toBeLessThan(transfer);
-  expect(page.indexOf("{ kind: 'wallet_transfer', txHash: hash }")).toBeGreaterThan(page.indexOf("transferState = hash === undefined"));
+  expect(page.indexOf("{ kind: 'wallet_transfer', txHash: hash as string }")).toBeGreaterThan(page.indexOf("transferState = hash === undefined"));
   const api = fs.readFileSync("src/lib/api.ts", "utf8");
   expect(api).toContain("return request('/faucet/gas', { method: 'POST', token, body: {} });");
   expect(api).toContain("{ kind: 'wallet_transfer'; txHash: string }");

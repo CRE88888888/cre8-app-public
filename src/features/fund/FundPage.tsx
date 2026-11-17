@@ -8,6 +8,7 @@ import type { Address } from 'viem';
 import { cancelPendingVersion, closePosition, confirmEnrollment, continueRedeem, enrollPortfolio, prepareEnrollment, getAssets, getPortfolioExecution, getPortfolioStatus, getPortfolios, getRenewalParams, getStrategy, listStrategies, postBuyFunding, postFaucetUsdt, postFundingLot, postGasFaucet, postRebalance, postRenewalResult, redeemPortfolio } from '../../lib/api';
 import { CHAIN, CHAIN_ID, approveCalldata, assertRpcChain, bsc as appChain, publicClientFor, readOnlyClient, readRpcUrl, sendGasTopUp, sendRenewalUserOp, sendSudoCalls, sendSweep, sendWithdraw } from '../../lib/kernel';
 import type { BuyFunding, PortfolioStatus, RedeemResult } from '../../lib/api';
+import { retryWhileBusy } from '../../lib/portfolio-busy';
 import { defaultPayWith, ensureOwnerGas, walletBuyMinimum, walletBuyProblem, type TestnetPayWith } from '../../lib/testnet-wallet-buy';
 import { MOCK_FUNDS } from '../../data/mock-funds';
 import {safePublicReturn} from '../../lib/public-navigation';
@@ -1512,6 +1513,8 @@ function FundPageBody(): ReactNode {
     /** 測試網：這一次的錢已經記成這檔的投入（迎新、每日領取，或上次沒買完的）。之後失敗也不能說成「沒送出」。 */
     let funded = false;
     showProgress({ tone: 'pending', title: 'Preparing your purchase', detail: 'Follow the prompts in your wallet.' });
+    // 帳戶處理中（剛加入基金時）：自動重送，畫面說明正在設定帳戶，不當成失敗（cre8-app#116）。
+    const busyRetry = { onBusy: () => showProgress({ tone: 'pending', title: 'Setting up your account…', detail: 'Your first buy takes a few extra seconds while your account is set up.' }) };
     try {
       // 沒有帳戶就先建（enroll）——「存款就是跟隨」，使用者不必先理解 enroll。
       // 位址是 counterfactual 的：同一個 (owner, strategy) 永遠同一個地址，所以建好之後
@@ -1606,7 +1609,7 @@ function FundPageBody(): ReactNode {
       // 主網：轉帳之前問後端這個帳戶能不能投入（`/execution` 的 automation）。不能就不轉、也不補 gas。
       if (!faucetBuy && portfolioIdAfterEnroll !== null) {
         const target = portfolioIdAfterEnroll;
-        await assertSubscriptionOpen(CHAIN, () => getPortfolioExecution(token, target));
+        await assertSubscriptionOpen(CHAIN, () => retryWhileBusy(() => getPortfolioExecution(token, target), busyRetry));
       }
 
       // 動錢之前先確認這個帳戶的 gas 夠不夠；不夠就**自動補**。
@@ -1654,7 +1657,7 @@ function FundPageBody(): ReactNode {
         // 上次每日領取到帳了、卻沒記成投入（後端忙或交易還沒確認）：先補記；記好了這次就把它買完，不再領新的。
         const earlier = pendingClaim(target);
         if (earlier !== null) {
-          await postFundingLot(token, target, { kind: 'faucet_claim', claimId: earlier })
+          await retryWhileBusy(() => postFundingLot(token, target, { kind: 'faucet_claim', claimId: earlier }), busyRetry)
             .then(() => { forgetClaim(target); rememberResume(target); buy = 'resume'; })
             .catch((cause) => { if (!retryClaimLater(cause)) forgetClaim(target); });
         }
@@ -1672,7 +1675,7 @@ function FundPageBody(): ReactNode {
           toast.replace(toastId, { tone: 'pending', title: 'Buy', body: 'Getting your test USDT…' });
           let funding: BuyFunding | null = null;
           try {
-            funding = await postBuyFunding(token, target);
+            funding = await retryWhileBusy(() => postBuyFunding(token, target), busyRetry);
           } catch (cause) {
             if (!needsDailyFaucet(cause)) throw cause;
             // 迎新給了別檔、失敗了，或在這檔用完了。
@@ -1778,7 +1781,7 @@ function FundPageBody(): ReactNode {
         // 每日領取到帳：記成這檔的投入，排進買入（backend BE-2）。沒記成就留著，下次按買入時補記。
         const target = portfolioIdAfterEnroll;
         let alreadyInvested = false;
-        await postFundingLot(token, target, { kind: 'faucet_claim', claimId })
+        await retryWhileBusy(() => postFundingLot(token, target, { kind: 'faucet_claim', claimId: claimId as string }), busyRetry)
           .then((lot) => {
             forgetClaim(target);
             // 同一天重送，水龍頭回的是原來那筆（backend#97 的冪等契約：200＋同一個 claimId）。那一筆之前就記過了：
@@ -1800,7 +1803,7 @@ function FundPageBody(): ReactNode {
       }
       if (testnetWalletBuy && hash !== undefined && transferState === 'confirmed' && portfolioIdAfterEnroll !== null) {
         // 測試網：錢包轉進來的 USDT 要記成這檔的投入，後端才會排進買入（cre8-app#114）。
-        await postFundingLot(token, portfolioIdAfterEnroll, { kind: 'wallet_transfer', txHash: hash })
+        await retryWhileBusy(() => postFundingLot(token, portfolioIdAfterEnroll as number, { kind: 'wallet_transfer', txHash: hash as string }), busyRetry)
           .then(() => { funded = true; })
           .catch(() => {
             claimNote = 'Your USDT arrived in this fund’s account, but it could not be scheduled to buy yet. Contact support with the transfer link.';

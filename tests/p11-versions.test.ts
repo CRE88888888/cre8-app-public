@@ -211,7 +211,7 @@ test("first buy on chain 97: backend deploys the account, the owner signs enroll
   expect(code).toBeLessThan(join);
   expect(join).toBeLessThan(sign);
   expect(sign).toBeLessThan(confirm);
-  expect(confirm).toBeLessThan(page.indexOf("funding = await postBuyFunding(token, target);"));
+  expect(confirm).toBeLessThan(page.indexOf("funding = await retryWhileBusy(() => postBuyFunding(token, target), busyRetry);"));
   expect(page).not.toContain("approveEnrollment");
   // 只有還沒有帳戶時才加入；已持有的人不會每次買都被要求重簽。
   expect(page.lastIndexOf("if (account === undefined) {", join)).toBeGreaterThan(page.indexOf("let account = holding?.smartAccounts[0]?.address;"));
