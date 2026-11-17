@@ -70,7 +70,14 @@ const STUB_POST_OP_GAS = 0n;
 /**
  * 估 gas 用的假 paymaster 資料：長度與真的一樣（uint48 效期 ×2 ＋ 65 bytes 簽名），簽名是固定的假值，
  * 對任何真的 UserOp 都無效。真正的資料在 `getPaymasterData` 才向後端要。
+ *
+ * 假簽名必須是「格式正確」的 ECDSA 簽名（與後端 `src/paymaster.ts` 的 stub 相同）：VerifyingPaymaster 用
+ * OpenZeppelin `ECDSA.recover`，格式錯的簽名（例如全 0x11）會直接 revert `ECDSAInvalidSignature()`，
+ * 估 gas 時 AA33 失敗；格式正確但簽的人不對只會回 SIG_VALIDATION_FAILED，估 gas 照常完成。
  */
+export const STUB_PAYMASTER_SIGNATURE: Hex =
+  '0xe82ed51b2b3964a6779171ee6589b1b2f5b5ebb77c1555626205d4619cb8df271a3f5c43f6b0ea3c76d852252d8a19539aa3ca2cb9fb66af3ac4dee7e846b4321c';
+
 export function stubPaymasterData(paymaster: Address): {
   paymaster: Address;
   paymasterData: Hex;
@@ -83,7 +90,7 @@ export function stubPaymasterData(paymaster: Address): {
     paymasterPostOpGasLimit: STUB_POST_OP_GAS,
     paymasterData: concatHex([
       encodeAbiParameters([{ type: 'uint48' }, { type: 'uint48' }], [0, 0]),
-      `0x${'11'.repeat(64)}1b`,
+      STUB_PAYMASTER_SIGNATURE,
     ]),
   };
 }
