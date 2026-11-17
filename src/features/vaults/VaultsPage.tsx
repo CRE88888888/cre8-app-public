@@ -6,7 +6,7 @@ import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useBodyClass } from "../../lib/use-body-class";
 import { LISTED_FUNDS } from "../../lib/public-funds";
 import type { ReferenceFund } from "../../lib/public-funds";
-import { symbolOf, synthesizeCommunityFund } from "../../lib/community-fund";
+import { catalogueTwin, symbolOf, synthesizeCommunityFund } from "../../lib/community-fund";
 import {
   COLLECTIONS,
   ASSET_CLASSES,
@@ -95,6 +95,9 @@ export function VaultsPage() {
     ? (strategies.data ?? []).filter(
         (strategy) =>
           hiddenCommunityStrategies.get(strategy.id) !== strategy.name &&
+          // 跟參考目錄同名的鏈上策略（測試網上架的 16 檔）已經以正式基金出現在自己的分類
+          // （Public figures、X voices、Themes…），點進去買的也是同一檔；不在 Community 重複列一次（使用者 2026-11-17）。
+          catalogueTwin(strategy.name) === undefined &&
           strategy.name.toLowerCase().includes(strategySearch),
       )
     : [];
