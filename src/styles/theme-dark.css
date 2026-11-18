@@ -220,3 +220,13 @@ body.atp-formal-fund #root #atp-fund-cover:not(.is-hedcut) h1 :is(a, button, spa
     body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover:not(.is-hedcut)) .atp-fund-byline :is(.btn, .fund-introduction-trigger):hover { background: rgba(20, 40, 32, .9); color: #f4f1e8; }
   }
 }
+
+/*
+ * Buy 面板（2026-11-18）：public-detail-source.css 把 #ticket 寫死成 white，手機 Buy 抽屜與桌機右欄都變成白底，
+ * 上面的淺色字（Fund updates…、Ways to add money）看不見。改回面板色（--white 在深色主題是 --forest-surface）。
+ */
+body.fund-detail-redesign #ticket { background: var(--white); border-color: var(--forest-line); }
+/* 手機 Buy 抽屜在 #root 外面，吃不到桌機那條分段控制規則，選中項變成一塊淺色。照桌機：凹槽用 raised，選中用面板色。 */
+.app-bottom-sheet #ticket .seg { border: 0; background: var(--forest-raised); padding: 3px; }
+.app-bottom-sheet #ticket .seg button { background: transparent; color: var(--steel); }
+.app-bottom-sheet #ticket .seg button.on { background: var(--forest-surface); color: var(--ink); }

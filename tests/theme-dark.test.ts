@@ -45,3 +45,11 @@ test("photo covers keep light text and dark glass buttons (names were dark-on-da
   // 桌機寬版：疊在封面上的兩顆按鈕是深色玻璃＋淺字，不是 fund-page.css 的白色玻璃（字也是淺色，會白底白字）。
   expect(css).toMatch(/@container fund-heading \(min-width: 560px\) \{\s*body\.atp-formal-fund #root \.vault-heading:has\(#atp-fund-cover:not\(\.is-hedcut\)\) \.atp-fund-byline :is\(\.btn, \.fund-introduction-trigger\) \{ background: rgba\(8, 20, 15, \.72\); color: #f4f1e8;/);
 });
+
+test("the Buy panel is a dark panel, not the hard-coded white from public-detail-source.css", () => {
+  // public-detail-source.css 把 #ticket 寫死 background:white；深色主題要蓋回面板色，不然手機抽屜裡的淺色字看不見。
+  expect(fs.readFileSync("src/styles/public-detail-source.css", "utf8")).toMatch(/body\.fund-detail-redesign #ticket\{[^}]*background:white/);
+  expect(css).toContain("body.fund-detail-redesign #ticket { background: var(--white); border-color: var(--forest-line); }");
+  // 手機抽屜在 #root 外：分段控制的選中項用面板色，不是淺色色塊。
+  expect(css).toContain(".app-bottom-sheet #ticket .seg button.on { background: var(--forest-surface); color: var(--ink); }");
+});
