@@ -83,3 +83,34 @@ body.atp-formal-fund #root #atp-fund-cover.is-hedcut h1 :is(a, button, span) { c
 }
 #root .mkt-avatar img { object-position: 50% 30% !important; transform: scale(1.18); }
 #fund-explore .mkt-deck .mkt-avatar { box-shadow: none; }
+
+/* ── 寫實照封面（2026-11-18）：滿版照片，左邊 40% 本來就是暗的留給名稱，不加漸層 ── */
+body.atp-formal-fund #root #atp-fund-cover.is-photo .atp-fund-cover-shade { display: none; }
+body.atp-formal-fund #root #atp-fund-cover.is-photo h1 { right: auto; max-width: 46%; }
+/*
+ * 桌機：主欄夠寬（封面約 3.2:1）時，名稱與兩顆按鈕都排在左邊暗處，不壓到右邊的人，名稱太長就縮小；
+ * 主欄窄（約 720–1100px 的視窗，右邊還有下單面板）時，按鈕移到封面下面一行，不疊在名稱上。
+ */
+@media (min-width: 720px) {
+  body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-photo) { container: fund-heading / inline-size; }
+  @container fund-heading (min-width: 560px) {
+    body.atp-formal-fund #root #atp-fund-cover.is-photo h1 {
+      left: 28px;
+      bottom: 76px;
+      max-width: 44%;
+      font-size: clamp(24px, calc(44cqi / (var(--title-word, 13) * 0.55)), 40px);
+    }
+    body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-photo) .atp-fund-byline { right: auto; left: 28px; bottom: 24px; }
+  }
+  @container fund-heading (max-width: 559.98px) {
+    body.atp-formal-fund #root #atp-fund-cover.is-photo h1 {
+      left: 20px;
+      bottom: 20px;
+      max-width: calc(100% - 40px);
+      font-size: clamp(22px, calc((100cqi - 40px) / (var(--title-word, 13) * 0.55)), 32px);
+    }
+    body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-photo) .atp-fund-byline { position: static; flex-wrap: wrap; justify-content: flex-start; margin-top: 12px; padding-top: 0; }
+    body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-photo) .atp-fund-byline :is(.btn, .fund-introduction-trigger) { background: var(--white); box-shadow: inset 0 0 0 1px var(--hair); }
+    body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-photo) .atp-fund-byline :is(.btn, .fund-introduction-trigger):hover { background: var(--snow); }
+  }
+}

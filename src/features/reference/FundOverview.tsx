@@ -66,7 +66,7 @@ export function FundOverview({
             <AppIcon name="left" size={16} /> {fromPortfolio ? "Profile" : "All funds"}
           </Link>
           <div className="vault-heading">
-            <div className={`atp-fund-cover${meta?.cover.art === "hedcut" ? ` is-hedcut is-${meta.cover.subject ?? "person"}` : ""}`} id="atp-fund-cover" data-fund-cover>
+            <div className={`atp-fund-cover${meta?.cover.art === "hedcut" ? ` is-hedcut is-${meta.cover.subject ?? "person"}` : meta?.cover.art === "photo" ? " is-photo" : ""}`} id="atp-fund-cover" data-fund-cover>
               {meta === undefined ? (
                 <div
                   style={{
@@ -87,7 +87,8 @@ export function FundOverview({
                   src={meta.cover.src}
                   alt=""
                   fetchPriority="high"
-                  style={{ objectPosition: `50% ${meta.cover.position}%` }}
+                  // 寫實照的人物在右 60%：封面被擠成直的時（桌機窄主欄）要往右對齊，才不會切到人（styles/covers.css）。
+                  style={{ objectPosition: `${meta.cover.art === "photo" ? 72 : 50}% ${meta.cover.position}%` }}
                 />
               )}
               <div className="atp-fund-cover-shade" />

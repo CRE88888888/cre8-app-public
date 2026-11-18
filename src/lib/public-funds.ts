@@ -1,5 +1,5 @@
 import payload from "../reference/data/funds.json";
-import { listedFunds } from "./testnet-catalogue";
+import { listedFunds, TESTNET_LISTED_SLUGS } from "./testnet-catalogue";
 import metadata from "../reference/data/fund-metadata.json";
 import assetData from "../reference/data/asset-index.json";
 import type { ExploreFund } from "../reference/lib/fund-explore";
@@ -52,8 +52,11 @@ export type ReferenceMetadata = {
     thumbnailSrc: string;
     position: number;
     thumbnailPosition: number;
-    /** `hedcut` = 白底點畫圖：版式是「圖靠右、名稱在左」，不是滿版照片。 */
-    art?: "hedcut";
+    /**
+     * `hedcut` = 白底點畫圖：版式是「圖靠右、名稱在左」，不是滿版照片。
+     * `photo` = 深綠寫實照（2026-11-18）：滿版、人物在右 60%、左邊留給名稱，不加漸層。
+     */
+    art?: "hedcut" | "photo";
     /** 點畫圖畫的是人像（肩膀可以出血到下緣）還是物件（要完整留在框內）。 */
     subject?: "person" | "object";
   };
@@ -128,10 +131,30 @@ const hedcutCover = (slug: string): ReferenceMetadata["cover"] => ({
   art: "hedcut",
   subject: HEDCUT_OBJECTS.has(slug) ? "object" : "person",
 });
+/**
+ * 寫實照封面（2026-11-18）：深綠底、金色側光、穿西裝風衣戴墨鏡的主角，牆上刻公司名。
+ * 圖在 `public/fund-covers/photo/`：大圖 `<slug>.webp`（3:2）與方形縮圖 `<slug>-thumb.webp`（已裁好臉）。
+ * 使用者 2026-11-18：測試網沒有的基金先不放，所以只有測試網列出的那 16 檔有（見 `testnet-catalogue.ts`）；
+ * 其餘仍用點畫封面。
+ */
+export const PHOTO_COVER_SLUGS: ReadonlySet<string> = new Set(TESTNET_LISTED_SLUGS);
+/** 主題基金拍的是物件（Mag7 是七位 CEO 的合照，也算主題）。 */
+const PHOTO_OBJECTS: ReadonlySet<string> = new Set(["mag7", "ai-buildout", "multi-asset-balanced", "treasury-reserve"]);
+const photoCover = (slug: string): ReferenceMetadata["cover"] => ({
+  src: `/fund-covers/photo/${slug}.webp`,
+  thumbnailSrc: `/fund-covers/photo/${slug}-thumb.webp`,
+  // 桌機封面約 3.2:1，只露出圖的中間一半：人像往上對齊，才看得到牆上的字與整顆頭；物件置中。
+  position: slug === "mag7" ? 35 : PHOTO_OBJECTS.has(slug) ? 50 : 22,
+  thumbnailPosition: 50,
+  art: "photo",
+  subject: PHOTO_OBJECTS.has(slug) ? "object" : "person",
+});
+const coverFor = (slug: string, meta: ReferenceMetadata): ReferenceMetadata["cover"] =>
+  PHOTO_COVER_SLUGS.has(slug) ? photoCover(slug) : HEDCUT_SLUGS.has(slug) ? hedcutCover(slug) : meta.cover;
 export const REFERENCE_METADATA: Record<string, ReferenceMetadata> = Object.fromEntries(
   Object.entries(metadata as unknown as Record<string, ReferenceMetadata>).map(([slug, meta]) => [
     slug,
-    HEDCUT_SLUGS.has(slug) ? { ...meta, cover: hedcutCover(slug) } : meta,
+    { ...meta, cover: coverFor(slug, meta) },
   ]),
 );
 export const REFERENCE_ASSETS = assetData as UnderlyingAsset[];
