@@ -36,3 +36,17 @@ test("photo covers have no gradient and keep the title and buttons on the dark l
   const overview = fs.readFileSync("src/features/reference/FundOverview.tsx", "utf8");
   expect(overview).toContain('meta?.cover.art === "photo" ? " is-photo"');
 });
+
+test("Mag7 cover is the full 1536x1024 group shot with a square 256 thumbnail (v8 A, natural proportions)", () => {
+  // 使用者 2026-11-19 選 A 版（前排三人、後排四人，肩寬正常）；圖要維持原尺寸，封面裁切才對得上。
+  const size = (file: string) => {
+    const b = fs.readFileSync(path.join("public/fund-covers/photo", file));
+    expect(b.toString("ascii", 0, 4)).toBe("RIFF");
+    const chunk = b.toString("ascii", 12, 16);
+    if (chunk === "VP8 ") return [b.readUInt16LE(26) & 0x3fff, b.readUInt16LE(28) & 0x3fff];
+    if (chunk === "VP8L") { const v = b.readUInt32LE(21); return [(v & 0x3fff) + 1, ((v >> 14) & 0x3fff) + 1]; }
+    return [b.readUIntLE(24, 3) + 1, b.readUIntLE(27, 3) + 1];
+  };
+  expect(size("mag7.webp")).toEqual([1536, 1024]);
+  expect(size("mag7-thumb.webp")).toEqual([256, 256]);
+});
