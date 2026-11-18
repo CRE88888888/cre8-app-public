@@ -53,3 +53,5 @@ import './styles/fund-page.css';
 import './styles/pages.css';
 import './styles/builder.css';
 import './styles/covers.css';
+// 深色主題（深林綠＋暖金，2026-11-17）：只換色，一定最後載入。
+import './styles/theme-dark.css';
