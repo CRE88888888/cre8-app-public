@@ -52,9 +52,5 @@ jobs:
         # 建置設定只有一個來源，避免 CI 與本機產生不同的 bundle。
         run: bun run build
 
-      - name: Upload dist
-        uses: actions/upload-artifact@v7
-        with:
-          name: dist
-          path: dist
-          retention-days: 7
+      # 不上傳 dist artifact（2026-11-19）：部署走 Cloudflare Workers Builds，沒有東西下載它；
+      # 帳號的 artifact 儲存額度用完後，這一步讓每個 PR 都變紅。

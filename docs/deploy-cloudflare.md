@@ -114,7 +114,7 @@ bunx wrangler deploy --dry-run    # 只打包檢查，不上傳
 
 | Workflow | 觸發 | 做什麼 |
 |---|---|---|
-| `.github/workflows/ci.yml` | PR、push main、手動 | `bun install --frozen-lockfile` → `bun test tests` → `typecheck` → `build` → 上傳 `dist` artifact |
+| `.github/workflows/ci.yml` | PR、push main、手動 | `bun install --frozen-lockfile` → `bun test tests` → `typecheck` → `build`（不上傳 artifact，部署走 Workers Builds） |
 
 Workers Builds 的建置失敗**只顯示在 Cloudflare**，PR 上看不到，所以 CI 保留：
 `typecheck` 抓的是「本機能過、CI 掛掉」那類問題（例如依賴只存在於某人的家目錄 `~/node_modules`）。
