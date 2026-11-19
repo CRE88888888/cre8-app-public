@@ -20,7 +20,6 @@ test("sticky side panels sit below the real masthead height, never a hard-coded 
     ["src/styles/fund-page.css", "#root .vgrid > .side {"],
     ["src/styles/pages.css", 'body.atp-asset-page #root [class*="_side_"] {'],
     ["src/styles/pages.css", "#root .cf-side {"],
-    ["src/styles/builder.css", 'aside[class*="_side_"] { position: sticky;'],
   ] as const) {
     const css = read(file);
     const rule = css.slice(css.indexOf(selector), css.indexOf("}", css.indexOf(selector)));
@@ -59,16 +58,6 @@ test("fund cover: narrow covers stack portrait over name, and the name never run
   expect(longestWordLength("Stanley Druckenmiller · Duquesne")).toBe(13);
   expect(longestWordLength("Bill Gates·Foundation Trust")).toBe(10);
   expect(longestWordLength("  ")).toBe(1);
-});
-
-test("create page: the cover editor goes single-column when narrow, so Change cover no longer sits on the heading", () => {
-  const css = read("src/styles/builder.css");
-  expect(css).toContain('section[aria-label="Fund cover"] { container: cover-editor / inline-size; }');
-  const narrow = css.slice(css.indexOf("@container cover-editor (max-width: 559.98px)"));
-  expect(narrow).toContain('> [class] { grid-area: auto; grid-column: 1 / -1; }');
-  expect(narrow).toContain('[class*="_preview_"] { width: 100%;');
-  // 費用表的左欄不可窄過最長的字。
-  expect(read("src/features/create/fund-designer.module.css")).toContain(".kv dt { min-width: min-content;");
 });
 
 test("fund key figures and the asset price stay inside their columns on narrow desktop widths", () => {

@@ -4,7 +4,8 @@
  * 使用者 2026-11-15 決定：測試網只展示 16 檔基金（刪掉負報酬與持倉過多的 14 檔），資產用
  * cre8-contracts#43 的 92 個（`testnet-97.ts`）。主網行為不在這裡：主網仍看 `launch-admission.ts` 的 38 個。
  *
- * 其餘 14 檔的資料保留在目錄裡，只是測試網不列出來、也不開放投資。
+ * 2026-11-19 新方向（cre8-app#123）：主網也只留這 16 檔。其餘 14 檔的資料在同步來的 `src/reference/data/`
+ * （不能改），所以只在這裡藏起來：目錄、基金頁、買入都看不到（之後會換成首發 21 檔，另一張單）。
  * 純邏輯：不碰 React、不碰 fetch。是否為測試網由 `VITE_CHAIN_ID` 決定（與 `lib/kernel.ts` 同一個來源），
  * 函式都另外收一個 `testnet` 參數，單元測試不必改環境變數。
  */
@@ -51,12 +52,12 @@ export function testnetToken(symbol: string | null | undefined): string | null {
   return (typeof symbol === 'string' && SYMBOLS.get(symbol.toLowerCase())) || null;
 }
 
-/** 這檔展示基金要不要列出來：主網全部列；測試網只列那 16 檔。 */
-export function isListedFund(slug: string, testnet: boolean = IS_TESTNET): boolean {
-  return !testnet || LISTED.has(slug);
+/** 這檔展示基金要不要列出來：主網與測試網都只列那 16 檔（cre8-app#123 起主網也一樣）。 */
+export function isListedFund(slug: string): boolean {
+  return LISTED.has(slug);
 }
 
 /** 只留要列出來的基金。回傳的是同一批物件（參考資料更新時會就地改寫，畫面跟著變）。 */
-export function listedFunds<T extends { slug: string }>(funds: readonly T[], testnet: boolean = IS_TESTNET): T[] {
-  return funds.filter((fund) => isListedFund(fund.slug, testnet));
+export function listedFunds<T extends { slug: string }>(funds: readonly T[]): T[] {
+  return funds.filter((fund) => isListedFund(fund.slug));
 }

@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 import { catalogueTargets } from "../src/data/public-fund-adapter";
 import {
   REFERENCE_FUNDS,
+  LISTED_FUNDS,
   REFERENCE_METADATA,
   PHOTO_COVER_SLUGS,
   REFERENCE_ASSETS,
@@ -25,7 +26,6 @@ import {
   emptyBuilder,
   addAsset,
 } from "../src/reference/lib/fund-builder";
-import { activationDesign } from "../src/lib/activation-design";
 import { safePublicReturn } from "../src/lib/public-navigation";
 import { assetReturnUrl } from "../src/reference/lib/asset-navigation";
 import {
@@ -54,16 +54,15 @@ test("full published catalogue and all figures remain available; withdrawn figur
   expect(source.commit).toBe("0f3196d37821561050dee1176d9d33e3b51c5d5e");
   expect(REFERENCE_FUNDS).toEqual(snapshot.funds);
 });
-test("every model has its approved cover, real holdings, history and all recorded updates", () => {
-  for (const fund of REFERENCE_FUNDS) {
+test("every listed model has its approved cover, real holdings, history and all recorded updates", () => {
+  for (const fund of LISTED_FUNDS) {
     const meta = REFERENCE_METADATA[fund.slug];
     expect(fs.existsSync(path.join("public", meta.cover.src))).toBe(true);
     expect(fs.existsSync(path.join("public", meta.cover.thumbnailSrc))).toBe(true);
-    // 2026-11-13：30 檔參考基金的封面統一成點畫（DESIGN.md「基金封面：點畫」）；
-    // 2026-11-18：測試網列出的 16 檔換成寫實照（tests/photo-covers.test.ts）。
-    const art = PHOTO_COVER_SLUGS.has(fund.slug) ? "photo" : "hedcut";
-    expect(meta.cover.art).toBe(art);
-    expect(meta.cover.src).toBe(`/fund-covers/${art}/${fund.slug}.webp`);
+    // 2026-11-18：列出的 16 檔都是寫實照（tests/photo-covers.test.ts）；點畫封面隨其他 14 檔拿掉（cre8-app#123）。
+    expect(PHOTO_COVER_SLUGS.has(fund.slug)).toBe(true);
+    expect(meta.cover.art).toBe("photo");
+    expect(meta.cover.src).toBe(`/fund-covers/photo/${fund.slug}.webp`);
     expect(meta.holdings.length).toBeGreaterThan(0);
     expect(meta.updates.length).toBeGreaterThan(0);
     expect(fund.nav!.length).toBeGreaterThan(90);
@@ -169,25 +168,14 @@ test("search and category filters cover X voices and underlying company names", 
     selectFunds(REFERENCE_FUNDS, "NVIDIA", "all", "perf", "1Y").length,
   ).toBeGreaterThan(1);
 });
-test("activation imports only allocation addresses and weights, without authorizing or translating other rules", () => {
-  let design = addAsset(emptyBuilder(), "BTC", "demo");
-  design = { ...design, name: "Test allocation" };
-  const plan = activationDesign(design)!;
-  expect(plan.name).toBe(design.name);
-  expect(Object.values(plan.weights).reduce((a, b) => a + b, 0)).toBe(100);
-  expect(
-    Object.keys(plan.weights).every((a) => /^0x[0-9a-f]{40}$/.test(a)),
-  ).toBe(true);
-  expect(
-    activationDesign({ rows: [{ key: "NOT_A_REAL_ASSET", share: 100 }] }),
-  ).toBeNull();
-  expect(activationDesign(null)).toBeNull();
-});
 test("deep-link returns retain same-origin discovery context and reject external redirects", () => {
   const origin = "https://cre8-atp.pages.dev";
-  expect(safePublicReturn("/leaderboard?period=90D", origin)).toBe(
-    "/leaderboard?period=90D",
+  expect(safePublicReturn("/vaults?period=90D", origin)).toBe(
+    "/vaults?period=90D",
   );
+  // Creators／leaderboard／創作者頁已拿掉（cre8-app#123）：舊連結回到 /vaults。
+  expect(safePublicReturn("/leaderboard?period=90D", origin)).toBe("/vaults");
+  expect(safePublicReturn("/creator/cre8", origin)).toBe("/vaults");
   expect(safePublicReturn("https://evil.example/vaults", origin)).toBe(
     "/vaults",
   );

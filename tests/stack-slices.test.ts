@@ -47,10 +47,7 @@ test("switching daily to weekly clamps to 52 and says so", () => {
   expect(clampSlices("weekly", 52)).toEqual({ buys: 52, clamped: false });
   expect(clampSlices("daily", 52)).toEqual({ buys: 52, clamped: false });
   expect(clampSlices("daily", 365)).toEqual({ buys: 365, clamped: false });
-  const designer = fs.readFileSync("src/features/create/FundDesigner.tsx", "utf8");
   // 夾值會被看到：記下原本幾期，畫面寫出「N buys became 52」。
-  expect(designer).toContain("setClamped(next.clamped ? p.buys : null);");
-  expect(designer).toContain("so {clamped} buys became {stackSlicesLimit(\"weekly\").max}.");
 });
 
 test("each buy is at least 10 USDT; a small amount gets fewer buys (about M = min(N, floor(amount / 10)))", () => {
@@ -86,24 +83,17 @@ test("minimum deposit is max(50, ceil(10 / (1 − cash))); a small asset weight 
   expect(minimumDepositFor([3_000])).toBe(50);
   // 現金 83% → ceil(58.82…) = 59：整 USDT 向上取整，與後端 minimumAssetContribution 相同。
   expect(minimumDepositFor([1_700])).toBe(59);
-  // 設計器用列的權重算。
-  const designer = fs.readFileSync("src/features/create/FundDesigner.tsx", "utf8");
-  expect(designer).toContain("const fallback = minimumDepositFor(rows.map((item) => Math.round(item.share * 100)));");
 });
 
 test("the per-batch rule replaces the old under-1-USDT note, from one constant", () => {
   expect(STACK_MIN_BUY_NOTE).toBe("Each buy is at least 10 USDT. When the amount is too small, it is split into fewer buys automatically.");
-  const designer = fs.readFileSync("src/features/create/FundDesigner.tsx", "utf8");
   const page = fs.readFileSync("src/features/fund/FundPage.tsx", "utf8");
-  for (const source of [designer, page]) {
+  for (const source of [page]) {
     expect(source).toContain("{STACK_MIN_BUY_NOTE}");
     expect(source).not.toMatch(/under 1 USDT|smallBuyNote|(?<!STACK_)MIN_BUY_USDT\b/);
     // 數字不寫死在畫面文案裡。
     expect(source).not.toMatch(/least (10|50) USDT/);
   }
-  expect(designer).toContain("this asset is bought in {plan.about}{plan.buys}");
-  // 測試網 gas 由平台全付：不顯示 gas 佔比。
-  expect(designer).not.toMatch(/gas share|of it is gas|% gas/i);
 });
 
 test("the buyer page reads each stack asset from the version and uses the real amount", () => {

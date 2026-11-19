@@ -4,23 +4,22 @@ import { FEATURES, featureLock, featureState, parseFeatureOverrides, playLock, t
 
 // cre8-app#58：還不能用的功能看得到、灰色、點不動；每一項的開關集中在 lib/feature-flags.ts。
 
+test("designer-only flags are gone with the fund designer (cre8-app#123)", () => {
+  // 建立基金拿掉後，只在設計器出現的灰色項（含績效費）不再是開關。
+  for (const key of ["ondoStocks", "holdEarn", "fundRules", "idleYield", "performanceFee", "settingsDelay"]) expect(key in FEATURES).toBe(false);
+});
+
 test("the defaults match what the testnet shows as not yet available", () => {
   const states = Object.fromEntries(Object.keys(FEATURES).map((key) => [key, featureState(key as FeatureKey, {})]));
   expect(states).toEqual({
     // 主網才開放。
     depositCard: "mainnet",
     depositCrossChain: "mainnet",
-    ondoStocks: "mainnet",
     // 定期定額：逐資產、參數由創作者設定（G0-4），後端 BE-2 已支援，開放。
     strategyDca: "on",
     // 其他策略與功能還沒做好：一律「Coming soon」（使用者 2026-11-15 決定，原本 Later 的四種也改成這樣）。
     strategyDips: "soon",
     strategyLimits: "soon",
-    holdEarn: "soon",
-    fundRules: "soon",
-    idleYield: "soon",
-    performanceFee: "soon",
-    settingsDelay: "soon",
     strategyRange: "soon",
     strategyTrend: "soon",
     strategyLp: "soon",
@@ -64,7 +63,7 @@ test("deployment overrides: only known names and states are accepted", () => {
   expect(parseFeatureOverrides(" strategyDca = on , depositCard=soon,")).toEqual({ strategyDca: "on", depositCard: "soon" });
   // 打錯的名稱、不存在的狀態、少了等號：都忽略，不會意外打開任何東西。
   expect(parseFeatureOverrides("strategyDCA=on,idleYield=yes,performanceFee,=on,toString=on,__proto__=on")).toEqual({});
-  expect(parseFeatureOverrides("idleYield=on,idleYield=later")).toEqual({ idleYield: "later" });
+  expect(parseFeatureOverrides("depositCard=on,depositCard=later")).toEqual({ depositCard: "later" });
 });
 
 test("strategies: buy & hold and stack are open; the other six are locked as Coming soon", () => {

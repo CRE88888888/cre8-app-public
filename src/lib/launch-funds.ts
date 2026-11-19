@@ -37,7 +37,7 @@ const STATUS_BY_SLUG: ReadonlyMap<string, FundLaunchStatus> = new Map(
 const TESTNET_STATUS_BY_SLUG: ReadonlyMap<string, FundLaunchStatus> = new Map(
   MOCK_FUNDS.map((fund) => {
     const missing = [...new Set(fund.holdings.map((holding) => holding.symbol).filter((symbol) => !isTestnetSymbol(symbol)))];
-    const open = isListedFund(fund.slug, true) && fund.holdings.length > 0 && missing.length === 0;
+    const open = isListedFund(fund.slug) && fund.holdings.length > 0 && missing.length === 0;
     return [fund.slug, { status: open ? 'open' : 'preview', missing }];
   }),
 );

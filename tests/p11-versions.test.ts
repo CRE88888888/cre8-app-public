@@ -240,23 +240,6 @@ test("who may cancel comes from the backend (canCancel), not from comparing the 
   expect(api).toContain("request(`/strategies/${strategyId}/versions/cancel`, { method: 'POST', token, body: {} })");
 });
 
-test("creating a fund on the P11 chain stops after publishing and explains the 24-hour wait", () => {
-  const fs = require("node:fs");
-  const create = fs.readFileSync("src/features/create/CreateFundPage.tsx", "utf8") as string;
-  expect(create).toContain("const VERSION_NOTICE_CHAIN = CHAIN.contracts?.registry !== undefined;");
-  const stop = create.indexOf("if (VERSION_NOTICE_CHAIN) {");
-  expect(stop).toBeGreaterThan(create.indexOf("const published = await publishVersion(token, strategy.id, version);"));
-  expect(stop).toBeLessThan(create.indexOf("const portfolio = await enrollPortfolio(token, strategy.id);"));
-  for (const rule of ["PUBLISH_RULES.delay", "PUBLISH_RULES.interval", "PUBLISH_RULES.feeCut"]) expect(create).toContain(`{${rule}}`);
-  // 審查 #95 第 11 項：首發版本不能取消（backend#126 canCancel=false），建立頁不寫取消的承諾。
-  expect(create).not.toContain("{PUBLISH_RULES.cancel}");
-  expect(create).not.toMatch(/you can cancel it/i);
-  // 審查 #95 第 12 項：開放時間用發版回應的 activeAt，不自己算 +24h。
-  expect(create).toContain("opensAt: opensAtFrom(published.activeAt)");
-  expect(create).not.toContain("Date.now() / 1000) + VERSION_DELAY_SECONDS");
-  expect(create).toContain("`Your fund opens for buying on ${whenText(created.opensAt)}.`");
-});
-
 test("chain 56 reads no version schedule", () => {
   const fs = require("node:fs");
   const hook = fs.readFileSync("src/features/fund/use-version-schedule.ts", "utf8") as string;

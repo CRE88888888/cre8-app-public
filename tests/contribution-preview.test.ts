@@ -195,7 +195,6 @@ test("chain 56 (or no stack, or no amount) never calls the endpoint", () => {
   expect(previewBody(97, execution, raw(1_000))).toEqual({ chainId: 97, execution, amountRaw: raw(1_000) });
   // 頁面用 build 的鏈（CHAIN_ID）決定，不寫死 97。
   expect(fs.readFileSync("src/features/fund/FundPage.tsx", "utf8")).toContain("useContributionPreview(previewBody(CHAIN_ID, execution, usdtToRaw(amountText)))");
-  expect(fs.readFileSync("src/features/create/FundDesigner.tsx", "utf8")).toContain('if (!IS_TESTNET || !rows.some((row) => row.play === "stack")) return null;');
 });
 
 test("amounts become 18-decimal raw strings", () => {
@@ -224,10 +223,6 @@ test("the backend minimum wins when it differs from the app's, and the designer 
   for (const state of [{ status: "loading" }, { status: "fallback", code: "RATE_LIMITED" }, { status: "blocked", code: "BELOW_MINIMUM_ALLOCATION" }] as PreviewState[]) {
     expect(backendMinimum(state, 58.83)).toEqual({ minimum: 58.83, retryRaw: null, settled: false });
   }
-  const designer = fs.readFileSync("src/features/create/FundDesigner.tsx", "utf8");
-  expect(designer).toContain("const { minimum, retryRaw, settled } = backendMinimum(state, fallback);");
-  expect(designer).toContain("if (retryRaw !== null && key !== null) setBackend({ key, raw: retryRaw });");
-  expect(designer).toContain("const count = settled && state.status === \"ok\"");
 });
 
 test("the designer builds the same execution it would publish, with the full cash entry, from its rows", () => {

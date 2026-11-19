@@ -19,5 +19,5 @@ test("everything the header menu offered is still reachable from Profile", () =>
   expect(profile).toMatch(/exportWallet/);
   expect(profile).toMatch(/LinkedAccounts/);
   // 導覽列有 Profile。
-  expect(fs.readFileSync("src/components/TopBar.tsx", "utf8") + fs.readFileSync("src/lib/app-mode.ts", "utf8")).toMatch(/Profile/);
+  expect(fs.readFileSync("src/components/TopBar.tsx", "utf8")).toContain("label: 'Profile'");
 });

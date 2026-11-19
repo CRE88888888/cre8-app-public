@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { MOCK_FUNDS } from "../src/data/mock-funds";
+import { LISTED_FUNDS, REFERENCE_FUNDS, referenceFund } from "../src/lib/public-funds";
 import { MAINNET_STATUS } from "../src/lib/testnet-assets";
-import { activationDesign } from "../src/lib/activation-design";
 import { LAUNCH_ASSETS } from "../src/lib/launch-admission";
 import { INVESTABLE_FUND_SLUGS, fundLaunchStatus, investableFundSlugs } from "../src/lib/launch-funds";
 import { TESTNET_97 } from "../src/lib/testnet-97";
@@ -17,23 +17,28 @@ test("the 16 listed funds all exist in the catalogue, once each", () => {
   for (const slug of TESTNET_LISTED_SLUGS) expect(slugs.has(slug)).toBe(true);
 });
 
-test("testnet lists 16 funds; mainnet still lists all of them", () => {
-  expect(listedFunds(MOCK_FUNDS, true).map((fund) => fund.slug).sort()).toEqual([...TESTNET_LISTED_SLUGS].sort());
-  expect(listedFunds(MOCK_FUNDS, false).length).toBe(MOCK_FUNDS.length);
-  expect(isListedFund("elon-universe", true)).toBe(false);
-  expect(isListedFund("elon-universe", false)).toBe(true);
+test("testnet and mainnet both list the same 16 funds; the other 14 are hidden everywhere (cre8-app#123)", () => {
+  expect(listedFunds(REFERENCE_FUNDS).map((fund) => fund.slug).sort()).toEqual([...TESTNET_LISTED_SLUGS].sort());
+  expect(MOCK_FUNDS.map((fund) => fund.slug).sort()).toEqual([...TESTNET_LISTED_SLUGS].sort());
+  expect(LISTED_FUNDS.length).toBe(16);
+  expect(isListedFund("elon-universe")).toBe(false);
+  // 用網址直接打開也找不到（基金頁走 referenceFund）。
+  expect(referenceFund("elon-universe")).toBeUndefined();
+  expect(referenceFund("mag7")?.slug).toBe("mag7");
+  // 同步來的原始資料仍是 30 檔（參考資料更新要用同一份比對），只是不列出來。
+  expect(REFERENCE_FUNDS.length).toBe(30);
 });
 
 test("on testnet all 16 are open to invest and the other 14 are not", () => {
   expect(investableFundSlugs(true).sort()).toEqual([...TESTNET_LISTED_SLUGS].sort());
   for (const slug of TESTNET_LISTED_SLUGS) expect(fundLaunchStatus(slug, true)).toEqual({ status: "open", missing: [] });
-  // 沒列出的基金：就算成分全在 92 個裡，直接打網址進去也不能投資。
-  expect(fundLaunchStatus("elon-universe", true)?.status).toBe("preview");
+  // 沒列出的基金不在目錄裡：沒有狀態，也不能投資。
+  expect(fundLaunchStatus("elon-universe", true)).toBeNull();
 });
 
-test("mainnet behaviour is unchanged: 38 assets and the same 5 open funds", () => {
+test("mainnet: 38 assets; of the 16 listed funds, 4 are fully on the list", () => {
   expect(LAUNCH_ASSETS.filter((asset) => asset.symbol !== "USDT").length).toBe(38);
-  expect(INVESTABLE_FUND_SLUGS).toEqual(["mag7", "elon-universe", "raoul-pal-x", "ming-chi-kuo-x", "lyn-alden-x"]);
+  expect(INVESTABLE_FUND_SLUGS).toEqual(["mag7", "raoul-pal-x", "ming-chi-kuo-x", "lyn-alden-x"]);
   expect(investableFundSlugs(false)).toEqual([...INVESTABLE_FUND_SLUGS]);
 });
 
@@ -73,17 +78,4 @@ test("the 8 cryptos CRE8 added to the designer catalogue are there, testnet-list
   // 加得進設計（只能用 Buy & hold，跟其他 preview 資產一樣）。
   const design = B.addAsset(B.emptyBuilder(), "CAKE", "demo");
   expect(design.rows.map((row) => row.key)).toEqual(["CAKE"]);
-});
-
-test("a design moves to the activation page with testnet token addresses on testnet", () => {
-  const design = { ...B.addAsset(B.emptyBuilder(), "BTC", "demo"), name: "Test" };
-  const testnet = activationDesign(design, true)!;
-  const mainnet = activationDesign(design, false)!;
-  const btc = TESTNET_97.assets.BTCB.toLowerCase();
-  expect(testnet.weights[btc]).toBeGreaterThan(0);
-  expect(testnet.symbols[btc]).toBe("BTCB");
-  expect(mainnet.weights["0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c"]).toBe(testnet.weights[btc]);
-  // 沒有放進資產的部分是 USDT：測試網要換成測試 USDT 的地址。
-  const cash = Object.entries(testnet.symbols).find(([, symbol]) => symbol === "USDT");
-  if (cash) expect(cash[0]).toBe(TESTNET_97.contracts.usdt.toLowerCase());
 });

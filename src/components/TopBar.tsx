@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import type { MouseEvent, ReactNode } from 'react';
-import { flushSync } from 'react-dom';
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import type { ReactNode } from 'react';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { AppIcon, type AppIconName } from './AppIcon';
 import { WalletMenu } from './WalletMenu';
-import { MODE_HOME, modeOf, rememberMode, type AppMode } from '../lib/app-mode';
 import { useMobile } from '../lib/use-mobile';
 import { useMastheadHeight } from '../lib/masthead-height';
 
@@ -36,45 +34,30 @@ function C8Logo(): ReactNode {
   );
 }
 
-type Destination = { to: string; label: string; short?: string; icon: AppIconName; paths: string[]; exact?: boolean };
+type Destination = { to: string; label: string; icon: AppIconName; paths: string[] };
 
 /**
- * 兩個工作區各自的導覽。投資模式只留三個常回來的地方；建立與管理整個搬到 Studio，
- * 一般投資者不會再看到用不到的分頁。
+ * 導覽只剩逛基金與個人頁。建立基金、Studio 與 Creators 分頁已拿掉（基金只由平台上架，cre8-app#123）。
  */
-const destinations: Record<AppMode, Destination[]> = {
-  invest: [
-    { to: '/vaults', label: 'Funds', icon: 'explore', paths: ['/vaults', '/funds', '/vault', '/assets', '/asset'] },
-    { to: '/leaderboard', label: 'Creators', icon: 'creators', paths: ['/leaderboard', '/creator'] },
-    { to: '/portfolios', label: 'Profile', icon: 'profile', paths: ['/portfolios', '/portfolio'] },
-  ],
-  studio: [
-    { to: '/studio', label: 'Today', icon: 'activity', paths: ['/studio'], exact: true },
-    { to: '/studio/funds', label: 'My funds', icon: 'holdings', paths: ['/studio/funds', '/strategies'] },
-    { to: '/create', label: 'Create fund', short: 'Create', icon: 'create', paths: ['/create'] },
-    { to: '/studio/earnings', label: 'Earnings', icon: 'chart', paths: ['/studio/earnings'] },
-  ],
-};
+const destinations: Destination[] = [
+  { to: '/vaults', label: 'Funds', icon: 'explore', paths: ['/vaults', '/funds', '/vault', '/assets', '/asset'] },
+  { to: '/portfolios', label: 'Profile', icon: 'profile', paths: ['/portfolios', '/portfolio'] },
+];
 
-function isActive({ paths, exact }: Destination, pathname: string): boolean {
-  return paths.some((path) => pathname === path || (!exact && pathname.startsWith(path + '/')));
+function isActive({ paths }: Destination, pathname: string): boolean {
+  return paths.some((path) => pathname === path || pathname.startsWith(path + '/'));
 }
 
 /**
- * 各分頁根目錄在手機上的標題。這些頁面由頁面自己的 h1 當「大標題」，頂部列只放模式切換與錢包；
+ * 各分頁根目錄在手機上的標題。這些頁面由頁面自己的 h1 當「大標題」，頂部列只放錢包；
  * 捲過大標題後頂部列才出現小標題，跟原生 App 的導覽列一樣。
  */
 const tabRootTitles: Record<string, string> = {
   // 首頁就是 Funds（main 的 6565628 讓 Pages 首頁直接開 Explore）。
   '/': 'Funds',
   '/vaults': 'Funds',
-  '/leaderboard': 'Creators',
   '/portfolio': 'Profile',
   '/portfolios': 'Profile',
-  '/studio': 'Today',
-  '/studio/funds': 'My funds',
-  '/studio/earnings': 'Earnings',
-  '/create': 'Create a fund',
 };
 
 /** 捲過大標題（約 56px）才算「已捲動」；用 passive listener，不擋捲動。 */
@@ -90,62 +73,21 @@ function useScrolledPast(threshold: number, enabled: boolean): boolean {
   return enabled && scrolled;
 }
 
-/**
- * 右上角的模式切換。用文字而不是圖示：旁邊已經有錢包圓鈕，再放一個看不懂的圖示只會混淆。
- * 支援 View Transitions 的瀏覽器會淡入淡出，讓「換了一個工作區」這件事看得出來。
- */
-function ModeSwitch({ mode }: { mode: AppMode }): ReactNode {
-  const navigate = useNavigate();
-  const target: AppMode = mode === 'studio' ? 'invest' : 'studio';
-  // 往 Studio 的入口直接進設計器：設計基金不需要錢包，這是「建立基金」真正的第一步。
-  const to = target === 'studio' ? '/create' : MODE_HOME[target];
-  const onClick = (event: MouseEvent<HTMLAnchorElement>) => {
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduced || typeof document.startViewTransition !== 'function' || event.metaKey || event.ctrlKey) return;
-    event.preventDefault();
-    document.startViewTransition(() => flushSync(() => navigate(to)));
-  };
-  // 投資模式下這顆寫「Create a fund」：說的是使用者想做的事，不是我們內部的區域名稱（原本叫 Creator Studio）。
-  // 不放圖示 —— 原本的「方框加號」看起來像另一顆要按的按鈕，跟旁邊的 Connect wallet 搶。
-  // 離開 Studio 的那顆保留左箭頭，因為它是「返回」。
-  return (
-    <Link
-      className="app-mode-switch"
-      to={to}
-      onClick={onClick}
-      title={target === 'studio' ? 'Design your own fund. No wallet needed to start.' : 'Back to browsing and investing'}
-      data-target={target}
-    >
-      {target === 'invest' && <AppIcon name="left" size={16} />}
-      {target === 'studio' ? 'Create a fund' : 'Exit Studio'}
-    </Link>
-  );
-}
-
 export function TopBar(): ReactNode {
   const { pathname } = useLocation();
   const mobile = useMobile();
   const path = pathname.replace(/\/$/, '') || '/';
-  const mode = modeOf(path);
   const rootTitle = mobile ? tabRootTitles[path] : undefined;
   const scrolled = useScrolledPast(56, rootTitle !== undefined);
   const masthead = useRef<HTMLElement>(null);
   useMastheadHeight(masthead);
 
-  // 模式寫在 body 上，Studio 的視覺差異（深色分頁列、Studio 標記）全由 CSS 處理。
-  useEffect(() => {
-    rememberMode(mode);
-    document.body.classList.toggle('studio-mode', mode === 'studio');
-  }, [mode]);
-
   return (
     <>
       {rootTitle !== undefined ? (
         <header className="app-nav-bar" data-scrolled={scrolled ? 'true' : 'false'}>
-          {mode === 'studio' && <span className="app-mode-label">Studio</span>}
           <span className="app-nav-bar-title" aria-hidden={!scrolled}>{rootTitle}</span>
           <div className="app-nav-bar-actions">
-            <ModeSwitch mode={mode} />
             <WalletMenu iconOnly />
           </div>
         </header>
@@ -155,11 +97,10 @@ export function TopBar(): ReactNode {
             <a className="brand" href="/" aria-label="CRE8 home">
               <C8Logo />
             </a>
-            {mode === 'studio' && <span className="app-mode-label">Studio</span>}
 
             <nav className="nav" aria-label="Main navigation">
-              {destinations[mode].map((destination) => (
-                <NavLink key={destination.to} to={destination.to} end={destination.exact}
+              {destinations.map((destination) => (
+                <NavLink key={destination.to} to={destination.to}
                   className={() => (isActive(destination, path) || (destination.to === '/vaults' && path === '/') ? 'active' : '')}>
                   {destination.label}
                 </NavLink>
@@ -167,19 +108,18 @@ export function TopBar(): ReactNode {
             </nav>
 
             <div className="head-right">
-              <ModeSwitch mode={mode} />
               <WalletMenu iconOnly={mobile} />
             </div>
           </div>
         </header>
       )}
-      <nav className="app-mobile-nav" aria-label="Main navigation" data-count={destinations[mode].length}>
-        {destinations[mode].map((destination) => {
+      <nav className="app-mobile-nav" aria-label="Main navigation" data-count={destinations.length}>
+        {destinations.map((destination) => {
           const active = (destination.to === '/vaults' && path === '/') || isActive(destination, path);
           return (
             <Link key={destination.to} to={destination.to} aria-current={active ? 'page' : undefined}>
               <AppIcon name={destination.icon} active={active} size={23} />
-              <span>{destination.short ?? destination.label}</span>
+              <span>{destination.label}</span>
             </Link>
           );
         })}

@@ -75,20 +75,21 @@ test("every asset on the list (except USDT cash) exists in the designer, matched
   expect(B.ASSETS.filter((asset) => B.canPickAsset(asset) && isLaunchAsset(asset.token)).length).toBe(38);
 });
 
-test("exactly the five funds whose holdings are all on the list are investable", () => {
+test("exactly the four listed funds whose holdings are all on the list are investable", () => {
   // 主網的名單：明確指定鏈，`VITE_CHAIN_ID=97 bun test` 也要過（cre8-app#93）。
   // 與 docs#32 的結論一致：Mag7、Elon Universe、Raoul Pal、Ming-Chi Kuo（郭明錤）、Lyn Alden。
   // 這個測試失敗代表目錄資料或清單變了、可投資的名單跟著變了：確認是預期的再更新這裡。
-  expect([...INVESTABLE_FUND_SLUGS].sort()).toEqual(["elon-universe", "lyn-alden-x", "mag7", "ming-chi-kuo-x", "raoul-pal-x"]);
-  expect(MOCK_FUNDS.length).toBe(30);
-  expect(MOCK_FUNDS.filter((fund) => fundLaunchStatus(fund.slug, false)?.status === "preview").length).toBe(25);
+  // cre8-app#123：主網也只列測試網那 16 檔，Elon Universe 不在其中（首發 21 檔另一張單會換掉整份名單）。
+  expect([...INVESTABLE_FUND_SLUGS].sort()).toEqual(["lyn-alden-x", "mag7", "ming-chi-kuo-x", "raoul-pal-x"]);
+  expect(MOCK_FUNDS.length).toBe(16);
+  expect(MOCK_FUNDS.filter((fund) => fundLaunchStatus(fund.slug, false)?.status === "preview").length).toBe(12);
 });
 
 test("each showcase fund reports its status and what is missing", () => {
   expect(fundLaunchStatus("mag7", false)).toEqual({ status: "open", missing: [] });
   expect(fundLaunchStatus("lyn-alden-x", false)).toEqual({ status: "open", missing: [] });
-  // 兩個成分在審查裡沒過。
-  expect(fundLaunchStatus("crypto-leaders", false)).toEqual({ status: "preview", missing: ["ADA", "LINK"] });
+  // 沒列出的基金（cre8-app#123）不在目錄裡，沒有狀態。
+  expect(fundLaunchStatus("crypto-leaders", false)).toBeNull();
   // 一個成分不在清單上。
   expect(fundLaunchStatus("treasury-reserve", false)).toEqual({ status: "preview", missing: ["IEFon"] });
   for (const fund of MOCK_FUNDS) {

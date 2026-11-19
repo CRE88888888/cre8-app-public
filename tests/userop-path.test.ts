@@ -50,7 +50,7 @@ test("sendSudoCalls dispatches through sendUserOp, and the old path is the origi
   expect(kernel).toContain("return await accountClient.sendUserOperation({ calls: args.calls });");
   expect(kernel).toMatch(/legacy: async \(\) => \{\s*try \{\s*return await accountClient\.sendUserOperation\(\{ calls: args\.calls \}\);\s*\} catch \(cause\) \{\s*throw sponsorFailure \?\? cause;\s*\}\s*\}/);
   // 其他呼叫者沒有帶 onSubmitted。
-  for (const file of ["src/features/create/CreateFundPage.tsx", "src/features/fund/FundPage.tsx", "src/features/fund/AccountControls.tsx", "src/lib/approval-batches.ts"]) {
+  for (const file of ["src/features/fund/FundPage.tsx", "src/features/fund/AccountControls.tsx", "src/lib/approval-batches.ts"]) {
     const source = fs.readFileSync(file, "utf8");
     expect(source).not.toContain("onSubmitted");
   }

@@ -40,10 +40,7 @@ test("the page shows up at the moment of buying, selling or creating, never on o
   // 手機：登入頁開著時下單面板先收起來（面板是 modal，登入頁疊在上面會整頁按不到），關掉後才回來。
   expect(fund).toContain("open={mobileTicket && !signInOpen && !ticketHidden}");
 
-  const create = fs.readFileSync("src/features/create/CreateFundPage.tsx", "utf8");
-  expect(create).toContain("openSignIn({ purpose: 'create' });");
   // 只在有設計好的基金、而且 Privy 確定沒人登入時自動出現一次。
-  expect(create).toContain("draft === null || privyPhase !== 'signed-out' || askedToSignIn.current");
 
   // 沒有任何「一打開就出現」的邏輯（#66 已還原）。
   const app = fs.readFileSync("src/App.tsx", "utf8");

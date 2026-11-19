@@ -77,8 +77,8 @@ export function VaultsPage() {
    * 「Live on CRE8」= 鏈上真的存在、有人可以認購的 ATP 策略。
    *
    * 為什麼要另開一個區塊，而不是塞進下面的參考基金目錄：
-   * `REFERENCE_FUNDS` 是 30 檔**示範資料**（`Example funds · Reconstructed or simulated
-   * performance`）。使用者在 `/create` 建出來的策略是另一種東西 —— 它有自己的鏈上 id、
+   * `LISTED_FUNDS` 是 16 檔**示範資料**（`Example funds · Reconstructed or simulated
+   * performance`）。鏈上策略是另一種東西 —— 它有自己的鏈上 id、
    * 自己的版本與目標配置。把兩者混在同一份清單裡，會讓人以為示範基金也能下單。
    *
    * `GET /strategies` 是公開端點（實測未帶 token 也回 200），所以這裡用空 token 呼叫；

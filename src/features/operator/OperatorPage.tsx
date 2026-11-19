@@ -13,7 +13,6 @@ import { Button } from '@/components/ui/button';
 import { Badge, ErrorNote, Spinner } from '../../components/ui';
 import { toast } from '../../components/Toast';
 import { explainTradeFailure } from '../../lib/trade-failure';
-import { Link } from 'react-router-dom';
 import { AppIcon } from '../../components/AppIcon';
 import { OperatorWalletMenu, WalletMenu } from '../../components/WalletMenu';
 import { InvitesPanel } from './InvitesPanel';
@@ -505,11 +504,11 @@ export function OperatorPage(): ReactNode {
       <header className="explore-heading">
         <h1>Operations<span>.</span></h1>
       </header>
-      {/* 這是 CRE8 內部的營運後台，不是 creator 的管理頁（creator 用 Studio）。 */}
+      {/* 這是 CRE8 內部的營運後台。 */}
       <section className="app-portfolio-summary app-portfolio-guest" aria-labelledby="ops-guest-title">
         <span className="app-icon-tile app-portfolio-hero-icon"><AppIcon name="manage" size={22} /></span>
         <h2 id="ops-guest-title">Operations console</h2>
-        <p>This console is for the CRE8 operations team. Creators manage their funds in Studio.</p>
+        <p>This console is for the CRE8 operations team.</p>
         {/*
           使用者 2026-11-17：管理員用 X 帳號登入（@cre8admin 的 Privy 錢包列在後端 OPERATOR_WALLETS，免 waitlist）。
           backend#134 也允許營運錢包直接用錢包簽名（SIWE）登入，放在下面當備用。
@@ -519,7 +518,6 @@ export function OperatorPage(): ReactNode {
           <summary>Use an operator wallet instead</summary>
           <div style={{ marginTop: 8 }}><OperatorWalletMenu inline /></div>
         </details>
-        <Link to="/studio">Go to Studio <AppIcon name="right" size={16} /></Link>
       </section>
     </main>
   );

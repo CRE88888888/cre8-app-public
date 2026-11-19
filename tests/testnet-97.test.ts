@@ -357,5 +357,4 @@ test("sponsorship is only wired in when the chain is sponsored, and gas top-ups 
   const fund = fs.readFileSync("src/features/fund/FundPage.tsx", "utf8");
   expect(fund).toContain("&& !CHAIN.sponsored) {");
   expect(fund).toContain("if (CHAIN.sponsored) return false;");
-  expect(fs.readFileSync("src/features/create/CreateFundPage.tsx", "utf8")).toContain("shortfall > 0n && !CHAIN.sponsored");
 });

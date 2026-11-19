@@ -1,4 +1,4 @@
-import { REFERENCE_FUNDS } from "../lib/public-funds";
+import { LISTED_FUNDS } from "../lib/public-funds";
 import type { ReferenceFund } from "../lib/public-funds";
 import type { MockFund, MockHolding } from "./mock-funds";
 // 票券的目標配置取自原目標權重；不能把目前漂移後的持倉冒充 mandate。
@@ -20,7 +20,8 @@ export function catalogueTargets(fund: ReferenceFund): MockHolding[] {
   for (let i = 0; i < missing; i++) order[i % order.length].weightBps++;
   return prepared.map(({ symbol, weightBps }) => ({ symbol, weightBps }));
 }
-export const PUBLIC_FUNDS: MockFund[] = REFERENCE_FUNDS.map((f) => ({
+// 只有列出的 16 檔（cre8-app#123）：沒列出的基金用網址也打不開、買不到。
+export const PUBLIC_FUNDS: MockFund[] = LISTED_FUNDS.map((f) => ({
   slug: f.slug,
   name: f.name,
   symbol: f.symbol,

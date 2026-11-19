@@ -66,76 +66,15 @@ export type ReferenceMetadata = {
 };
 export const REFERENCE_FUNDS = payload.funds as unknown as ReferenceFund[];
 /**
- * 畫面上要列出來的基金（目錄、排行、創作者頁）。主網全部列；測試網只列 16 檔（cre8-app#86，見 `testnet-catalogue.ts`）。
- * 與 `REFERENCE_FUNDS` 是同一批物件：參考資料更新時就地改寫，這裡跟著變。用網址直接打開的基金頁仍查 `REFERENCE_FUNDS`。
+ * 畫面上要列出來的基金：主網與測試網都只列 16 檔（cre8-app#86、#123，見 `testnet-catalogue.ts`）。
+ * 與 `REFERENCE_FUNDS` 是同一批物件：參考資料更新時就地改寫，這裡跟著變。
+ * `REFERENCE_FUNDS` 仍是同步來的全部 30 檔，只給參考資料更新比對用；畫面一律用這份。
  */
 export const LISTED_FUNDS: ReferenceFund[] = listedFunds(REFERENCE_FUNDS);
 /**
- * 點畫封面（hedcut）：2026-11-13 起，30 檔參考基金的封面統一成同一種畫法 ——
- * 純白底、黑色墨點與線條（規格見 DESIGN.md「封面」）。圖在 `public/fund-covers/hedcut/`，
- * 每檔一張大圖（`<slug>.webp`）與一張縮圖（`<slug>-thumb.webp`）。
- *
- * 封面的來源資料（`src/reference/data/fund-metadata.json`）是同步來的不能改，
- * 所以在這裡覆蓋 `cover`：所有讀 `REFERENCE_METADATA[slug].cover` 的地方（列表頭像、
- * 基金頁封面、Portfolio 縮圖、交易抽屜）會一起換，不用各自處理。
- * 不在這份清單裡的基金（例如使用者自己建的）沒有圖，各處用名稱縮寫。
- */
-export const HEDCUT_SLUGS: ReadonlySet<string> = new Set([
-  "mag7",
-  "ai-buildout",
-  "multi-asset-balanced",
-  "crypto-leaders",
-  "treasury-reserve",
-  "elon-universe",
-  "pelosi-disclosed-equity",
-  "berkshire-disclosed-equities",
-  "trump-universe",
-  "dan-bin-oriental-harbor",
-  "ray-dalio-bridgewater",
-  "bill-ackman-pershing",
-  "bill-gates-foundation",
-  "cathie-wood-arkk",
-  "tom-lee-granny-shots",
-  "dan-ives-ai",
-  "stanley-druckenmiller-duquesne",
-  "ken-griffin-citadel",
-  "serenity-x",
-  "raoul-pal-x",
-  "ming-chi-kuo-x",
-  "herman-jin-x",
-  "chris-lee-x",
-  "peter-schiff-euro-pacific",
-  "jeffrey-gundlach-doubleline",
-  "gavin-baker-atreides",
-  "david-einhorn-dme",
-  "jim-cramer-x",
-  "lyn-alden-x",
-  "leopold-aschenbrenner-situational",
-]);
-/** 畫的不是人像的那幾張（主題基金的物件，以及頭像本來就不是真人照片的 X 帳號）。 */
-const HEDCUT_OBJECTS: ReadonlySet<string> = new Set([
-  "mag7",
-  "ai-buildout",
-  "multi-asset-balanced",
-  "crypto-leaders",
-  "treasury-reserve",
-  "serenity-x",
-  "raoul-pal-x",
-  "ming-chi-kuo-x",
-]);
-const hedcutCover = (slug: string): ReferenceMetadata["cover"] => ({
-  src: `/fund-covers/hedcut/${slug}.webp`,
-  thumbnailSrc: `/fund-covers/hedcut/${slug}-thumb.webp`,
-  position: 50,
-  thumbnailPosition: 50,
-  art: "hedcut",
-  subject: HEDCUT_OBJECTS.has(slug) ? "object" : "person",
-});
-/**
  * 寫實照封面（2026-11-18）：深綠底、金色側光、穿西裝風衣戴墨鏡的主角，牆上刻公司名。
  * 圖在 `public/fund-covers/photo/`：大圖 `<slug>.webp`（3:2）與方形縮圖 `<slug>-thumb.webp`（已裁好臉）。
- * 使用者 2026-11-18：測試網沒有的基金先不放，所以只有測試網列出的那 16 檔有（見 `testnet-catalogue.ts`）；
- * 其餘仍用點畫封面。
+ * 列出的 16 檔都有（見 `testnet-catalogue.ts`）。原本其餘基金用的點畫封面（hedcut）隨那 14 檔一起拿掉（cre8-app#123）。
  */
 export const PHOTO_COVER_SLUGS: ReadonlySet<string> = new Set(TESTNET_LISTED_SLUGS);
 /** 主題基金拍的是物件（Mag7 是七位 CEO 的合照，也算主題）。 */
@@ -150,7 +89,7 @@ const photoCover = (slug: string): ReferenceMetadata["cover"] => ({
   subject: PHOTO_OBJECTS.has(slug) ? "object" : "person",
 });
 const coverFor = (slug: string, meta: ReferenceMetadata): ReferenceMetadata["cover"] =>
-  PHOTO_COVER_SLUGS.has(slug) ? photoCover(slug) : HEDCUT_SLUGS.has(slug) ? hedcutCover(slug) : meta.cover;
+  PHOTO_COVER_SLUGS.has(slug) ? photoCover(slug) : meta.cover;
 export const REFERENCE_METADATA: Record<string, ReferenceMetadata> = Object.fromEntries(
   Object.entries(metadata as unknown as Record<string, ReferenceMetadata>).map(([slug, meta]) => [
     slug,
@@ -169,7 +108,7 @@ export function updateReferenceMeta(
   RISK_FREE = riskFree;
 }
 export const referenceFund = (slug: string) =>
-  REFERENCE_FUNDS.find((f) => f.slug === slug);
+  LISTED_FUNDS.find((f) => f.slug === slug);
 export const editorial = (f: ReferenceFund) => fundEditorial(f);
 export const assetBySymbol = (symbol: string) =>
   REFERENCE_ASSETS.find((a) => a.symbol === symbol) ||

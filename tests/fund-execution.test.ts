@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import fs from "node:fs";
-import { activationDesign } from "../src/lib/activation-design";
 import {
   EXECUTION_COPY,
   describeExecutionProblem,
@@ -165,25 +164,39 @@ test("the minimum deposit is 50 USDT of buys: cash does not count", () => {
   expect(minimumDeposit([{ address: USDT, weightBps: 10_000 }], USDT)).toBe(50);
 });
 
-test("a design reaches the activation page with each asset's strategy, keyed by token", () => {
-  const mixed = activationDesign(design(["hold", "stack"]), false, NOW)!;
-  expect(mixed.executionProblem).toBeNull();
-  expect(mixed.executions).toEqual({
-    [BTC]: { kind: "hold" },
-    [ETH]: { kind: "stack", every: "weekly", weekday: 1, timeUtc: "01:00", slices: 12 },
-  });
-  expect(Object.values(mixed.weights).reduce((sum, value) => sum + value, 0)).toBe(100);
-  const dips = activationDesign(design(["dips"]), false, NOW)!;
-  expect(dips.executions).toBeNull();
-  expect(dips.executionProblem).toContain("coming soon");
-});
-
 test("the copy names both strategies and the confirmation states only what this fund does", () => {
   expect(EXECUTION_COPY.stack.line).toMatch(/Holders only choose how much/);
   expect(executionConfirm(new Set(["hold"]))).toBe(EXECUTION_COPY.hold.confirm);
   expect(executionConfirm(new Set(["stack"]))).toBe(EXECUTION_COPY.stack.confirm);
   expect(executionConfirm(new Set(["hold", "stack"]))).toMatch(/Buy & hold assets .* Stack assets .* skipped/);
   expect(EXECUTION_COPY.stack.confirm).toMatch(/slices I set/);
+});
+
+test("rebalancing: off, monthly or more than 5 points off, only when every asset is Buy & hold", () => {
+  const rule = B.emptyBuilder().rules.rebalance;
+  expect(rebalanceOf(rule)).toBe("none");
+  expect(rebalanceOf({ ...rule, on: true, how: "schedule", every: "monthly" })).toBe("monthly");
+  expect(rebalanceOf({ ...rule, on: true, how: "drift", drift: 5 })).toBe("drift");
+  // 舊草稿的每季、其他門檻、等權重：不偷偷換成三個選項之一。
+  expect(rebalanceOf({ ...rule, on: true, how: "schedule", every: "quarterly" })).toBeNull();
+  expect(rebalanceOf({ ...rule, on: true, how: "drift", drift: 10 })).toBeNull();
+  expect(rebalanceOf({ ...rule, on: true, how: "drift", drift: 5, weight: "equal" })).toBeNull();
+
+  const holds = design(["hold", "hold"]);
+  const monthly = { ...holds.rules, rebalance: { ...rule, on: true, how: "schedule" as const, every: "monthly" as const } };
+  expect(designExecution(holds.rows, { rules: monthly, open: BOTH })).toEqual({ assets: new Map([["BTC", { kind: "hold" }], ["ETH", { kind: "hold" }]]), rebalance: "monthly" });
+  expect(designExecution(design(["hold", "stack"]).rows, { rules: monthly, open: BOTH })).toEqual({ problem: { kind: "rebalance", reason: "stack" } });
+  expect(describeExecutionProblem({ kind: "rebalance", reason: "stack" })).toMatch(/needs every asset on Buy & hold/);
+  const quarterly = { ...holds.rules, rebalance: { ...rule, on: true, how: "schedule" as const, every: "quarterly" as const } };
+  expect(designExecution(holds.rows, { rules: quarterly, open: BOTH })).toEqual({ problem: { kind: "rebalance", reason: "options" } });
+
+  const body = typedVersionBody({ chainId: 97, usdt: USDT, rebalance: "drift", assets: [{ address: BTC, weightBps: 10_000 }] });
+  expect(body.execution.rebalance).toBe("drift");
+  expect(typedVersionBody({ chainId: 97, usdt: USDT, assets: [{ address: BTC, weightBps: 10_000 }] }).execution.rebalance).toBe("none");
+  expect(() => typedVersionBody({ chainId: 97, usdt: USDT, rebalance: "monthly", assets: [{ address: BTC, weightBps: 10_000, execution: { kind: "stack", every: "daily", weekday: null, timeUtc: "01:00", slices: 2 } }] })).toThrow("Buy & hold");
+  expect(executionConfirm(new Set(["hold"]), "monthly")).toMatch(/once a month CRE8 sells and buys/);
+  expect(executionConfirm(new Set(["hold"]), "drift")).toMatch(/more than 5 points off/);
+  expect(executionConfirm(new Set(["hold"]), "none")).toBe(EXECUTION_COPY.hold.confirm);
 });
 
 test("a fund has no asset limit (docs#61)", () => {
@@ -213,55 +226,4 @@ test("ZEC and the 8 added cryptos open on testnet only", () => {
   expect(MAINNET_STATUS.get("ZEC")).toBe("no-feed");
   // 載入時只在測試網的 build 打開。
   expect(B.ASSET_BY_KEY.get("ZEC")?.status).toBe(IS_TESTNET ? "ready" : "no-feed");
-});
-
-// 原始碼守住：建立頁只送 typed 版本，要明示確認；連點與失敗重試不會建第二個策略。
-test("the activation page publishes the typed version only after explicit confirmation", () => {
-  const page = fs.readFileSync("src/features/create/CreateFundPage.tsx", "utf8");
-  expect(page).toContain("typedVersionBody(");
-  expect(page).toContain("publishVersion(token, strategy.id, version)");
-  expect(page).not.toMatch(/kind: 'interval'|intervalSeconds/);
-  expect(page).toMatch(/&& kindAgreed;/);
-  expect(page).toContain("if (inFlight.current) return;");
-  expect(page).toContain("createdStrategy.current?.name === trimmed");
-  const api = fs.readFileSync("src/lib/api.ts", "utf8");
-  expect(api).toContain("body: TypedVersionBody");
-});
-
-test("rebalancing: off, monthly or more than 5 points off, only when every asset is Buy & hold", () => {
-  const rule = B.emptyBuilder().rules.rebalance;
-  expect(rebalanceOf(rule)).toBe("none");
-  expect(rebalanceOf({ ...rule, on: true, how: "schedule", every: "monthly" })).toBe("monthly");
-  expect(rebalanceOf({ ...rule, on: true, how: "drift", drift: 5 })).toBe("drift");
-  // 舊草稿的每季、其他門檻、等權重：不偷偷換成三個選項之一。
-  expect(rebalanceOf({ ...rule, on: true, how: "schedule", every: "quarterly" })).toBeNull();
-  expect(rebalanceOf({ ...rule, on: true, how: "drift", drift: 10 })).toBeNull();
-  expect(rebalanceOf({ ...rule, on: true, how: "drift", drift: 5, weight: "equal" })).toBeNull();
-
-  const holds = design(["hold", "hold"]);
-  const monthly = { ...holds.rules, rebalance: { ...rule, on: true, how: "schedule" as const, every: "monthly" as const } };
-  expect(designExecution(holds.rows, { rules: monthly, open: BOTH })).toEqual({ assets: new Map([["BTC", { kind: "hold" }], ["ETH", { kind: "hold" }]]), rebalance: "monthly" });
-  expect(designExecution(design(["hold", "stack"]).rows, { rules: monthly, open: BOTH })).toEqual({ problem: { kind: "rebalance", reason: "stack" } });
-  expect(describeExecutionProblem({ kind: "rebalance", reason: "stack" })).toMatch(/needs every asset on Buy & hold/);
-  const quarterly = { ...holds.rules, rebalance: { ...rule, on: true, how: "schedule" as const, every: "quarterly" as const } };
-  expect(designExecution(holds.rows, { rules: quarterly, open: BOTH })).toEqual({ problem: { kind: "rebalance", reason: "options" } });
-  const draft = activationDesign({ ...holds, rules: monthly }, false, NOW)!;
-  expect(draft.rebalance).toBe("monthly");
-
-  const body = typedVersionBody({ chainId: 97, usdt: USDT, rebalance: "drift", assets: [{ address: BTC, weightBps: 10_000 }] });
-  expect(body.execution.rebalance).toBe("drift");
-  expect(typedVersionBody({ chainId: 97, usdt: USDT, assets: [{ address: BTC, weightBps: 10_000 }] }).execution.rebalance).toBe("none");
-  expect(() => typedVersionBody({ chainId: 97, usdt: USDT, rebalance: "monthly", assets: [{ address: BTC, weightBps: 10_000, execution: { kind: "stack", every: "daily", weekday: null, timeUtc: "01:00", slices: 2 } }] })).toThrow("Buy & hold");
-  expect(executionConfirm(new Set(["hold"]), "monthly")).toMatch(/once a month CRE8 sells and buys/);
-  expect(executionConfirm(new Set(["hold"]), "drift")).toMatch(/more than 5 points off/);
-  expect(executionConfirm(new Set(["hold"]), "none")).toBe(EXECUTION_COPY.hold.confirm);
-});
-
-test("the stack buys slider follows the frequency (365 daily, 52 weekly) in every designer path", () => {
-  const designer = fs.readFileSync("src/features/create/FundDesigner.tsx", "utf8");
-  expect(designer).not.toContain("B.LIMITS.stack.buys");
-  expect(designer.match(/label="Number of buys" value=\{p\.buys\} limit=\{stackSlicesLimit\(p\.every\)\}/g)?.length).toBe(2);
-  // 兩條路徑換頻率都經過夾值（useStackSet），不直接 set("every")。
-  expect(designer.match(/onChange=\{\(value\) => setStack\("every", value\)\}/g)?.length).toBe(1);
-  expect(designer).toContain("<Schedule p={p} set={setStack} />");
 });

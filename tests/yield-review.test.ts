@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import fs from "node:fs";
-import { exportDesign } from "../src/lib/design-export";
 import { TESTNET_97 } from "../src/lib/testnet-97";
 import {
   CASH_PICK,
@@ -138,10 +137,6 @@ test("#6 a draft with lending picks cannot be created until the market list has 
   expect(yieldListBlock(2, { data: MOCK_MARKETS_97, isError: false })).toBeNull();
   // 有快取但重抓失敗：也不能用。
   expect(yieldListBlock(1, { data: MOCK_MARKETS_97, isError: true })).toBe("error");
-  const page = fs.readFileSync("src/features/create/CreateFundPage.tsx", "utf8");
-  expect(page).toContain("yieldBlock === null");
-  expect(page).toContain("Loading lending markets");
-  expect(page).toContain("Retry");
 });
 
 test("#7 lending has four states: off, loading, error (unknown + retry, no signing) and ready", () => {
@@ -179,10 +174,7 @@ test("#9 a picked cash market can be turned Off even when no cash market is open
   expect(cashLendingOptions([], "venus_usdt")).toEqual([["", "Off"], ["venus_usdt", "Closed market (venus_usdt)"]]);
   expect(cashLendingOptions([], null)).toEqual([["", "Off"]]);
   expect(cashLendingOptions([venusUsdt], "venus_usdt").map(([id]) => id)).toEqual(["", "venus_usdt"]);
-  const designer = fs.readFileSync("src/features/create/FundDesigner.tsx", "utf8");
-  expect(designer).toContain("cash > 0 && (cashMarkets.length > 0 || picks[CASH_PICK] !== undefined)");
   // 現金是 0 時，看不到的現金選擇不擋啟用。
-  expect(designer).toContain("...(cash > 0 ? [{ key: CASH_PICK");
 });
 
 test("#10 lent but consent cancelled can be agreed again directly, unless withdrawing everything", () => {
@@ -194,28 +186,8 @@ test("#10 lent but consent cancelled can be agreed again directly, unless withdr
   expect(consentable([cancelled, row({ market: "lista_usdt", state: "exiting" })], markets)).toEqual([]);
 });
 
-test("#11 removing an asset clears its lending pick", () => {
-  const designer = fs.readFileSync("src/features/create/FundDesigner.tsx", "utf8");
-  expect(designer).toContain("prunePicks(readYieldPicks(s), B.assetKeys(next.rows))");
-});
-
 test("#12 the Lending income line reads the per-asset picks instead of saying None", () => {
   expect(lendingChoicesText([{ name: "BTC", market: venusUsdt }, { name: "Cash", market: listaUsdt }])).toBe("BTC on Venus · Cash on Lista");
   expect(lendingChoicesText([{ name: "BTC", market: undefined }])).toBe("BTC on unknown");
   expect(lendingChoicesText([])).toBeNull();
-  const designer = fs.readFileSync("src/features/create/FundDesigner.tsx", "utf8");
-  expect(designer).toContain("lendingChoicesText(");
-});
-
-test("#13 Download design carries each asset's and the cash's lending market", () => {
-  const design = { chainId: 56, assets: [{ asset: "btc", symbol: "BTC", token: "0x1" }, { asset: "eth", symbol: "ETH", token: "0x2" }], cash: { token: "USDT", shareBps: 1_000 } };
-  const out = exportDesign(design, { chainId: 97, testnet: false, feePct: 10, yieldPicks: { btc: "venus_btcb", [CASH_PICK]: "venus_usdt" } }) as unknown as { assets: { yield: unknown }[]; cash: { yield: unknown } };
-  expect(out.assets.map((a) => a.yield)).toEqual([{ market: "venus_btcb" }, null]);
-  expect(out.cash.yield).toEqual({ market: "venus_usdt" });
-  // 沒有任何選擇：匯出跟以前一樣（不加欄位）。
-  const plain = exportDesign(design, { chainId: 56, testnet: false, feePct: 10, yieldPicks: {} }) as unknown as { assets: Record<string, unknown>[]; cash: Record<string, unknown> };
-  expect("yield" in plain.assets[0]!).toBe(false);
-  expect("yield" in plain.cash).toBe(false);
-  const designer = fs.readFileSync("src/features/create/FundDesigner.tsx", "utf8");
-  expect(designer).toContain("yieldPicks: prunePicks(picks, keys)");
 });

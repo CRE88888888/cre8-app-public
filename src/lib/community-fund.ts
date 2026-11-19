@@ -1,4 +1,4 @@
-import { REFERENCE_FUNDS } from './public-funds';
+import { LISTED_FUNDS } from './public-funds';
 import type { ReferenceFund } from './public-funds';
 import { TESTNET_97 } from './testnet-97';
 
@@ -37,7 +37,7 @@ export function symbolOf(address: string): string {
  * 參考目錄的基金頁本來就用同一個名稱找到要買的鏈上策略（FundPage 的 slug 模式），兩邊對應的是同一檔。
  */
 export function catalogueTwin(name: string): ReferenceFund | undefined {
-  return REFERENCE_FUNDS.find((fund) => fund.name === name);
+  return LISTED_FUNDS.find((fund) => fund.name === name);
 }
 
 /** 確定性亂數：同一個 seed 永遠得到同一個序列（重整不會讓數字跳動）。 */

@@ -46,7 +46,7 @@ import { TradeFailureError, explainTradeFailure } from '../../lib/trade-failure'
 import { CLAIM_UNCONFIRMED_TODAY, QUOTA_MESSAGE, dailyClaimAlreadyInvested, DAILY_REQUIRED, DAILY_TEST_USDT, FAUCET_UNCONFIRMED, FaucetError, WELCOME_PENDING, WELCOME_TEST_USDT, afterBuyFunding, claimOutcomeUnknown, faucetBuyMode, faucetFailure, faucetSuccess, forgetClaim, forgetPendingWelcome, forgetResume, forgetUnknownClaim, hadUnknownClaimToday, needsDailyFaucet, needsResume, pendingClaim, pendingWelcome, rememberClaim, rememberPendingWelcome, rememberResume, rememberUnknownClaim, rememberWelcomeUsed, retryClaimLater, welcomeUsed } from '../../lib/faucet';
 import type { FaucetBuyMode } from '../../lib/faucet';
 import { APPROVALS_PER_USEROP, approvalProgress, sendInBatches } from '../../lib/approval-batches';
-import { SWAP_FEE, performanceFeeLine } from '../../lib/fees';
+import { SWAP_FEE } from '../../lib/fees';
 import { SubscriptionLocked, assertSubscriptionOpen, typedVersionLocked } from '../../lib/subscription-lock';
 import { usePrivyAuth } from '../../store/privy';
 import { AccountControls } from './AccountControls';
@@ -131,11 +131,8 @@ function FundPageBody(): ReactNode {
     queryFn: () => getStrategy('', strategyId as number),
     enabled: strategyId !== null && Number.isInteger(strategyId) && strategyId > 0,
   });
+  // 績效費第一階段暫停（2026-11-19 產品說明 §3.3、§9#1；cre8-app#123）：畫面不顯示績效費，只留管理費與換幣費。
   const modelFees = reference?.fees;
-  const modelPerformanceFee = modelFees
-    // 參數總表：績效費是總額，平台從裡面抽 10%，不是另外加（cre8-app#93，`lib/fees.ts`）。
-    ? Number(modelFees.perf.toFixed(2))
-    : null;
 
   const strategies = useQuery({
     queryKey: ['strategies', token],
@@ -179,8 +176,6 @@ function FundPageBody(): ReactNode {
   const sellOnly = new Set(versionSchedule.data?.active ? sellOnlyAssets(versionSchedule.data.historicalAssets, versionSchedule.data.active.assets) : []);
   // 預覽、配置、簽名都用生效中的那一版（審查 #95 第 4 項）：chain 97 讀得到鏈上 activeVersion 時以它為準。
   const effective = effectiveVersion(communityStrategy.data?.versions, versionSchedule.data === undefined ? undefined : (versionSchedule.data.active?.version ?? null));
-  // 生效中這一版的績效費（bps，審查 #95 第 8 項）：鏈上讀得到用鏈上，不然用後端版本的欄位；都沒有是 null（不顯示）。
-  const effectiveFeeBps = versionSchedule.data?.active?.performanceFeeBps ?? effective?.performanceFeeBps ?? null;
 
   /**
    * id 模式（`/funds/strategy/:id`）的合成 fund：Community 策略沒有參考目錄的 slug，
@@ -931,7 +926,7 @@ function FundPageBody(): ReactNode {
                     </>)}
                     {/* 第一次買＝加入基金（P11）：你本人簽名同意之後跟隨新版本。chain 56 還是舊合約，不顯示。 */}
                     {holding === undefined && CHAIN.contracts?.registry !== undefined && <FollowVersionsTerms terms={FOLLOW_VERSIONS_TERMS_TEXT} />}
-                    {effectiveFeeBps !== null && <p className="fine" data-entry="effective-fee" style={{ margin: '6px 0 0' }}>{shownVersion !== null ? `Version ${shownVersion.version} in effect · ` : ''}Performance fee {effectiveFeeBps / 100}% of profit.</p>}
+                    {shownVersion !== null && <p className="fine" data-entry="version-in-effect" style={{ margin: '6px 0 0' }}>Version {shownVersion.version} in effect.</p>}
                     <StackBuyPreview execution={effective?.execution} amountText={faucetBuy ? (buyMode === 'resume' ? '0' : (dailyMode ? DAILY_TEST_USDT : WELCOME_TEST_USDT)) : amount} />
                     {whitelistOnly ? (
                       connectedAddress === null ? <WalletMenu inline signInFor={{ purpose: 'buy', subject: fund.name }} /> : (
@@ -1290,7 +1285,6 @@ function FundPageBody(): ReactNode {
               <div className="panel-h"><h3>At a glance</h3></div>
               <div className="panel-b">
                 <dl className="app-facts-overview">
-                  {modelPerformanceFee !== null && <div><dt>Model fees</dt><dd>{modelPerformanceFee}% of realized profit</dd></div>}
                   <div><dt>Allocation</dt><dd>{fund.thesis}</dd></div>
                   <div><dt>Rebalancing</dt><dd>{reference?.sourceModel ? 'Source updates' : fund.rebalance === 'none' ? 'No fixed schedule' : fund.rebalance === 'drift' ? 'On allocation drift' : 'Monthly'}</dd></div>
                   <div><dt>Execution</dt><dd>{strategy === undefined ? 'Catalogue model' : `Connected to strategy #${strategy.id}`}</dd></div>
@@ -1300,15 +1294,9 @@ function FundPageBody(): ReactNode {
             <section id="facts-fees" className="panel pros-sec" tabIndex={-1}>
               <div className="panel-h"><h3>Fees &amp; terms</h3></div>
               <div className="panel-b">
-                {modelFees || strategy || effectiveFeeBps !== null ? (
+                {modelFees || strategy ? (
                   <dl className="app-facts-overview">
-                    {modelFees && (
-                      <>
-                        <div><dt>Model performance fee</dt><dd>{performanceFeeLine(modelPerformanceFee ?? 0, 'the creator')}</dd></div>
-                        <div><dt>Model management fee</dt><dd>{modelFees.mgmt}%</dd></div>
-                      </>
-                    )}
-                    {effectiveFeeBps !== null && <div><dt>Performance fee (in effect)</dt><dd>{performanceFeeLine(effectiveFeeBps / 100, 'the creator')}</dd></div>}
+                    {modelFees && <div><dt>Model management fee</dt><dd>{modelFees.mgmt}%</dd></div>}
                     {strategy && <div><dt>Swap fee</dt><dd>{pct(strategy.swapFeeBps)} per batch, at least {SWAP_FEE.minUsdt} USDT</dd></div>}
                   </dl>
                 ) : <p className="fine">Fee terms unavailable.</p>}

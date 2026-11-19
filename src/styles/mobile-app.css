@@ -1464,7 +1464,8 @@ body.atp-formal-fund .app-bottom-sheet #ticket {
 }
 
 @media (max-width: 719px) {
-  /* 分頁數依模式不同（投資 3、Studio 4），平均分配寬度。 */
+  /* 分頁平均分配寬度（cre8-app#123 起只剩 Funds、Profile 兩個）。 */
+  #root .app-mobile-nav[data-count="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #root .app-mobile-nav[data-count="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   #root .app-mobile-nav[data-count="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 

@@ -21,14 +21,8 @@ import { useAccountWatch } from './lib/use-account-watch';
 import { FundPage } from './features/fund/FundPage';
 import { OperatorPage } from './features/operator/OperatorPage';
 import { PortfoliosPage } from './features/portfolios/PortfoliosPage';
-const DesignFundPage=lazy(()=>import('./features/create/DesignFundPage').then(module=>({default:module.DesignFundPage})));
-const ActivateFundPage=lazy(()=>import('./features/create/CreateFundPage').then(module=>({default:module.ActivateFundPage})));
-import {CreatorPage} from './features/reference/CreatorPage';
-import { Leaderboard } from './features/reference/Leaderboard';
 const AssetPage=lazy(()=>import('./features/reference/AssetPage').then(module=>({default:module.AssetPage})));
 import { VaultsPage } from './features/vaults/VaultsPage';
-import { StudioEarningsPage, StudioFundsPage, StudioTodayPage } from './features/studio/StudioPages';
-import { MODE_HOME, lastMode } from './lib/app-mode';
 import { WaitlistGate } from './features/waitlist/WaitlistScreen';
 
 /**
@@ -70,22 +64,12 @@ export function App(): ReactNode {
         {/* 登入改由標頭的錢包選單處理；舊連結仍然可用，只是把使用者帶回目錄。 */}
         <Route path="/login" element={<Navigate to="/vaults" replace />} />
         <Route path="/" element={<VaultsPage />} />
-        {/* 從主畫面打開 App 時回到上次用的模式（manifest 的 start_url）。 */}
-        <Route path="/start" element={<Navigate to={MODE_HOME[lastMode()]} replace />} />
+        {/* manifest 的 start_url。原本會回到上次用的模式（投資／Studio）；Studio 已拿掉（cre8-app#123）。 */}
+        <Route path="/start" element={<Navigate to="/vaults" replace />} />
         <Route path="/vaults" element={<VaultsPage />} />
-        <Route path="/leaderboard" element={<Leaderboard />} />
-        <Route path="/creator/:id" element={<CreatorPage />} />
         <Route path="/portfolio" element={<PortfoliosPage />} />
-        {/* `/create` 是基金設計器（封面、命名、加資產、每個資產的策略）：不需要錢包就能開始，
-            這是使用者認知裡的「Create fund」。設計完成後把配置帶到 `/create/activate`，
-            那一頁才是真的建立（createStrategy → publishVersion → enroll → approve，每一步都簽名送交易）。
-            `/create/design` 是舊網址，保留。 */}
-        <Route path="/create" element={<DesignFundPage />} />
-        <Route path="/create/design" element={<DesignFundPage />} />
-        <Route path="/create/activate" element={<ActivateFundPage />} />
-        <Route path="/studio" element={<StudioTodayPage />} />
-        <Route path="/studio/funds" element={<StudioFundsPage />} />
-        <Route path="/studio/earnings" element={<StudioEarningsPage />} />
+        {/* 基金只由平台上架（2026-11-19 產品說明 §3.2）：建立基金（/create*）、Studio（/studio*）、
+            創作者頁（/creator/:id）與 /leaderboard 都拿掉了（cre8-app#123），舊網址交給最後的 * 回到 /vaults。 */}
         {/* 內部營運後台：不在任何導覽裡，保留網址給營運團隊。 */}
         <Route path="/operator" element={<OperatorPage />} />
         <Route path="/rebalance" element={<Navigate to="/operator" replace />} />

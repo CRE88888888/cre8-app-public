@@ -200,10 +200,3 @@ test("F5 a submitted UserOp is kept by its hash until its receipt is known; it i
   expect(panel).toContain("const unresolved = unrecorded.some((item) => item.state === 'submitted');");
   expect(panel).toContain("Check status");
 });
-
-test("F6 the chain 56 designer shows no Lend the cash picker; an old draft's lending choices get a clean-up notice", () => {
-  const designer = fs.readFileSync("src/features/create/FundDesigner.tsx", "utf8");
-  expect(designer).toContain("yieldMarkets !== null && cash > 0 && (cashMarkets.length > 0 || picks[CASH_PICK] !== undefined)");
-  expect(designer).toContain("yieldBookFor(CHAIN_ID) === null && Object.keys(picks).length > 0");
-  expect(designer).toContain("Remove them");
-});

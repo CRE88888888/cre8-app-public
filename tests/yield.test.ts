@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 import fs from "node:fs";
 import { decodeFunctionData, erc20Abi, maxUint256, toFunctionSelector } from "viem";
-import { activationDesign } from "../src/lib/activation-design";
 import { typedVersionBody } from "../src/lib/fund-execution";
 import { TESTNET_97 } from "../src/lib/testnet-97";
 import { testnetToken } from "../src/lib/testnet-catalogue";
@@ -171,14 +170,9 @@ test("the simulated-rate label says 模擬利率 and every market view shows it 
   expect(SIMULATED_RATE_LABEL).toContain("模擬利率");
   const tag = fs.readFileSync("src/components/YieldTag.tsx", "utf8");
   expect(tag).toContain("market.simulated && <> <SimulatedRate />");
-  const designer = fs.readFileSync("src/features/create/FundDesigner.tsx", "utf8");
-  expect(designer).toContain("market.simulated && <><SimulatedRate />");
-  expect(designer).toContain("pickedMarket(CASH_PICK)?.simulated && <SimulatedRate />");
   const panel = fs.readFileSync("src/features/fund/YieldPanel.tsx", "utf8");
   expect(panel).toContain("<YieldTag market={market} />");
   expect(panel).toContain("anySimulated && <SimulatedRate />");
-  const create = fs.readFileSync("src/features/create/CreateFundPage.tsx", "utf8");
-  expect(create).toContain("lent on <YieldTag market={market} />");
 });
 
 test("the designer keeps each asset's market in the draft; reviveBuilder dropping it does not lose it", () => {
@@ -189,8 +183,6 @@ test("the designer keeps each asset's market in the draft; reviveBuilder droppin
   expect(picks).toEqual({ BTC: "venus-btcb", cash: "lista-usdt" });
   expect(setYieldPick(picks, "BTC", null)).toEqual({ cash: "lista-usdt" });
   expect(prunePicks({ BTC: "venus-btcb", ETH: "venus-eth", cash: "venus-usdt" }, ["BTC"])).toEqual({ BTC: "venus-btcb", cash: "venus-usdt" });
-  const source = fs.readFileSync("src/features/create/FundDesigner.tsx", "utf8");
-  expect(source).toContain("yieldPicks: readYieldPicks(raw)");
 });
 
 test("a picked market that this chain does not have for that asset is flagged so the creator picks again", () => {
@@ -224,19 +216,6 @@ test("the published version carries each asset's market as yield.market, USDT in
   ]);
   // 整檔 idleYield 維持關閉：逐資產的 yield 取代它。
   expect(body.idleYield).toEqual({ enabled: false });
-});
-
-test("the activation page gets each asset's market by token address, cash included only when the fund keeps cash", () => {
-  let state = B.addAsset(B.emptyBuilder(), "BTC", "demo");
-  state = B.setShare(state, state.rows[0]!.id, 80);
-  const withCash = activationDesign({ ...state, name: "Lent", yieldPicks: { BTC: "venus-btcb", cash: "venus-usdt", ETH: "venus-eth" } }, false)!;
-  expect(withCash.yields).toEqual({ [BTC]: "venus-btcb", [USDT]: "venus-usdt" });
-  const allIn = B.setShare(state, state.rows[0]!.id, 100);
-  expect(activationDesign({ ...allIn, name: "All in", yieldPicks: { cash: "venus-usdt" } }, false)!.yields).toEqual({});
-  expect(activationDesign({ ...state, name: "None" }, false)!.yields).toEqual({});
-  const page = fs.readFileSync("src/features/create/CreateFundPage.tsx", "utf8");
-  expect(page).toContain("...(marketOf(address) ? { yield: (marketOf(address) as YieldMarket).id } : {})");
-  expect(page).toContain("staleYield.length === 0 && kindAgreed;");
 });
 
 test("consenting signs a receipt approval to the executor and setYieldPolicy for each ticked market, in one UserOp", () => {
@@ -409,6 +388,4 @@ test("the mock holder sample covers lent, not agreed and partly waiting, only on
 test("with no yield on this chain the API answers null and the designer keeps Coming soon", async () => {
   const api = fs.readFileSync("src/lib/api.ts", "utf8");
   expect(api).toContain("if (cause instanceof ApiError && cause.status === 404) return null;");
-  const designer = fs.readFileSync("src/features/create/FundDesigner.tsx", "utf8");
-  expect(designer).toContain('kind === "hold" && !lending ? featureLock("holdEarn") : null');
 });

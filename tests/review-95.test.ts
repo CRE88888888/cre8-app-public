@@ -108,7 +108,7 @@ test("4. before signing, the version the buyer confirmed on screen must be the o
   expect(check).toBeLessThan(page.indexOf("const joined = await sendSudoCalls("));
   expect(page.indexOf("await Promise.all([versionSchedule.refetch(), communityStrategy.refetch()]);")).toBeGreaterThan(check);
   expect(page).toContain("const shownVersion = versionSchedule.data?.active ?? null;");
-  expect(page).toContain("`Version ${shownVersion.version} in effect · `");
+  expect(page).toContain("Version {shownVersion.version} in effect.");
 });
 
 test("7. a preview that does not match the request falls back to the estimate (about)", async () => {
@@ -190,14 +190,13 @@ test("13. a real backend preview for a Hold + Stack fund is accepted: Hold asset
   expect(parsePreview({ ...backend, effectiveSlices: { ...backend.effectiveSlices, "0x7ad6e310b0f6744b66d97cb7cb525bd974501cb5": 1 } }, request, NOW)).toBeNull();
 });
 
-test("8. the buy ticket and the fee section show the performance fee of the version in effect", () => {
+test("8. performance fee is paused: the buy ticket and Fund facts show no performance fee (cre8-app#123)", () => {
   const page = fs.readFileSync("src/features/fund/FundPage.tsx", "utf8");
-  expect(page).toContain("const effectiveFeeBps = versionSchedule.data?.active?.performanceFeeBps ?? effective?.performanceFeeBps ?? null;");
-  // 下單面板只留費率（使用者 2026-11-17：提示太吵）；分潤明細在 Fund facts。
-  expect(page).toContain("Performance fee {effectiveFeeBps / 100}% of profit.");
-  expect(page).toContain("<dt>Performance fee (in effect)</dt><dd>{performanceFeeLine(effectiveFeeBps / 100, 'the creator')}</dd>");
-  // 模型費用另列，名稱寫明是模型的。
-  expect(page).toContain("<dt>Model performance fee</dt>");
+  // 2026-11-19 產品說明 §9#1：借款、第三批、績效費第一階段暫停，畫面收起來。合約與 ABI 不動。
+  expect(page).not.toMatch(/Performance fee|performance fee|% of profit|% of realized profit|performanceFeeLine/);
+  // 下單面板只留生效中的版本。
+  expect(page).toContain('data-entry="version-in-effect"');
+  expect(page).toContain("Version {shownVersion.version} in effect.");
 });
 
 test("9. a P11 portfolio on an older version: new buys paused until it can move, sell and take out stay open", () => {

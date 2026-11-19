@@ -7,7 +7,6 @@ import fs from "node:fs";
 import { ApiError } from "../src/lib/api";
 import { APPROVALS_PER_USEROP, ApprovalBatchError, approvalBatches, approvalProgress, sendInBatches, upgradeBatches } from "../src/lib/approval-batches";
 import { DEFAULT_CHAIN_ID, RpcChainMismatch, chainProfile, readChainId, readRpcChainId, testnetRpcUrl, verifyRpcChain } from "../src/lib/chain-config";
-import { exportDesign } from "../src/lib/design-export";
 import { createExchangeGuard } from "../src/lib/exchange-guard";
 import {
   CLAIM_UNCONFIRMED_TODAY, afterBuyFunding, dailyClaimAlreadyInvested, claimOutcomeUnknown, faucetBuyMode, forgetResume, hadUnknownClaimToday,
@@ -22,8 +21,6 @@ import { testnetToken } from "../src/lib/testnet-catalogue";
 
 const read = (file: string): string => fs.readFileSync(file, "utf8");
 const FUND_PAGE = read("src/features/fund/FundPage.tsx");
-const CREATE_PAGE = read("src/features/create/CreateFundPage.tsx");
-const DESIGNER = read("src/features/create/FundDesigner.tsx");
 
 // 這些測試要一個 localStorage（bun 沒有）。
 const store = new Map<string, string>();
@@ -99,9 +96,7 @@ test("M1: approvals go out 32 per user operation, one batch after another, and r
   expect(approvalProgress(1, 3, 32)).toBe("Signature 2 of 3 · 32 assets…");
   // 三個入口都分批：首買、補授權、建立頁。
   expect(FUND_PAGE.match(/sendInBatches\(/g)?.length).toBe(2);
-  expect(CREATE_PAGE).toContain("await sendInBatches(status.targets,");
   expect(FUND_PAGE).not.toContain("calls: targets.map(");
-  expect(CREATE_PAGE).not.toContain("calls: status.targets.map(");
 });
 
 // ---- M2 每日投入記帳暫時失敗不丟 claimId ----
@@ -248,9 +243,9 @@ test("M10: fees follow the fee table: swap max(0.1%, 0.30 USDT) per batch, CRE8 
   expect(performanceFeeLine(20)).toBe("20% of realized profit · CRE8 keeps 2%, the creator 18%");
   expect(PERFORMANCE_FEE).toEqual({ min: 5, max: 20, default: 10 });
   expect(designFeeTerms(30).performanceFeeBps).toBe(2000);
-  expect(DESIGNER).not.toMatch(/Deposit fee|\+ yours|CRE8 adds/);
-  expect(DESIGNER).toContain("min={PERFORMANCE_FEE.min} max={PERFORMANCE_FEE.max}");
   expect(FUND_PAGE).not.toContain("modelFees.perf + modelFees.platform");
+  // 績效費暫停：基金頁不顯示（cre8-app#123）。
+  expect(FUND_PAGE).not.toContain("performanceFeeLine(");
 });
 
 // ---- M11 status 的 drift 可能是 null ----
@@ -271,34 +266,11 @@ test("L1: a 0.001% weight is caught before the strategy is created", () => {
   expect(quantizePercent(0.001)).toBe(0);
   expect(quantizePercent(33.337)).toBe(33.34);
   expect(percentToBps(12.5)).toBe(1250);
-  expect(CREATE_PAGE).toContain("tooSmall.length === 0");
 });
 
 // ---- L2 沒有「+ Another strategy」----
 
-test("L2: the designer no longer offers a second strategy for the same asset", () => {
-  expect(DESIGNER).not.toContain("+ Another strategy</button>");
-  expect(DESIGNER).not.toContain("B.addSlice(");
-});
-
 // ---- L3 匯出套用目前的鏈與地址 ----
-
-test("L3: Download design on chain 97 writes chain 97 and the testnet addresses", () => {
-  const design = {
-    chainId: 56, platformFeeBps: 1000, depositFeeBps: 100, performanceFeeBps: 1000,
-    cash: { token: "USDT", shareBps: 1000 },
-    assets: [{ symbol: "CAKE", token: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82" }],
-  };
-  const testnet = exportDesign(design, { chainId: 97, testnet: true, feePct: 15 });
-  expect(testnet.chainId).toBe(97);
-  expect(testnet.assets).toEqual([{ symbol: "CAKE", token: testnetToken("CAKE") }]);
-  expect((testnet.cash as { address: string }).address).toBe(testnetToken("USDT")!);
-  expect("depositFeeBps" in testnet || "platformFeeBps" in testnet).toBe(false);
-  expect(testnet.platformShareOfPerformanceFeeBps).toBe(1000);
-  const mainnet = exportDesign(design, { chainId: 56, testnet: false, feePct: 15 });
-  expect(mainnet.assets).toEqual(design.assets);
-  expect(DESIGNER).toContain("exportDesign(B.fundDesign(");
-});
 
 // ---- L4 登入彈窗留住焦點 ----
 

@@ -153,7 +153,6 @@ export function PortfoliosPage(): ReactNode {
     <main className="explore-wrap app-portfolio">
       <header className="explore-heading">
         <h1>Profile<span>.</span></h1>
-        {token !== null && !mobile && <Link className="btn ghost app-portfolio-create" to="/create">Create fund <AppIcon name="create" size={18} /></Link>}
       </header>
 
       {token === null ? (
@@ -192,7 +191,7 @@ export function PortfoliosPage(): ReactNode {
                 {portfolios.isPending ? (
                   <p className="fund-list-loading" role="status"><Spinner /> Loading holdings…</p>
                 ) : !holdings.length ? (
-                  <div className="directory-empty"><strong>No fund accounts yet</strong><Link to="/create">Create a fund</Link><Link className="btn ghost" to="/vaults">Explore funds</Link></div>
+                  <div className="directory-empty"><strong>No fund accounts yet</strong><Link className="btn ghost" to="/vaults">Explore funds</Link></div>
                 ) : mobile ? (
                   <ul className="app-portfolio-ledger">
                     {holdings.map(({ id, status, name, path, value, drift, state, cover }) => (

@@ -6,8 +6,9 @@ import { TESTNET_LISTED_SLUGS } from "../src/lib/testnet-catalogue";
 
 // 使用者 2026-11-18：基金封面改成寫實照（深綠底、西裝風衣墨鏡的主角），測試網沒有的基金先不放。
 
-test("the 16 testnet funds use the photo covers; the rest keep their hedcut", () => {
+test("the 16 listed funds use the photo covers; the hedcut covers are gone (cre8-app#123)", () => {
   expect([...PHOTO_COVER_SLUGS].sort()).toEqual([...TESTNET_LISTED_SLUGS].sort());
+  expect(fs.existsSync("public/fund-covers/hedcut")).toBe(false);
   for (const [slug, meta] of Object.entries(REFERENCE_METADATA)) {
     if (PHOTO_COVER_SLUGS.has(slug)) {
       expect(meta.cover.art).toBe("photo");
@@ -16,7 +17,8 @@ test("the 16 testnet funds use the photo covers; the rest keep their hedcut", ()
       expect(fs.existsSync(path.join("public", meta.cover.src))).toBe(true);
       expect(fs.existsSync(path.join("public", meta.cover.thumbnailSrc))).toBe(true);
     } else {
-      expect(meta.cover.art).toBe("hedcut");
+      // 沒列出的 14 檔不顯示；封面退回同步資料原本的值，不再指向點畫圖。
+      expect(meta.cover.src).not.toContain("/hedcut/");
     }
   }
 });
