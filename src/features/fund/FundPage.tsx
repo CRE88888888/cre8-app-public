@@ -22,6 +22,7 @@ import { REFERENCE_METADATA, referenceFund } from '../../lib/public-funds';
 import { catalogueStrategy, symbolOf, synthesizeCommunityFund } from '../../lib/community-fund';
 import { fundArt } from '../../lib/fund-art';
 import { inclusionNote, withModelHistory } from '../../lib/model-history';
+import { LAUNCH_METHOD, launchDescription } from '../../lib/fund-copy';
 import { groupOf } from '../../lib/fund-categories';
 import { REBALANCE_LABEL, SHOW_STACK_AND_YIELD, STACK_MIN_BUY_NOTE, rebalanceText, usdtText, type StackBuy } from '../../lib/fund-execution';
 import { PREVIEW_BLOCK_COPY, previewBody, previewBuys, usdtToRaw } from '../../lib/contribution-preview';
@@ -121,6 +122,12 @@ export function FundPage(): ReactNode {
     return <Navigate replace to={`/funds/strategy/${match.id}${search}`} />;
   }
   return <FundPageBody key={id === undefined ? `slug:${slug ?? ''}` : `strategy:${id}`} />;
+}
+
+/** 首發基金的英文說明（C3 2026-11-20）；對不到就用目錄或後端原文。 */
+function launchCopyFor(catalogKey: string | null | undefined): { description: string; method: string } | undefined {
+  const description = launchDescription(catalogKey);
+  return description === undefined ? undefined : { description, method: LAUNCH_METHOD };
 }
 
 /** 已下架（後端 isPublic=false）的基金頁：不能買、持有人照常能賣。 */
@@ -1044,7 +1051,7 @@ function FundPageBody(): ReactNode {
     <>
       <main className="wrap vault-content">
         <div className="vgrid">
-          <div className="main">{reference&&<FundOverview key={reference.slug} fund={reference} notices={notices} modelNote={strategyId !== null ? inclusionNote(communityStrategy.data?.modelComponents, communityStrategy.data?.modelNav) : null} art={fundArt(strategyId !== null ? communityStrategy.data?.catalogKey : slug)} backTo={backTo} factsTrigger={factsTrigger} onFacts={()=>setFacts(true)} onPosition={()=>setMyPosition(true)} held={held}/>}</div>
+          <div className="main">{reference&&<FundOverview key={reference.slug} fund={reference} notices={notices} modelNote={strategyId !== null ? inclusionNote(communityStrategy.data?.modelComponents, communityStrategy.data?.modelNav) : null} launchCopy={launchCopyFor(strategyId !== null ? communityStrategy.data?.catalogKey : null)} art={fundArt(strategyId !== null ? communityStrategy.data?.catalogKey : slug)} backTo={backTo} factsTrigger={factsTrigger} onFacts={()=>setFacts(true)} onPosition={()=>setMyPosition(true)} held={held}/>}</div>
 
           {mobile ? (
             <AppBottomSheet

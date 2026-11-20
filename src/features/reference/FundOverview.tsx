@@ -24,6 +24,7 @@ export function FundOverview({
   art = null,
   notices = [],
   modelNote = null,
+  launchCopy,
 }: {
   fund: ReferenceFund;
   /** 新版首頁同一組封面（`lib/fund-art.ts`）；有的話優先用它。 */
@@ -32,6 +33,8 @@ export function FundOverview({
   notices?: readonly { id: string; text: string }[];
   /** 模型報酬區下方的一行小字：哪些成分較晚或還沒計入回測（`inclusionNote`）。 */
   modelNote?: string | null;
+  /** 首發基金的英文說明（`lib/fund-copy.ts`）；有的話取代目錄或後端的說明。 */
+  launchCopy?: { description: string; method: string };
   backTo: string;
   onFacts: () => void;
   factsTrigger: Ref<HTMLButtonElement>;
@@ -42,7 +45,8 @@ export function FundOverview({
     period = performancePeriod(params.get("period")),
     // Community 策略（`/funds/strategy/:id`）沒有參考目錄的封面與人物資料，meta 會是 undefined。
     meta = REFERENCE_METADATA[fund.slug] as (typeof REFERENCE_METADATA)[string] | undefined,
-    copy = editorial(fund);
+    base = editorial(fund),
+    copy = launchCopy ? { ...base, paragraphs: [launchCopy.description], methodology: [launchCopy.description, launchCopy.method] } : base;
   const fromPortfolio = /^\/portfolios?(?:[?#]|$)/.test(backTo);
   // 上線時這檔能不能投資（cre8-app#51）。社群策略不是展示基金，回 null、不顯示。
   const launch = fundLaunchStatus(fund.slug);

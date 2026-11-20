@@ -153,3 +153,25 @@ test("the model return section says which components joined the backtest late or
   expect(overview).toContain('{modelNote && <p className="fine" data-entry="model-inclusion">{modelNote}</p>}');
   expect(fs.readFileSync("src/features/vaults/FundTile.tsx", "utf8")).not.toContain("inclusion");
 });
+
+test("every launch fund has a short English description of its theme and core holdings; others fall back", async () => {
+  const { launchDescription, LAUNCH_METHOD } = await import("../src/lib/fund-copy");
+  const keys = ["mag7", "everyday", "ai-chips", "ai-memory", "ai-models", "new-giants", "korea-semiconductors", "china", "crypto-treasuries", "bitcoin-plus", "bnb", "crypto-infrastructure", "meme", "gold-bitcoin", "us-market", "pelosi", "trump", "duan", "musk", "soxl", "tqqq"];
+  for (const key of keys) {
+    const text = launchDescription(key);
+    expect(text).toBeDefined();
+    // 英文、一兩句、不寫報酬、保證或買賣建議（C3 2026-11-20）。
+    expect(text!).toMatch(/^[\x20-\x7e’]+$/);
+    expect(text!.split(/(?<=\.)\s/).length).toBeLessThanOrEqual(2);
+    expect(text!).not.toMatch(/return|guarantee|profit|yield|APY|should|buy now|%/i);
+  }
+  // 舊的 Mag7 目錄說明還寫著每週分批買入；新說明不提買法。
+  expect(launchDescription("mag7")).not.toMatch(/tranche|weekly/i);
+  expect(launchDescription("not-a-launch-fund")).toBeUndefined();
+  expect(launchDescription(null)).toBeUndefined();
+  expect(LAUNCH_METHOD).toContain("rebalances once a month, and whenever an asset moves more than 5 points");
+  const overview = fs.readFileSync("src/features/reference/FundOverview.tsx", "utf8");
+  expect(overview).toContain("copy = launchCopy ? { ...base, paragraphs: [launchCopy.description], methodology: [launchCopy.description, launchCopy.method] } : base;");
+  const page = fs.readFileSync("src/features/fund/FundPage.tsx", "utf8");
+  expect(page).toContain("launchCopy={launchCopyFor(strategyId !== null ? communityStrategy.data?.catalogKey : null)}");
+});
