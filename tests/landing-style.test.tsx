@@ -8,8 +8,8 @@ import { FundTile } from "../src/features/vaults/FundTile";
 
 // 使用者 2026-11-20：「找 landing 那個風格把舊的 app 改了」，預設淺色。
 
-test("the 21 launch funds get the landing page's art by catalogKey; the rest get none", () => {
-  for (const key of ["mag7", "everyday", "ai-chips", "ai-memory", "ai-models", "crypto-treasuries", "bitcoin-plus", "china", "korea-semiconductors", "us-market", "tqqq"]) {
+test("every one of the 21 launch funds has art by catalogKey; anything else gets none", () => {
+  for (const key of ["mag7", "everyday", "ai-chips", "ai-memory", "ai-models", "new-giants", "korea-semiconductors", "china", "crypto-treasuries", "bitcoin-plus", "bnb", "crypto-infrastructure", "meme", "gold-bitcoin", "us-market", "soxl", "tqqq"]) {
     expect(fundArt(key)).toEqual({ kind: "ink", src: `/fund-art/${key}.webp` });
     expect(fs.existsSync(`public/fund-art/${key}.webp`)).toBe(true);
   }
@@ -19,7 +19,7 @@ test("the 21 launch funds get the landing page's art by catalogKey; the rest get
     expect(fs.existsSync(`public/fund-art/${key}.webp`)).toBe(true);
     expect(fs.existsSync(`public/fund-art/${key}-dark.webp`)).toBe(true);
   }
-  for (const key of ["new-giants", "bnb", "soxl", "", null, undefined]) expect(fundArt(key)).toBeNull();
+  for (const key of ["not-a-launch-fund", "", null, undefined]) expect(fundArt(key)).toBeNull();
 });
 
 const fund = (name: string) => synthesizeCommunityFund({
@@ -45,7 +45,7 @@ test("people tiles are engravings on the plate with a dark-theme mask; funds wit
   expect(person).toContain('class="lp-tile lp-tile--person"');
   expect(person).toContain('style="--src:url(/fund-art/pelosi.webp);--src-dark:url(/fund-art/pelosi-dark.webp)"');
   expect(person).not.toContain("<img");
-  const plain = render(<FundTile fund={fund("BNB ecosystem")} art={null} url="/x" apy={null} />);
+  const plain = render(<FundTile fund={fund("Unknown fund")} art={null} url="/x" apy={null} />);
   expect(plain).toContain('class="lp-tile lp-tile--plain"');
   expect(plain).not.toContain("lp-ink");
   // 卡片上沒有小字（使用者 2026-11-20）：High risk 與成分只給螢幕閱讀器，成分另外放在滑過提示。

@@ -19,6 +19,13 @@ const INK = new Set([
   'korea-semiconductors',
   'us-market',
   'tqqq',
+  // 2026-11-20 補齊（Codex 圖像生成，同一套版畫）：開市鐘、柴犬配爆米花、起重機、吊橋塔、金條配硬幣、槓桿抬晶片。
+  'new-giants',
+  'meme',
+  'bnb',
+  'crypto-infrastructure',
+  'gold-bitcoin',
+  'soxl',
 ]);
 const PEOPLE = new Set(['pelosi', 'trump', 'musk', 'duan']);
 
