@@ -34,9 +34,9 @@ test("a fund tile is a plate with the engraving, the name in serif and the retur
   expect(html).toContain('style="--src:url(/fund-art/ai-chips.webp)"');
   expect(html).toContain('<h3 class="lp-tile-name">AI 晶片</h3>');
   expect(html).toContain('<b class="">—</b>');
-  const priced = render(<FundTile fund={fund("AI chips")} art={fundArt("ai-chips")} url="/x" apy={{ apy: 12.345, days: 180 }} />);
+  const priced = render(<FundTile fund={fund("AI chips")} art={fundArt("ai-chips")} url="/x" apy={{ apy: 12.345, asOf: "2026-11-19" }} />);
   expect(priced).toContain('<b class="pos">+12.35%<small> APY</small></b>');
-  expect(priced).toContain('title="Estimated APY from 180 days of model history. NVDA · TSM"');
+  expect(priced).toContain('title="Estimated APY from model history to 2026-11-19. NVDA · TSM"');
   expect(html).toContain('href="/strategies/30"');
 });
 
@@ -83,27 +83,35 @@ test("the list and the fund page use the landing layout", () => {
   expect(css).toContain("@media (prefers-reduced-motion: reduce)");
 });
 
-test("the card number is an estimated APY: compounded over the model history, none under 30 days", async () => {
-  const { estimatedApy, navFromApi, APY_MIN_DAYS } = await import("../src/lib/estimated-apy");
+test("cards show the backend's estimated APY from the list; the fund page uses the backend model history", async () => {
+  const { annualizedOf, parsePct, navFromApi, withModelHistory } = await import("../src/lib/model-history");
+  const returns = { asOf: "2026-11-19", d7: "-2.50000000", d30: null, d90: "4.00000000", y1: null, all: "3.64306676", annualized: "12.25000000" };
+  expect(annualizedOf(returns)).toEqual({ apy: 12.25, asOf: "2026-11-19" });
+  expect(annualizedOf({ ...returns, annualized: null })).toBeNull();
+  expect(annualizedOf(null)).toBeNull();
+  expect(parsePct("-27.26742900")).toBeCloseTo(-27.267429, 8);
+  for (const value of [null, undefined, "", "abc"]) expect(parsePct(value)).toBeNull();
+  // modelNav 的 value 是字串，由舊到新；壞點略過。
+  expect(navFromApi([{ date: "2026-11-19", value: "1.1" }, { date: "bad", value: "1" }, { date: "2026-11-18", value: "1.000000000000" }]))
+    .toEqual([{ t: Date.parse("2026-11-18"), v: 1 }, { t: Date.parse("2026-11-19"), v: 1.1 }]);
+  expect(navFromApi([])).toEqual([]);
+  // 目錄基金也換成後端的資料（不再用內建回測）；沒有資料就是空的。
   const day = 86_400_000;
-  // 半年漲 10%：年化 (1.1)^(365/182.5) − 1 = 21%。
-  const half = estimatedApy([{ t: 0, v: 100 }, { t: 182.5 * day, v: 110 }]);
-  expect(half?.apy).toBeCloseTo(21, 6);
-  expect(half?.days).toBe(182.5);
-  // 一整年就是原本的報酬。
-  expect(estimatedApy([{ t: 0, v: 1 }, { t: 365 * day, v: 0.9 }])?.apy).toBeCloseTo(-10, 6);
-  expect(APY_MIN_DAYS).toBe(30);
-  expect(estimatedApy([{ t: 0, v: 1 }, { t: 29 * day, v: 1.2 }])).toBeNull();
-  expect(estimatedApy([{ t: 0, v: 1 }])).toBeNull();
-  expect(estimatedApy(null)).toBeNull();
-  expect(estimatedApy([{ t: 0, v: 0 }, { t: 90 * day, v: 1 }])?.apy).toBe(undefined);
-  // 後端 modelNav（backend#173）：{date, value}，排序、略過壞點。
-  expect(navFromApi([{ date: "2026-02-01", value: 1.1 }, { date: "bad", value: 1 }, { date: "2026-01-01", value: 1 }]))
-    .toEqual([{ t: Date.parse("2026-01-01"), v: 1 }, { t: Date.parse("2026-02-01"), v: 1.1 }]);
-  expect(navFromApi(null)).toEqual([]);
+  const nav = [1, 1.2, 0.9, 1.05].map((value, i) => ({ date: new Date(Date.UTC(2026, 10, 1) + i * day).toISOString().slice(0, 10), value: String(value) }));
+  const base = synthesizeCommunityFund({ id: 27, name: "美股七巨頭 Mag7", provider: "0x1", onchainId: 1, description: "", createdAt: "2026-11-01T00:00:00Z", positions: [], catalogKey: "mag7" });
+  expect(base.nav.length).toBeGreaterThan(10); // 目錄的舊回測
+  const live = withModelHistory(base, { modelNav: nav, modelReturns: returns });
+  expect(live.nav).toHaveLength(4);
+  expect(live.returns).toEqual({ "7D": -2.5, "30D": null, "90D": 4, "1Y": null, ALL: 3.64306676 });
+  expect(live.maxDrawdown.ALL).toBeCloseTo(-25, 8);
+  const empty = withModelHistory(base, { modelNav: [], modelReturns: null });
+  expect(empty.nav).toEqual([]);
+  expect(Object.values(empty.returns).every((value) => value === null)).toBe(true);
   const vaults = fs.readFileSync("src/features/vaults/VaultsPage.tsx", "utf8");
-  expect(vaults).toContain("const apy = estimatedApy(nav.length > 1 ? nav : twin ? fund.nav : null);");
-  expect(vaults).not.toContain("Model return period");
+  expect(vaults).toContain("apy: annualizedOf(strategy.modelReturns)");
+  expect(vaults).not.toContain("getStrategy");
+  const page = fs.readFileSync("src/features/fund/FundPage.tsx", "utf8");
+  expect(page).toContain("return withModelHistory(synthesizeCommunityFund({");
 });
 
 test("leveraged fund pages carry the high-risk line; hidden funds open but cannot be bought", async () => {
@@ -122,4 +130,26 @@ test("leveraged fund pages carry the high-risk line; hidden funds open but canno
   expect(vaults).toContain("groupFunds([...rows].sort((a, b) => a.strategy.id - b.strategy.id))");
   // 列表不放槓桿說明（C3 2026-11-20）。
   expect(vaults).not.toContain("High risk");
+});
+
+test("the model return section says which components joined the backtest late or not yet; cards never do", async () => {
+  const { inclusionNote } = await import("../src/lib/model-history");
+  const nav = [{ date: "2024-11-20", value: "1" }, { date: "2026-11-19", value: "1.2" }];
+  // Musk：SpaceX 比回測第一天晚計入。
+  expect(inclusionNote([{ symbol: "TSLAB", includedFrom: "2024-11-20" }, { symbol: "SPCXB", includedFrom: "2026-07-12" }], nav))
+    .toBe("SpaceX is included in the backtest from 2026-07-12.");
+  // New giants：回測從 SpaceX 上市那天開始，Anthropic 還沒計入。
+  expect(inclusionNote([{ symbol: "SPCXB", includedFrom: "2026-07-12" }, { symbol: "ANTB", includedFrom: null }], [{ date: "2026-07-12", value: "1" }, { date: "2026-11-19", value: "0.94" }]))
+    .toBe("Anthropic is not included yet.");
+  expect(inclusionNote([{ symbol: "SPCXB", includedFrom: "2026-07-12" }, { symbol: "ANTB", includedFrom: null }], nav))
+    .toBe("SpaceX is included in the backtest from 2026-07-12; Anthropic is not included yet.");
+  // 全部從第一天就計入、或沒有資料：沒有小字。
+  expect(inclusionNote([{ symbol: "AAPLB", includedFrom: "2024-11-20" }], nav)).toBeNull();
+  expect(inclusionNote(undefined, nav)).toBeNull();
+  expect(inclusionNote([], [])).toBeNull();
+  // 查得到的成分用 ticker。
+  expect(inclusionNote([{ symbol: "NVDAB", includedFrom: "2025-01-02" }], nav)).toBe("NVDA is included in the backtest from 2025-01-02.");
+  const overview = fs.readFileSync("src/features/reference/FundOverview.tsx", "utf8");
+  expect(overview).toContain('{modelNote && <p className="fine" data-entry="model-inclusion">{modelNote}</p>}');
+  expect(fs.readFileSync("src/features/vaults/FundTile.tsx", "utf8")).not.toContain("inclusion");
 });

@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { encodeFunctionData, formatEther, formatUnits, parseEther, parseUnits } from 'viem';
 import { tidyAmountInput } from '../../lib/amount-input';
 import type { Address } from 'viem';
@@ -21,6 +21,7 @@ import {catalogueTargets} from '../../data/public-fund-adapter';
 import { REFERENCE_METADATA, referenceFund } from '../../lib/public-funds';
 import { catalogueStrategy, symbolOf, synthesizeCommunityFund } from '../../lib/community-fund';
 import { fundArt } from '../../lib/fund-art';
+import { inclusionNote, withModelHistory } from '../../lib/model-history';
 import { groupOf } from '../../lib/fund-categories';
 import { REBALANCE_LABEL, SHOW_STACK_AND_YIELD, STACK_MIN_BUY_NOTE, rebalanceText, usdtText, type StackBuy } from '../../lib/fund-execution';
 import { PREVIEW_BLOCK_COPY, previewBody, previewBuys, usdtToRaw } from '../../lib/contribution-preview';
@@ -102,6 +103,7 @@ export function FundPage(): ReactNode {
   // 輸入框的金額、上一筆的「Withdrawn. tx …」與「Sent $… of …」都會留在下一支基金的畫面上。
   // 這一頁的 state 有二十幾個，逐一重置一定會漏；用 key 讓每支基金有自己的一份最不會錯。
   const { slug, id } = useParams<{ slug: string; id: string }>();
+  const { search } = useLocation();
   // 目錄基金的舊連結：後端已經沒有這檔公開基金（使用者 2026-11-20，只留 Mag7）就顯示已下架，不進交易頁。
   const listed = useQuery({
     queryKey: ['strategies', 'public'],
@@ -110,8 +112,13 @@ export function FundPage(): ReactNode {
     enabled: id === undefined && slug !== undefined,
   });
   const catalogue = id === undefined && slug !== undefined ? MOCK_FUNDS.find((entry) => entry.slug === slug) : undefined;
-  if (catalogue !== undefined && listed.data !== undefined && catalogueStrategy(listed.data, catalogue.slug, catalogue.name) === undefined) {
+  const match = catalogue !== undefined && listed.data !== undefined ? catalogueStrategy(listed.data, catalogue.slug, catalogue.name) : undefined;
+  if (catalogue !== undefined && listed.data !== undefined && match === undefined) {
     return <DelistedFund name={catalogue.name} />;
+  }
+  // 還在上架的目錄基金（例如 /funds/mag7）：轉到策略 id 的頁面，走勢與數字讀後端的模型資料，不用 App 內建的舊回測。
+  if (match !== undefined && match.catalogKey === slug) {
+    return <Navigate replace to={`/funds/strategy/${match.id}${search}`} />;
   }
   return <FundPageBody key={id === undefined ? `slug:${slug ?? ''}` : `strategy:${id}`} />;
 }
@@ -248,7 +255,8 @@ function FundPageBody(): ReactNode {
       loc: symbols[i] ?? 'USDT',
       w: asset.weightBps / 100,
     }));
-    return synthesizeCommunityFund({
+    // 走勢與期間數字一律用後端的模型資料（backend#174、#175）；目錄基金（Mag7）也不再用 App 內建的舊回測。
+    return withModelHistory(synthesizeCommunityFund({
       id: detail.id,
       name: detail.name,
       provider: detail.provider,
@@ -257,7 +265,7 @@ function FundPageBody(): ReactNode {
       createdAt: detail.createdAt,
       positions,
       catalogKey: detail.catalogKey,
-    });
+    }), detail);
   }, [communityStrategy.data, effective]);
 
   // id 模式（`/funds/strategy/:id`）：用合成值覆寫 slug 模式的 fund / reference，
@@ -1036,7 +1044,7 @@ function FundPageBody(): ReactNode {
     <>
       <main className="wrap vault-content">
         <div className="vgrid">
-          <div className="main">{reference&&<FundOverview key={reference.slug} fund={reference} notices={notices} art={fundArt(strategyId !== null ? communityStrategy.data?.catalogKey : slug)} backTo={backTo} factsTrigger={factsTrigger} onFacts={()=>setFacts(true)} onPosition={()=>setMyPosition(true)} held={held}/>}</div>
+          <div className="main">{reference&&<FundOverview key={reference.slug} fund={reference} notices={notices} modelNote={strategyId !== null ? inclusionNote(communityStrategy.data?.modelComponents, communityStrategy.data?.modelNav) : null} art={fundArt(strategyId !== null ? communityStrategy.data?.catalogKey : slug)} backTo={backTo} factsTrigger={factsTrigger} onFacts={()=>setFacts(true)} onPosition={()=>setMyPosition(true)} held={held}/>}</div>
 
           {mobile ? (
             <AppBottomSheet

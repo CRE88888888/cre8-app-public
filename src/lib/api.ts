@@ -13,6 +13,7 @@ import { yieldBookFor } from './yield-book';
 import type { YieldMarketList } from './yield';
 import { MOCK_MARKETS_97, YIELD_MOCK } from './yield-mock';
 import type { TypedVersionBody } from './fund-execution';
+import type { ModelComponent, ModelReturns } from './model-history';
 import { WAITLIST_PENDING, signalWaitlistPending } from './waitlist-signal';
 import type { PackedSponsorOperation, SponsorResponse } from './paymaster';
 
@@ -757,8 +758,11 @@ export type StrategyDetail = {
   onchainId: number | null;
   category?: string | null;
   catalogKey?: string | null;
-  /** 模型淨值（backend#173）：日線、最多兩年；還沒上線或沒資料時不存在或是 null。 */
-  modelNav?: { date: string; value: number }[] | null;
+  /** 模型淨值（backend#173／#175）：日線、由舊到新、最多兩年；value 是十進位字串。沒有資料是 []。 */
+  modelNav?: { date: string; value: string | number }[] | null;
+  modelReturns?: ModelReturns | null;
+  /** 每個成分從哪天起計入回測（backend#177）；includedFrom 是 null＝還沒計入。 */
+  modelComponents?: ModelComponent[] | null;
   versions: StrategyVersion[];
 };
 
@@ -780,6 +784,8 @@ export type StrategySummary = {
   category?: string | null;
   /** 參考目錄的穩定識別碼（backend#170），例如 Mag7 是 `mag7`；沒有對應是 null。 */
   catalogKey?: string | null;
+  /** 模型報酬（backend#174）：卡片讀 `annualized`。見 `lib/model-history.ts`。 */
+  modelReturns?: ModelReturns | null;
 };
 
 export function listStrategies(token: string): Promise<{ items: StrategySummary[]; total: number }> {

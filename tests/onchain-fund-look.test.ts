@@ -41,9 +41,9 @@ test("a backend fund with a catalogKey uses the catalogue fund; others show no m
   expect(other.nav).toEqual([]);
 });
 
-test("rows without a catalogue twin link by strategy id", () => {
+test("every row links by strategy id, Mag7 included", () => {
   const vaults = fs.readFileSync("src/features/vaults/VaultsPage.tsx", "utf8");
-  expect(vaults).toContain(": `/strategies/${row.strategy.id}`;");
+  expect(vaults).toContain("const fundUrl = (row: (typeof rows)[number]) => `/funds/strategy/${row.strategy.id}?returnTo=${encodeURIComponent(returnTo)}`;");
   expect(vaults).toContain("key={row.strategy.id}");
 });
 

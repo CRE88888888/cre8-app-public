@@ -23,12 +23,15 @@ export function FundOverview({
   held,
   art = null,
   notices = [],
+  modelNote = null,
 }: {
   fund: ReferenceFund;
   /** 新版首頁同一組封面（`lib/fund-art.ts`）；有的話優先用它。 */
   art?: FundArt | null;
   /** 封面下方的提醒（已下架、槓桿高風險），每則一句。 */
   notices?: readonly { id: string; text: string }[];
+  /** 模型報酬區下方的一行小字：哪些成分較晚或還沒計入回測（`inclusionNote`）。 */
+  modelNote?: string | null;
   backTo: string;
   onFacts: () => void;
   factsTrigger: Ref<HTMLButtonElement>;
@@ -161,6 +164,7 @@ export function FundOverview({
           setParams(next, { replace: true });
         }}
       />
+      {modelNote && <p className="fine" data-entry="model-inclusion">{modelNote}</p>}
       <section className="vault-about vault-description">
         <h2>Description</h2>
         {copy.paragraphs.map((p, i) => (

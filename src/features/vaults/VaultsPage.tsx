@@ -1,14 +1,13 @@
 import { AppIcon } from "../../components/AppIcon";
-import { useMemo } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useBodyClass } from "../../lib/use-body-class";
-import { catalogueTwin, symbolOf, synthesizeCommunityFund } from "../../lib/community-fund";
+import { synthesizeCommunityFund } from "../../lib/community-fund";
 import { exploreFilters } from "../../reference/lib/fund-navigation";
 import { FundTile } from "./FundTile";
 import { fundArt } from "../../lib/fund-art";
-import { estimatedApy, navFromApi } from "../../lib/estimated-apy";
-import { getStrategy, listStrategies } from "../../lib/api";
+import { annualizedOf } from "../../lib/model-history";
+import { listStrategies } from "../../lib/api";
 import { groupFunds } from "../../lib/fund-categories";
 
 const hiddenCommunityStrategies = new Map<number, string>([
@@ -21,7 +20,7 @@ const hiddenCommunityStrategies = new Map<number, string>([
  * Themes／People／Leveraged，沒分類的放最後。
  *
  * - App 內建的 16 檔示範目錄不再當列表（後端只留 Mag7，其他隱藏）；資料留著，舊連結會顯示已下架（FundPage）。
- * - 有 `catalogKey` 對應到目錄的（Mag7）沿用目錄的封面與資料；其他基金不顯示模擬報酬，報酬欄是「—」。
+ * - 卡片上的數字是後端的推估年化（`modelReturns.annualized`，backend#174）；沒有就是「—」。Mag7 也一樣，不用 App 內建的舊回測。
  * - `GET /strategies` 是公開端點，用空 token 呼叫（`request()` 不送 Authorization）。
  * - 正式版面等整站重新設計。
  */
@@ -52,51 +51,25 @@ export function VaultsPage() {
       hiddenCommunityStrategies.get(strategy.id) !== strategy.name &&
       strategy.name.toLowerCase().includes(search),
   );
-  // 每檔的目標配置要另外問一次（`GET /strategies/:id` 也是公開端點）。
-  const details = useQueries({
-    queries: live.map((strategy) => ({
-      queryKey: ["strategy", "public", strategy.id],
-      queryFn: () => getStrategy("", strategy.id),
-      staleTime: 60_000,
-    })),
+  // 卡片只要名稱、分類、封面和推估年化，列表一次就給齊（backend#174），不再逐檔打詳情。
+  const rows = live.map((strategy) => {
+    const fund = synthesizeCommunityFund({
+      id: strategy.id,
+      name: strategy.name,
+      provider: strategy.provider,
+      onchainId: strategy.onchainId,
+      description: strategy.description,
+      createdAt: strategy.createdAt,
+      positions: [],
+      catalogKey: strategy.catalogKey,
+    });
+    return { strategy, fund, apy: annualizedOf(strategy.modelReturns), category: strategy.category };
   });
-
-  const rows = useMemo(
-    () =>
-      live.map((strategy, index) => {
-        const version = details[index]?.data?.versions?.[0];
-        const allocation = version?.allocation?.assets ?? [];
-        const positions = allocation.map((asset) => {
-          const symbol = symbolOf(asset.address);
-          return { p: symbol, loc: symbol, w: asset.weightBps / 100 };
-        });
-        const fund = synthesizeCommunityFund({
-          id: strategy.id,
-          name: strategy.name,
-          provider: strategy.provider,
-          onchainId: strategy.onchainId,
-          description: strategy.description,
-          createdAt: strategy.createdAt,
-          positions,
-          catalogKey: strategy.catalogKey,
-        });
-        const twin = catalogueTwin(strategy.catalogKey) !== undefined;
-        // 推估年化：後端模型淨值（backend#173）優先；還沒有的話，目錄基金用內建回測。
-        const nav = navFromApi(details[index]?.data?.modelNav);
-        const apy = estimatedApy(nav.length > 1 ? nav : twin ? fund.nav : null);
-        return { strategy, fund, twin, apy, category: strategy.category };
-      }),
-    // `details` 每次 render 都是新陣列，用它當依賴會無限重算 —— 用「已載入的版本數」當訊號。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [live.map((strategy) => strategy.id).join(","), details.map((row) => `${row.data?.versions?.[0]?.version ?? 0}:${row.data?.modelNav?.length ?? 0}`).join(",")],
-  );
   // 後端由新到舊回傳；組內照上架名單的順序（id 由小到大，Mag7 在最前面）。
   const groups = groupFunds([...rows].sort((a, b) => a.strategy.id - b.strategy.id));
   const returnTo = location.pathname + location.search;
-  const fundUrl = (row: (typeof rows)[number]) =>
-    row.twin
-      ? `/funds/${row.fund.slug}?returnTo=${encodeURIComponent(returnTo)}`
-      : `/strategies/${row.strategy.id}`;
+  // 一律用策略 id 進基金頁（Mag7 也是），走勢與期間數字都讀後端的模型資料。
+  const fundUrl = (row: (typeof rows)[number]) => `/funds/strategy/${row.strategy.id}?returnTo=${encodeURIComponent(returnTo)}`;
   return (
     <main className="explore-wrap" id="fund-explore">
       <header className="explore-heading lp-hero">

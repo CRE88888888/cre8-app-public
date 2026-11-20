@@ -30,7 +30,10 @@ test("a catalogue page finds its backend fund by catalogKey; name only for rows 
 
 test("an old catalogue link shows a delisted state instead of the trading page", () => {
   const page = fs.readFileSync("src/features/fund/FundPage.tsx", "utf8");
-  expect(page).toContain("catalogueStrategy(listed.data, catalogue.slug, catalogue.name) === undefined");
+  expect(page).toContain("const match = catalogue !== undefined && listed.data !== undefined ? catalogueStrategy(listed.data, catalogue.slug, catalogue.name) : undefined;");
+  expect(page).toContain("if (catalogue !== undefined && listed.data !== undefined && match === undefined) {");
+  // 還在上架的（/funds/mag7）轉到策略 id 的頁面，數字讀後端模型資料（backend#174）。
+  expect(page).toContain("return <Navigate replace to={`/funds/strategy/${match.id}${search}`} />;");
   expect(page).toContain("return <DelistedFund name={catalogue.name} />;");
   expect(page).toContain("is no longer listed</h2>");
   // 持有的人從 Portfolio 用策略 id 進基金頁，不會被下架頁擋住。
