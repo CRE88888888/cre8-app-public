@@ -84,7 +84,9 @@ test("4. preview, allocation and signing use the version in effect, not versions
   expect(page).toContain("const effective = effectiveVersion(communityStrategy.data?.versions, versionSchedule.data === undefined ? undefined : (versionSchedule.data.active?.version ?? null));");
   expect(page).not.toContain("versions[0]?.execution");
   // 概覽（合成 fund 的配置）與持倉表也用同一份 `effective`（含鏈上版本），不再自己用裝置時間算（#95 最後複審第 1 項）。
-  expect(page.match(/effectiveVersion\(/g)?.length).toBe(1);
+  // 第二次只給「Rebalancing」那一格用（slug 模式讀後端版本，使用者 2026-11-20），同樣以鏈上生效版為準。
+  expect(page.match(/effectiveVersion\(/g)?.length).toBe(2);
+  expect(page).toContain("const factsVersion = effective ?? effectiveVersion(linkedStrategy.data?.versions, versionSchedule.data === undefined ? undefined : (versionSchedule.data.active?.version ?? null));");
   expect(page.match(/const version = effective \?\? detail\.versions\[0\];/g)?.length).toBe(2);
   expect(page.indexOf("const communityFund = useMemo(")).toBeGreaterThan(page.indexOf("const effective = effectiveVersion("));
   expect(page).toContain("}, [communityStrategy.data, effective]);");

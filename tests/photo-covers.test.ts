@@ -36,7 +36,7 @@ test("photo covers have no gradient and keep the title and buttons on the dark l
   expect(css).toContain("#atp-fund-cover.is-photo .atp-fund-cover-shade { display: none; }");
   expect(css).toContain(".vault-heading:has(#atp-fund-cover.is-photo) .atp-fund-byline { right: auto; left: 28px; bottom: 24px; }");
   const overview = fs.readFileSync("src/features/reference/FundOverview.tsx", "utf8");
-  expect(overview).toContain('meta?.cover.art === "photo" ? " is-photo"');
+  expect(overview).toContain('meta.cover.art === "photo" ? " is-photo"');
 });
 
 test("Mag7 cover is the full 1536x1024 group shot with a square 256 thumbnail (v8 A, natural proportions)", () => {

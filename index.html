@@ -1,11 +1,20 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="zh-Hant" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>CRE8 ATP</title>
-    <!-- 加到主畫面時以全螢幕 App 開啟（沒有網址列），狀態列與頁面同為白底。 -->
-    <meta name="theme-color" content="#ffffff" />
+    <!-- 加到主畫面時以全螢幕 App 開啟（沒有網址列），狀態列與頁面同色（預設深色 #0B0E11）。 -->
+    <meta name="theme-color" content="#FFFFFF" />
+    <!-- 主題（src/lib/theme.ts）：預設淺色（跟新版首頁一樣，使用者 2026-11-20）。選過深色的人在第一次繪製前切回深色，不會先閃一下白。 -->
+    <script>
+      try {
+        if (localStorage.getItem('cre8.theme') === 'dark') {
+          document.documentElement.removeAttribute('data-theme');
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0B0E11');
+        }
+      } catch (e) {}
+    </script>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/logos/cre8-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/app-icons/icon-180.png" />

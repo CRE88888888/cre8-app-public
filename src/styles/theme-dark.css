@@ -1,232 +1,220 @@
 /*
- * 深色主題「深林綠＋暖金」（使用者 2026-11-17 選 D1；提案見 BNB 生態研究）。
+ * 深色主題「BNB family」（2026-11-20，取代 2026-11-17 的深林綠＋暖金；規格見 DESIGN.md「BNB family theme」）。
  *
- * 這支檔案最後載入，只做「換色」：
+ * 預設主題。<html data-theme="light"> 時整支不作用（淺色版在 theme-bnb.css）。
+ * 寫法：每條規則前面加 `:where(html:not([data-theme="light"]))`（不加權重），
+ * 原本以 `html` 開頭的選擇器改成 `html:not([data-theme="light"])`，色票區塊用 `:root:not(...)` 才蓋得過 system.css 的 :root。
+ *
+ * 這支檔案只做「換色」：
  *   1. 重新定義 app 自己的色票（system.css）與設計稿 vendor 的色票（design.css 的 :root），整站一起變深。
- *      app 的規則一律用 `--ink` 當字、`--white` 當面板，所以兩個對調後，主要按鈕、輸入框、分段控制會一起翻過來。
+ *      app 的規則一律用 `--ink` 當字、`--white` 當面板，所以兩個對調後，輸入框、分段控制會一起翻過來。
  *   2. 少數寫死淺色的規則（頁首的半透明白、點畫封面的紙色……）在下面逐一覆蓋。
- * 不改版面、不改元件結構；vendor 與 src/reference 不動。
+ * 主要按鈕的黃色、圓角與兩個主題共用的規則在 theme-bnb.css。不改版面、不改元件結構；vendor 與 src/reference 不動。
  */
 /* 有些頁面在 body 上自己重設了色票（formal-ui.css、mobile-app.css 的手機殼層），這裡用同樣的選擇器蓋回來。 */
-:root,
-body:is(.atp-formal-market, .atp-formal-fund, .portfolio-page, .create-page, .atp-asset-page),
-body.atp-formal-market, body.atp-formal-fund,
-#root :is(.app-masthead, .app-mobile-nav),
-.app-bottom-sheet {
-  /* 底層與面板（由深到淺）。 */
-  --forest-page: #08140f;
-  --forest-surface: #0e1d17;
-  --forest-raised: #142820;
-  --forest-sunken: #06100c;
-  --forest-line: rgba(200, 235, 215, .09);
-  --forest-line-2: rgba(200, 235, 215, .16);
-  /* 暖金（D1）：只給主要動作、選取狀態、焦點環。 */
-  --gold: #e6b84e;
-  --gold-press: #d4a43a;
-  --gold-ink: #14110a;
-  --gold-text: #ecc66a;
-  --gold-soft: rgba(230, 184, 78, .13);
-  --gold-line: rgba(230, 184, 78, .42);
-  /* 點畫人像的紙（深色底上當成印刷卡，不反白）。 */
-  --print-paper: #f1ede2;
+:root:not([data-theme="light"]),
+:root:not([data-theme="light"]) body:is(.atp-formal-market, .atp-formal-fund, .portfolio-page, .create-page, .atp-asset-page),
+:root:not([data-theme="light"]) body.atp-formal-market,
+:root:not([data-theme="light"]) body.atp-formal-fund,
+:root:not([data-theme="light"]) #root :is(.app-masthead, .app-mobile-nav),
+:root:not([data-theme="light"]) .app-bottom-sheet {
+  /* BNB 的板岩灰（由深到淺）。 */
+  --bnb-page: #0b0e11;
+  --bnb-canvas: #07090c;
+  --bnb-surface: #13171c;
+  --bnb-surface-2: #1c2128;
+  --bnb-line: #232930;
+  --bnb-line-2: #3a424d;
+  --bnb-text: #eaecef;
+  --bnb-text-2: #929aa5;
+  --bnb-text-3: #5e6673;
+  --bnb-yellow: #fcd535;
+  --bnb-yellow-hover: #ffe55c;
+  --bnb-on-yellow: #181a1e;
+  --bnb-yellow-soft: rgba(252, 213, 53, .14);
+  --bnb-secondary: #262d36;
+  --bnb-secondary-hover: #303843;
+  --bnb-up: #2ebd85;
+  --bnb-down: #f6465d;
+  --bnb-warn: #f0b90b;
+  /* 點畫人像的底板（深色底上當成一張淺色卡，不反白）。 */
+  --print-paper: #eaecef;
+  --print-ink: #181a1e;
 
   /* app 色票（system.css）：字與面板對調。 */
-  --ink: #eef5f1;
-  --deep: #c9d8d0;
-  --steel: #9db3a8;
-  --slate: #7e968a;
-  --fog: #6f93ae;
-  --frost: #22392f;
-  --snow: var(--forest-raised);
-  --paper: var(--forest-surface);
-  --white: var(--forest-surface);
-  --hair: var(--forest-line);
-  --hair-2: var(--forest-line-2);
-  --positive: #7af0bf;
-  --negative: #ff7a70;
-  --caution: #f0c060;
-  --signal: var(--gold);
-  --signal-soft: var(--gold-soft);
-  --night: var(--forest-sunken);
-  --night-2: var(--forest-surface);
-  --night-line: var(--forest-line);
-  --night-text: #eef5f1;
-  --night-muted: #9db3a8;
-  --night-positive: #7af0bf;
-  --night-negative: #ff7a70;
-  --app-action: var(--gold);
-  --app-action-hover: var(--gold-press);
-  --app-grouped: var(--forest-raised);
-  --app-segment: var(--forest-sunken);
-  --app-card-line: var(--forest-line);
-  --shadow-pop: 0 16px 40px rgba(0, 0, 0, .45), 0 2px 6px rgba(0, 0, 0, .35);
+  --ink: var(--bnb-text);
+  --deep: #b7bdc6;
+  --steel: var(--bnb-text-2);
+  --slate: var(--bnb-text-3);
+  --fog: #848e9c;
+  --frost: var(--bnb-line-2);
+  --snow: var(--bnb-surface-2);
+  --paper: var(--bnb-surface);
+  --white: var(--bnb-surface);
+  --hair: var(--bnb-line);
+  --hair-2: var(--bnb-line-2);
+  --positive: var(--bnb-up);
+  --negative: var(--bnb-down);
+  --caution: var(--bnb-warn);
+  --signal: var(--bnb-yellow);
+  --signal-soft: var(--bnb-yellow-soft);
+  --night: var(--bnb-surface);
+  --night-2: var(--bnb-surface-2);
+  --night-line: var(--bnb-line);
+  --night-text: var(--bnb-text);
+  --night-muted: var(--bnb-text-2);
+  --night-positive: var(--bnb-up);
+  --night-negative: var(--bnb-down);
+  --app-action: var(--bnb-yellow);
+  --app-action-hover: var(--bnb-yellow-hover);
+  --app-grouped: var(--bnb-surface-2);
+  --app-segment: var(--bnb-canvas);
+  --app-card-line: var(--bnb-line);
+  --shadow-pop: 0 16px 40px rgba(0, 0, 0, .5), 0 2px 6px rgba(0, 0, 0, .35);
 
   /* 設計稿 vendor 的色票（design.css 的 :root）。 */
-  --cre8-ink: #eef5f1;
-  --cre8-deep: #c9d8d0;
-  --cre8-steel: #9db3a8;
-  --cre8-slate: #7e968a;
-  --cre8-frost: #22392f;
-  --cre8-snow: var(--forest-raised);
-  --cre8-fog: #6f93ae;
-  --bg: var(--forest-page);
-  --bg-2: var(--forest-surface);
-  --card: var(--forest-surface);
-  --card-2: var(--forest-raised);
-  --field: var(--forest-sunken);
-  --line: var(--forest-line);
-  --line-2: var(--forest-line-2);
-  --ink-2: #c9d8d0;
-  --body: #c9d8d0;
-  --muted: #9db3a8;
-  --mist: #9db3a8;
-  --mist-hover: #eef5f1;
-  --deep-mist: #c9d8d0;
-  --ice: #22392f;
-  --panel: var(--forest-surface);
-  --panel-2: var(--forest-raised);
-  --tint: var(--forest-raised);
-  --border: var(--forest-line-2);
-  --chip-on-mist: #eef5f1;
-  --line-on-mist: var(--forest-line-2);
-  --status-chip: #c9d8d0;
-  --gold-2: var(--gold-press);
-  --pos: #7af0bf;
-  --neg: #ff7a70;
-  --warn: #f0c060;
+  --cre8-ink: var(--bnb-text);
+  --cre8-deep: #b7bdc6;
+  --cre8-steel: var(--bnb-text-2);
+  --cre8-slate: var(--bnb-text-3);
+  --cre8-frost: var(--bnb-line-2);
+  --cre8-snow: var(--bnb-surface-2);
+  --cre8-fog: #848e9c;
+  --bg: var(--bnb-page);
+  --bg-2: var(--bnb-surface);
+  --card: var(--bnb-surface);
+  --card-2: var(--bnb-surface-2);
+  --field: var(--bnb-canvas);
+  --line: var(--bnb-line);
+  --line-2: var(--bnb-line-2);
+  --ink-2: #b7bdc6;
+  --body: #b7bdc6;
+  --muted: var(--bnb-text-2);
+  --mist: var(--bnb-text-2);
+  --mist-hover: var(--bnb-text);
+  --deep-mist: #b7bdc6;
+  --ice: var(--bnb-line-2);
+  --panel: var(--bnb-surface);
+  --panel-2: var(--bnb-surface-2);
+  --tint: var(--bnb-surface-2);
+  --border: var(--bnb-line-2);
+  --chip-on-mist: var(--bnb-text);
+  --line-on-mist: var(--bnb-line-2);
+  --status-chip: #b7bdc6;
+  /* 設計稿的 --gold 原本是 steel（強調用的字色），不是品牌黃：維持中性，黃色只給主要動作與選取。 */
+  --gold: var(--bnb-text-2);
+  --gold-2: var(--bnb-text);
+  --gold-soft: rgba(146, 154, 165, .12);
+  --pos: var(--bnb-up);
+  --neg: var(--bnb-down);
+  --warn: var(--bnb-warn);
   color-scheme: dark;
 }
 
-html, html body, body.atp-formal-market, body.atp-formal-fund { background: var(--forest-page) !important; }
+html:not([data-theme="light"]),
+html:not([data-theme="light"]) body,
+html:not([data-theme="light"]) body.atp-formal-market,
+html:not([data-theme="light"]) body.atp-formal-fund { background: var(--bnb-page) !important; }
 
-/* 頁首：半透明白改成半透明深綠。 */
+/* 頁首：半透明白改成半透明板岩。 */
 @media (min-width: 720px) {
-  #root .masthead.app-masthead { background: rgba(8, 20, 15, .86); }
+  :where(html:not([data-theme="light"])) #root .masthead.app-masthead { background: rgba(24, 26, 32, .88); }
 }
 @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-  #root .masthead.app-masthead { background: var(--forest-page); }
+  :where(html:not([data-theme="light"])) #root .masthead.app-masthead { background: var(--bnb-page); }
 }
 
-/* 主要按鈕：暖金底、深字（原本是墨色底白字）。 */
-html body #root .btn:not(.ghost, .light, .btn--ghost, :disabled),
-html body .btn:not(.ghost, .light, .btn--ghost, :disabled) { border-color: var(--gold); background: var(--gold); color: var(--gold-ink); }
-html body #root .btn:not(.ghost, .light, .btn--ghost, :disabled):hover,
-html body .btn:not(.ghost, .light, .btn--ghost, :disabled):hover { border-color: var(--gold-press); background: var(--gold-press); color: var(--gold-ink); }
-html body #root .btn:is(.ghost, .light, .btn--ghost):not(:disabled):hover,
-html body .btn:is(.ghost, .light, .btn--ghost):not(:disabled):hover { background: #1b3328; }
-html body #root .masthead .header-wallet[data-wallet-state="disconnected"] { border-color: var(--gold); background: var(--gold); color: var(--gold-ink); }
-html body #root .masthead .header-wallet[data-wallet-state="disconnected"]:hover { border-color: var(--gold-press); background: var(--gold-press); }
-
-/* 點畫人像：白紙黑墨用 multiply 疊在紙色上；深色底上維持紙色，像一張印刷卡。 */
-body.atp-formal-fund #root #atp-fund-cover.is-hedcut { background: var(--print-paper); border-color: var(--gold-line); }
-body.atp-formal-fund #root #atp-fund-cover.is-hedcut h1,
-body.atp-formal-fund #root #atp-fund-cover.is-hedcut h1 :is(a, button, span) { color: #16140f; }
-#root :is(.mkt-avatar, .app-holding-cover, .fund-thumb, .fund-introduction-identity img, .app-ticket-fund img) { background: var(--print-paper); }
+/* 點畫人像：白紙黑墨用 multiply 疊在底板上；深色底上維持一張淺色卡，墨線還是黑的。 */
+:where(html:not([data-theme="light"])) body.atp-formal-fund #root #atp-fund-cover.is-hedcut { background: var(--print-paper); border-color: var(--bnb-line); }
+:where(html:not([data-theme="light"])) body.atp-formal-fund #root #atp-fund-cover.is-hedcut h1,
+:where(html:not([data-theme="light"])) body.atp-formal-fund #root #atp-fund-cover.is-hedcut h1 :is(a, button, span) { color: var(--print-ink); }
+:where(html:not([data-theme="light"])) #root :is(.mkt-avatar, .app-holding-cover, .fund-thumb, .fund-introduction-identity img, .app-ticket-fund img) { background: var(--print-paper); }
 
 /* ── 逐條覆蓋：設計稿與舊樣式寫死的淺色（由全站對比檢查找出，2026-11-17） ── */
 /* logo 翻牌上的數字原本用 --snow（淺）；深色主題裡 --snow 是面板色，數字要維持淺色。 */
-.c8-reel { color: #eef3f7; }
+:where(html:not([data-theme="light"])) .c8-reel { color: #eef3f7; }
 /* 報酬走勢區塊寫死白底。 */
-body.atp-formal-fund .vault-performance,
-body.fund-detail-redesign .vault-performance,
-body.vault-page .vault-performance { background: transparent; }
+:where(html:not([data-theme="light"])) :is(body.atp-formal-fund, body.fund-detail-redesign, body.vault-page) .vault-performance { background: transparent; }
 /* 原本深色區（Top performers、資產頁的建立區）上的白字：--white 現在是深色，改用 --ink。 */
-#fund-explore .mkt-deck .mkt-id strong { color: var(--ink); }
-body.atp-asset-page #root [class*="_side_"] > section[class*="_create_"] h2 { color: var(--ink); }
+:where(html:not([data-theme="light"])) #fund-explore .mkt-deck .mkt-id strong { color: var(--ink); }
+:where(html:not([data-theme="light"])) body.atp-asset-page #root [class*="_side_"] > section[class*="_create_"] h2 { color: var(--ink); }
 /* 設計稿寫死 #2B4254 的細字與「展開更多」。 */
-.vault-page .fine,
-#root .fine { color: var(--muted); }
-#root .vault-details summary { color: var(--steel); }
+:where(html:not([data-theme="light"])) :is(.vault-page, #root) .fine { color: var(--muted); }
+:where(html:not([data-theme="light"])) #root .vault-details summary { color: var(--steel); }
 /* 手機：毛玻璃與分頁列（原本是半透明白）。 */
-:root {
-  --glass-fill: rgb(14 29 23 / 72%);
-  --glass-edge: rgb(200 235 215 / 12%);
-  --glass-press: rgb(238 245 241 / 8%);
-  --glass-shadow: 0 12px 32px rgb(0 0 0 / 40%), inset 0 1px 0 rgb(255 255 255 / 6%);
+:root:not([data-theme="light"]) {
+  --glass-fill: rgb(30 35 41 / 74%);
+  --glass-edge: rgb(234 236 239 / 10%);
+  --glass-press: rgb(234 236 239 / 8%);
+  --glass-shadow: 0 12px 32px rgb(0 0 0 / 45%), inset 0 1px 0 rgb(255 255 255 / 6%);
 }
 @media (max-width: 719px) {
-  #root .app-mobile-nav a[aria-current="page"] { background: var(--gold-soft); color: var(--gold-text); }
-  #root .app-mobile-nav a[aria-current="page"] :is(path, circle, rect, g)[fill="currentColor"] { fill: var(--gold-text); }
-  #fund-explore .collection-tabs,
-  #fund-explore > .collection-tabs { background: rgb(8 20 15 / 94%); }
-  #root:has(#fund-explore) .app-nav-bar::before { background: rgb(8 20 15 / 94%); }
-  #root .app-nav-bar .app-mode-switch[data-target="studio"] { background: var(--forest-raised); color: var(--ink); }
+  :root:not([data-theme="light"]) {
+    --glass-fill: rgb(30 35 41 / 74%);
+    --glass-edge: rgb(234 236 239 / 10%);
+    --glass-press: rgb(234 236 239 / 8%);
+    --glass-shadow: 0 12px 32px rgb(0 0 0 / 45%), inset 0 1px 0 rgb(255 255 255 / 6%);
+  }
+  :where(html:not([data-theme="light"])) #fund-explore .collection-tabs,
+  :where(html:not([data-theme="light"])) #fund-explore > .collection-tabs { background: rgb(24 26 32 / 94%); }
+  :where(html:not([data-theme="light"])) #root:has(#fund-explore) .app-nav-bar::before { background: rgb(24 26 32 / 94%); }
+  :where(html:not([data-theme="light"])) #root .app-nav-bar .app-mode-switch[data-target="studio"] { background: var(--bnb-secondary); color: var(--ink); }
 }
-.app-mode-label { background: var(--gold-soft); color: var(--gold-text); }
 /* 建立頁封面預覽的底（圖片載入前）。 */
-#root section[aria-label="Fund cover"] [class*="_preview_"] { background-color: var(--forest-raised); }
-/* 錢包選單裡的主要按鈕也是暖金。 */
-html body #root .wallet-menu .btn.primary:not(:disabled),
-html body #root .app-portfolio-guest .btn.primary,
-html body #root .signin-screen .btn.btn:not(.ghost) { border-color: var(--gold); background: var(--gold); color: var(--gold-ink); }
-/* Studio 的深色玻璃分頁列：選中項目原本用 --white（現在是深色）。 */
-@media (max-width: 719px) {
-  body.studio-mode #root .app-mobile-nav a[aria-current="page"] { color: var(--gold-text); }
-  body.studio-mode #root .app-mobile-nav a[aria-current="page"] :is(path, circle, rect, g)[fill="currentColor"] { fill: var(--gold-text); }
-}
+:where(html:not([data-theme="light"])) #root section[aria-label="Fund cover"] [class*="_preview_"] { background-color: var(--bnb-surface-2); }
 /* 封面預覽上的基金名稱疊在圖片上，固定白字。 */
-#root section[aria-label="Fund cover"] [class*="_preview_"] > strong { color: #fff; }
+:where(html:not([data-theme="light"])) #root section[aria-label="Fund cover"] [class*="_preview_"] > strong { color: #fff; }
 /*
- * 點畫封面（紙色）：
- *   - 寬版（按鈕疊在封面上）：兩顆按鈕維持紙上的淺色按鈕。
- *   - 窄版上下排（cre8-app#106）：名稱那條也用紙色，整張卡片是一張印刷卡；按鈕在卡片下面的深色底上，照一般深色按鈕。
+ * 點畫封面（淺色底板）：
+ *   - 寬版（按鈕疊在封面上）：兩顆按鈕維持底板上的淺色按鈕。
+ *   - 窄版上下排（cre8-app#106）：名稱那條也用底板色，整張卡片是一張淺色卡；按鈕在卡片下面的深色底上，照一般深色按鈕。
  */
 @media (min-width: 720px) {
   @container fund-heading (min-width: 560px) {
-    body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-hedcut) .atp-fund-byline :is(.btn, .fund-introduction-trigger) { background: #fffdf8; color: #16140f; box-shadow: inset 0 0 0 1px rgba(22, 20, 15, .12); }
-    body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-hedcut) .atp-fund-byline :is(.btn, .fund-introduction-trigger):hover { background: #f4efe3; }
+    :where(html:not([data-theme="light"])) body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-hedcut) .atp-fund-byline :is(.btn, .fund-introduction-trigger) { background: #fff; color: var(--print-ink); box-shadow: inset 0 0 0 1px rgba(24, 26, 30, .14); }
+    :where(html:not([data-theme="light"])) body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-hedcut) .atp-fund-byline :is(.btn, .fund-introduction-trigger):hover { background: #f5f5f5; }
   }
   @container fund-heading (max-width: 559.98px) {
-    body.atp-formal-fund #root #atp-fund-cover.is-hedcut h1 { background: var(--print-paper); border-top-color: rgba(22, 20, 15, .1); }
+    :where(html:not([data-theme="light"])) body.atp-formal-fund #root #atp-fund-cover.is-hedcut h1 { background: var(--print-paper); border-top-color: rgba(24, 26, 30, .1); }
   }
 }
 
 /* ── 登入頁與 waitlist（整站鎖住時唯一的畫面）：淺灰底與白色翻牌看板改成深色。 ── */
-.signin-screen.waitlist { background: var(--forest-page); }
-.waitlist__board {
-  background:
-    radial-gradient(90% 70% at 70% 20%, rgba(230, 184, 78, .10), transparent 60%),
-    linear-gradient(180deg, #0b1913, #08140f);
-  border-left-color: var(--forest-line);
-}
+:where(html:not([data-theme="light"])) .signin-screen.waitlist { background: var(--bnb-page); }
+:where(html:not([data-theme="light"])) .waitlist__board { background: var(--bnb-canvas); border-left-color: var(--bnb-line); }
 @media (max-width: 959px) {
-  .signin-screen.waitlist { background: radial-gradient(120% 55% at 50% 0%, rgba(230, 184, 78, .10), transparent 70%), var(--forest-page); }
-  .waitlist__board { background: none; }
+  :where(html:not([data-theme="light"])) .signin-screen.waitlist { background: var(--bnb-page); }
+  :where(html:not([data-theme="light"])) .waitlist__board { background: none; }
 }
-.flap-board { background: rgba(14, 29, 23, .72); box-shadow: 0 30px 60px rgba(0, 0, 0, .45), 0 0 0 1px var(--forest-line); }
-.flap { background: linear-gradient(180deg, #1d3a2e 0 50%, #16301f 50% 100%); box-shadow: 0 1px 1px rgba(0, 0, 0, .4), 0 0 0 1px rgba(200, 235, 215, .07); color: #eef5f1; }
-.flap::after { background: rgba(0, 0, 0, .55); }
-.flap[data-blank] { background: linear-gradient(180deg, #13271f 0 50%, #102119 50% 100%); }
-.waitlist__invite { border-top-color: var(--forest-line); }
-html body #root .waitlist__invite input { background: var(--forest-sunken); box-shadow: 0 0 0 1px var(--forest-line-2); }
-html body #root .signin-screen .btn.btn.ghost[data-method='follow'] { background: var(--forest-raised); color: var(--ink); box-shadow: 0 0 0 1px var(--forest-line); }
-html body #root .signin-screen .btn.btn.ghost[data-method='follow']:hover { background: #1b3328; }
-html body #root .signin-screen .btn.btn.ghost:not([data-method='google']) { background: var(--forest-raised); color: var(--ink); }
-/* 主要動作（含 Connect X）一律暖金。 */
-html body #root .signin-screen .btn.btn[data-method='x'] { background: var(--gold); color: var(--gold-ink); }
-html body #root .signin-screen .btn.btn[data-method='x']:hover:not(:disabled) { background: var(--gold-press); }
+:where(html:not([data-theme="light"])) .flap-board { background: var(--bnb-surface); box-shadow: 0 0 0 1px var(--bnb-line); }
+:where(html:not([data-theme="light"])) .flap { background: linear-gradient(180deg, #232930 0 50%, #252a31 50% 100%); box-shadow: 0 1px 1px rgba(0, 0, 0, .4), 0 0 0 1px rgba(234, 236, 239, .06); color: var(--bnb-text); }
+:where(html:not([data-theme="light"])) .flap::after { background: rgba(0, 0, 0, .55); }
+:where(html:not([data-theme="light"])) .flap[data-blank] { background: linear-gradient(180deg, #22272e 0 50%, #1f242a 50% 100%); }
+:where(html:not([data-theme="light"])) .waitlist__invite { border-top-color: var(--bnb-line); }
+html:not([data-theme="light"]) body #root .waitlist__invite input { background: var(--bnb-surface-2); box-shadow: 0 0 0 1px var(--bnb-line-2); }
 
 /*
  * 封面上的字與按鈕（2026-11-18）：封面一律是深色照片，原本用 --white 當字色／淺色玻璃當按鈕；
  * --white 在深色主題是面板色，名稱、手機的返回／分享圖示會變成深字疊深底，桌機封面上的按鈕變成白底白字。
- * 點畫封面（紙色）在上面另有規則，這裡只管非點畫的封面。
+ * 點畫封面（淺色底板）在上面另有規則，這裡只管非點畫的封面。
  */
-body.atp-formal-fund #root #atp-fund-cover:not(.is-hedcut) h1,
-body.atp-formal-fund #root #atp-fund-cover:not(.is-hedcut) h1 :is(a, button, span) { color: #f4f1e8; }
-#root #atp-fund-cover .app-fund-toolbar > :is(a, button) { background: rgba(8, 20, 15, .62); color: #f4f1e8; box-shadow: inset 0 0 0 1px rgba(244, 241, 232, .14); }
+:where(html:not([data-theme="light"])) body.atp-formal-fund #root #atp-fund-cover:not(.is-hedcut) h1,
+:where(html:not([data-theme="light"])) body.atp-formal-fund #root #atp-fund-cover:not(.is-hedcut) h1 :is(a, button, span) { color: #f5f5f5; }
+:where(html:not([data-theme="light"])) #root #atp-fund-cover .app-fund-toolbar > :is(a, button) { background: rgba(24, 26, 32, .66); color: #f5f5f5; box-shadow: inset 0 0 0 1px rgba(234, 236, 239, .16); }
 @media (min-width: 720px) {
   @container fund-heading (min-width: 560px) {
-    body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover:not(.is-hedcut)) .atp-fund-byline :is(.btn, .fund-introduction-trigger) { background: rgba(8, 20, 15, .72); color: #f4f1e8; box-shadow: inset 0 0 0 1px var(--gold-line); }
-    body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover:not(.is-hedcut)) .atp-fund-byline :is(.btn, .fund-introduction-trigger):hover { background: rgba(20, 40, 32, .9); color: #f4f1e8; }
+    :where(html:not([data-theme="light"])) body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover:not(.is-hedcut)) .atp-fund-byline :is(.btn, .fund-introduction-trigger) { background: rgba(24, 26, 32, .74); color: #f5f5f5; box-shadow: inset 0 0 0 1px rgba(234, 236, 239, .2); }
+    :where(html:not([data-theme="light"])) body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover:not(.is-hedcut)) .atp-fund-byline :is(.btn, .fund-introduction-trigger):hover { background: rgba(41, 49, 61, .92); color: #f5f5f5; }
   }
 }
 
 /*
  * Buy 面板（2026-11-18）：public-detail-source.css 把 #ticket 寫死成 white，手機 Buy 抽屜與桌機右欄都變成白底，
- * 上面的淺色字（Fund updates…、Ways to add money）看不見。改回面板色（--white 在深色主題是 --forest-surface）。
+ * 上面的淺色字（Fund updates…、Ways to add money）看不見。改回面板色。
  */
-body.fund-detail-redesign #ticket { background: var(--white); border-color: var(--forest-line); }
-/* 手機 Buy 抽屜在 #root 外面，吃不到桌機那條分段控制規則，選中項變成一塊淺色。照桌機：凹槽用 raised，選中用面板色。 */
-.app-bottom-sheet #ticket .seg { border: 0; background: var(--forest-raised); padding: 3px; }
-.app-bottom-sheet #ticket .seg button { background: transparent; color: var(--steel); }
-.app-bottom-sheet #ticket .seg button.on { background: var(--forest-surface); color: var(--ink); }
+:where(html:not([data-theme="light"])) body.fund-detail-redesign #ticket { background: var(--white); border-color: var(--bnb-line); }
+/* 手機 Buy 抽屜在 #root 外面，吃不到桌機那條分段控制規則：凹槽用 canvas，選中用 slate。 */
+:where(html:not([data-theme="light"])) .app-bottom-sheet #ticket .seg { border: 0; background: var(--bnb-canvas); padding: 3px; }
+:where(html:not([data-theme="light"])) .app-bottom-sheet #ticket .seg button { background: transparent; color: var(--steel); }
+:where(html:not([data-theme="light"])) .app-bottom-sheet #ticket .seg button.on { background: var(--bnb-secondary); color: var(--ink); }
+

@@ -1,6 +1,8 @@
 /** ATP 票券的相容型別；完整目錄與歷史資料由 public-fund-adapter 接上已核准來源。
  * 參考配置與真實帳戶資料分開，持有帳戶時仍使用 API 的即時目標與餘額。 */
 
+import type { Rebalance } from '../lib/fund-execution';
+
 export type MockHolding = {
   symbol: string;
   /** bps（10000 = 100%）。與後端 `allocation.assets[].weightBps` 同一個單位。 */
@@ -22,7 +24,7 @@ export type MockFund = {
   mark: string;
   risk: 'High' | 'Medium' | 'Low';
   /** 再平衡節奏；`none` = 不自動再平衡。 */
-  rebalance: 'monthly' | 'drift' | 'none';
+  rebalance: Rebalance;
   holdings: MockHolding[];
 };
 

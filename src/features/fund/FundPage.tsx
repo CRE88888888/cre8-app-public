@@ -19,8 +19,10 @@ import { TicketFund, TicketReceipt, TicketReview } from './TicketReview';
 import type { TicketAction, TicketProgress } from './TicketReview';
 import {catalogueTargets} from '../../data/public-fund-adapter';
 import { REFERENCE_METADATA, referenceFund } from '../../lib/public-funds';
-import { symbolOf, synthesizeCommunityFund } from '../../lib/community-fund';
-import { STACK_MIN_BUY_NOTE, usdtText, type StackBuy } from '../../lib/fund-execution';
+import { catalogueStrategy, symbolOf, synthesizeCommunityFund } from '../../lib/community-fund';
+import { fundArt } from '../../lib/fund-art';
+import { groupOf } from '../../lib/fund-categories';
+import { REBALANCE_LABEL, SHOW_STACK_AND_YIELD, STACK_MIN_BUY_NOTE, rebalanceText, usdtText, type StackBuy } from '../../lib/fund-execution';
 import { PREVIEW_BLOCK_COPY, previewBody, previewBuys, usdtToRaw } from '../../lib/contribution-preview';
 import { useContributionPreview } from '../../lib/use-contribution-preview';
 import {periodMetrics} from '../../reference/lib/fund-explore';
@@ -100,7 +102,41 @@ export function FundPage(): ReactNode {
   // 輸入框的金額、上一筆的「Withdrawn. tx …」與「Sent $… of …」都會留在下一支基金的畫面上。
   // 這一頁的 state 有二十幾個，逐一重置一定會漏；用 key 讓每支基金有自己的一份最不會錯。
   const { slug, id } = useParams<{ slug: string; id: string }>();
+  // 目錄基金的舊連結：後端已經沒有這檔公開基金（使用者 2026-11-20，只留 Mag7）就顯示已下架，不進交易頁。
+  const listed = useQuery({
+    queryKey: ['strategies', 'public'],
+    queryFn: () => listStrategies(''),
+    select: (data) => data.items,
+    enabled: id === undefined && slug !== undefined,
+  });
+  const catalogue = id === undefined && slug !== undefined ? MOCK_FUNDS.find((entry) => entry.slug === slug) : undefined;
+  if (catalogue !== undefined && listed.data !== undefined && catalogueStrategy(listed.data, catalogue.slug, catalogue.name) === undefined) {
+    return <DelistedFund name={catalogue.name} />;
+  }
   return <FundPageBody key={id === undefined ? `slug:${slug ?? ''}` : `strategy:${id}`} />;
+}
+
+/** 已下架（後端 isPublic=false）的基金頁：不能買、持有人照常能賣。 */
+const DELISTED_TEXT = 'This fund is no longer listed and can’t be bought. If you hold it, you can still sell.';
+/** 槓桿基金頁的高風險說明（含每日重設倍數的長期耗損）。 */
+const LEVERAGED_RISK_TEXT = 'High risk. This fund holds 3x leveraged tokens that reset their leverage every day. Over time the daily reset erodes returns, so the fund can lose value even when the index ends flat, and it can lose most of its value in a short time.';
+
+/** 已下架的目錄基金：說明一句、回列表的連結。持有的人到 Portfolio 仍看得到自己的部位。 */
+function DelistedFund({ name }: { name: string }): ReactNode {
+  // 沿用基金列表的版面與空狀態樣式。
+  useBodyClass('vault-directory', 'fund-explore', 'atp-formal-market', 'atp-complete-market');
+  return (
+    <main className="explore-wrap" id="fund-explore">
+      <div className="directory-empty app-search-empty" data-entry="fund-delisted" role="status">
+        <h2>{name} is no longer listed</h2>
+        <p>This fund can no longer be bought. If you hold it, you can still see and sell it in your portfolio.</p>
+        <div className="app-sheet-actions">
+          <Link className="btn primary" to="/vaults">See all funds</Link>
+          <Link className="btn ghost" to="/portfolio">Portfolio</Link>
+        </div>
+      </div>
+    </main>
+  );
 }
 
 function FundPageBody(): ReactNode {
@@ -167,8 +203,8 @@ function FundPageBody(): ReactNode {
         onchainId: communityStrategy.data.onchainId,
       };
     }
-    const fundName = fund?.name;
-    return fundName === undefined ? undefined : (strategies.data?.items ?? []).find((item) => item.name === fundName);
+    if (fund === undefined) return undefined;
+    return catalogueStrategy(strategies.data?.items ?? [], fund.slug, fund.name);
   }, [fund, strategies.data, strategyId, communityStrategy.data]);
   const holding = (portfolios.data ?? []).find((portfolio) => portfolio.strategyId === strategy?.id);
   // P11（cre8-contracts#54）：鏈上的版本排程。待生效版本、只能賣的資產、建立者的取消。chain 56 不讀。
@@ -176,13 +212,28 @@ function FundPageBody(): ReactNode {
   const sellOnly = new Set(versionSchedule.data?.active ? sellOnlyAssets(versionSchedule.data.historicalAssets, versionSchedule.data.active.assets) : []);
   // 預覽、配置、簽名都用生效中的那一版（審查 #95 第 4 項）：chain 97 讀得到鏈上 activeVersion 時以它為準。
   const effective = effectiveVersion(communityStrategy.data?.versions, versionSchedule.data === undefined ? undefined : (versionSchedule.data.active?.version ?? null));
+  // slug 模式（目錄基金，例如 Mag7）也讀後端的版本，「Rebalancing」才會跟後端設定一致（monthly_drift，使用者 2026-11-20）。
+  const linkedStrategy = useQuery({
+    queryKey: ['strategy', 'public', strategy?.id],
+    queryFn: () => getStrategy('', strategy!.id),
+    enabled: strategyId === null && strategy !== undefined,
+    staleTime: 60_000,
+  });
+  // 後端已隱藏的基金（例如舊 Mag7 #20，使用者 2026-11-20）：頁面照常打開，持有人可以看、可以賣，但不能再買。
+  const delisted = strategyId !== null && communityStrategy.data?.isPublic === false;
+  // 槓桿基金：封面下方一句高風險說明（列表不放；C3 2026-11-20）。
+  const leveraged = groupOf((strategyId !== null ? communityStrategy.data?.category : linkedStrategy.data?.category) ?? null) === 'leveraged';
+  const notices = [
+    ...(delisted ? [{ id: 'fund-delisted', text: DELISTED_TEXT }] : []),
+    ...(leveraged ? [{ id: 'leveraged-risk', text: LEVERAGED_RISK_TEXT }] : []),
+  ];
+  const factsVersion = effective ?? effectiveVersion(linkedStrategy.data?.versions, versionSchedule.data === undefined ? undefined : (versionSchedule.data.active?.version ?? null));
 
   /**
    * id 模式（`/funds/strategy/:id`）的合成 fund：Community 策略沒有參考目錄的 slug，
    * 用 `synthesizeCommunityFund` 現場合成一個 ReferenceFund，餵給 FundOverview。
    *
-   * 與 `/vaults` 的 Community 區塊共用同一個合成器，所以「列表看到的報酬」與「詳情頁看到的報酬」
-   * 是同一組確定性數字（seed = id）。
+   * 與 `/vaults` 的列表共用同一個合成器：有 catalogKey 對應的沿用目錄，其他的報酬一律「—」（不顯示模擬報酬）。
    */
   const communityFund = useMemo(() => {
     const detail = communityStrategy.data;
@@ -205,7 +256,7 @@ function FundPageBody(): ReactNode {
       description: detail.description,
       createdAt: detail.createdAt,
       positions,
-      seed: detail.id,
+      catalogKey: detail.catalogKey,
     });
   }, [communityStrategy.data, effective]);
 
@@ -927,23 +978,24 @@ function FundPageBody(): ReactNode {
                     {/* 第一次買＝加入基金（P11）：你本人簽名同意之後跟隨新版本。chain 56 還是舊合約，不顯示。 */}
                     {holding === undefined && CHAIN.contracts?.registry !== undefined && <FollowVersionsTerms terms={FOLLOW_VERSIONS_TERMS_TEXT} />}
                     {shownVersion !== null && <p className="fine" data-entry="version-in-effect" style={{ margin: '6px 0 0' }}>Version {shownVersion.version} in effect.</p>}
-                    <StackBuyPreview execution={effective?.execution} amountText={faucetBuy ? (buyMode === 'resume' ? '0' : (dailyMode ? DAILY_TEST_USDT : WELCOME_TEST_USDT)) : amount} />
+                    {SHOW_STACK_AND_YIELD && <StackBuyPreview execution={effective?.execution} amountText={faucetBuy ? (buyMode === 'resume' ? '0' : (dailyMode ? DAILY_TEST_USDT : WELCOME_TEST_USDT)) : amount} />}
                     {whitelistOnly ? (
                       connectedAddress === null ? <WalletMenu inline signInFor={{ purpose: 'buy', subject: fund.name }} /> : (
                         <>
-                          <button type="submit" className="btn primary block" disabled={!gatedDepositValid}>
+                          <button type="submit" className="btn primary block" disabled={!gatedDepositValid || delisted}>
                             {mobile ? 'Review order' : 'Buy'}
                           </button>
                           {whitelistNotice === 'deposit' && <WhitelistNote action="deposit" />}
                         </>
                       )
                     ) : token === null ? <WalletMenu inline signInFor={{ purpose: 'buy', subject: fund.name }} /> : (
-                      <button type="submit" className="btn primary block" disabled={ticketBusy || wallet === null || usdt === undefined || subscriptionLocked || buyingPaused !== null || (!faucetBuy && (depositTooLarge || walletBuyBlock !== null || (testnetWalletBuy && depositUnits <= 0n) || (mobile && depositUnits <= 0n)))}>
+                      <button type="submit" className="btn primary block" disabled={ticketBusy || wallet === null || usdt === undefined || subscriptionLocked || buyingPaused !== null || delisted || (!faucetBuy && (depositTooLarge || walletBuyBlock !== null || (testnetWalletBuy && depositUnits <= 0n) || (mobile && depositUnits <= 0n)))}>
                         {faucetBuy ? (busy ? 'Working…' : buyMode === 'resume' ? 'Finish investing' : dailyMode ? `Claim ${DAILY_TEST_USDT} test USDT and invest` : `Get ${WELCOME_TEST_USDT} test USDT and invest`) : busy ? 'Sending…' : mobile ? 'Review order' : 'Buy'}
                       </button>
                     )}
                     {subscriptionLocked && <p className="fine warn" role="status">{new SubscriptionLocked('mainnet').message.replace(' Nothing was transferred.', '')}</p>}
                     {buyingPaused !== null && <p className="fine warn" role="status" data-entry="buying-paused">{buyingPausedText(buyingPaused)}</p>}
+                    {delisted && <p className="fine warn" role="status" data-entry="delisted-buy">{DELISTED_TEXT}</p>}
                     {token !== null && platformPaused && <p className="fine warn" role="status">{PLATFORM_PAUSED_MESSAGE}</p>}
                     {token !== null && !platformPaused && accountPaused && (
                       <p className="fine warn" role="status">
@@ -984,7 +1036,7 @@ function FundPageBody(): ReactNode {
     <>
       <main className="wrap vault-content">
         <div className="vgrid">
-          <div className="main">{reference&&<FundOverview key={reference.slug} fund={reference} backTo={backTo} factsTrigger={factsTrigger} onFacts={()=>setFacts(true)} onPosition={()=>setMyPosition(true)} held={held}/>}</div>
+          <div className="main">{reference&&<FundOverview key={reference.slug} fund={reference} notices={notices} art={fundArt(strategyId !== null ? communityStrategy.data?.catalogKey : slug)} backTo={backTo} factsTrigger={factsTrigger} onFacts={()=>setFacts(true)} onPosition={()=>setMyPosition(true)} held={held}/>}</div>
 
           {mobile ? (
             <AppBottomSheet
@@ -1173,7 +1225,7 @@ function FundPageBody(): ReactNode {
               symbolOf={symbolForAsset}
               usdtDecimals={usdtDecimals}
               usdtSymbol={usdt?.symbol ?? 'USDT'}
-              yieldPermission={lending.view === 'ready' ? (lending.data?.permission ?? null) : null}
+              yieldPermission={SHOW_STACK_AND_YIELD && lending.view === 'ready' ? (lending.data?.permission ?? null) : null}
               onUpdatePermission={renewPermission}
               updatingPermission={renewing}
               onChanged={async () => {
@@ -1185,7 +1237,7 @@ function FundPageBody(): ReactNode {
               }}
             />
 
-            {holding !== undefined && (
+            {SHOW_STACK_AND_YIELD && holding !== undefined && (
               <YieldPanel
                 wallet={wallet}
                 token={token}
@@ -1286,7 +1338,7 @@ function FundPageBody(): ReactNode {
               <div className="panel-b">
                 <dl className="app-facts-overview">
                   <div><dt>Allocation</dt><dd>{fund.thesis}</dd></div>
-                  <div><dt>Rebalancing</dt><dd>{reference?.sourceModel ? 'Source updates' : fund.rebalance === 'none' ? 'No fixed schedule' : fund.rebalance === 'drift' ? 'On allocation drift' : 'Monthly'}</dd></div>
+                  <div><dt>Rebalancing</dt><dd>{rebalanceText(factsVersion?.execution) ?? (reference?.sourceModel ? 'Source updates' : REBALANCE_LABEL[fund.rebalance] ?? '—')}</dd></div>
                   <div><dt>Execution</dt><dd>{strategy === undefined ? 'Catalogue model' : `Connected to strategy #${strategy.id}`}</dd></div>
                 </dl>
               </div>
@@ -1510,6 +1562,7 @@ function FundPageBody(): ReactNode {
       // 主網：typed 基金的認購還沒開（cre8-app#93 high）。新買家在建帳戶之前就停。
       // P11：新版已生效、這個投組暫停買入：不轉錢、不送單（後端送單前也會擋，這裡先講清楚）。
       if (buyingPaused !== null) throw new Error(`${buyingPausedText(buyingPaused)} Nothing was transferred.`);
+      if (delisted) throw new Error(`${DELISTED_TEXT} Nothing was transferred.`);
       if (!faucetBuy && holding === undefined && typedVersionLocked(CHAIN, communityStrategy.data?.versions)) {
         throw new SubscriptionLocked('mainnet');
       }

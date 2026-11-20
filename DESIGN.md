@@ -5,6 +5,7 @@
 ## Typography and colour
 
 - Geist：標題、內文、標籤與按鈕；Geist Mono：數字、代號、地址與期間切換；Anton 只用於 CRE8 字標。
+- 頁面大標（h1）用 Libre Caslon Display（字檔在 `public/fonts/`，只有拉丁字，400 一種字重），與新版首頁一致（2026-11-20）；其餘標題照舊用 Geist。
 - 按鈕為 sentence case、500 weight、0 letter spacing。一般按鈕 15px；小按鈕與錢包 14px。控制項與標籤至少 12px。
 - 使用既有 token：ink `#16222D`、deep `#2B4254`、steel `#4E6A7F`、fog `#6F93AE`、snow `#EEF3F7`、paper `#F7F9FB`、white `#FFFFFF`。
 - 次要文字為 steel；slate `#8297A8` 只用於 disabled。正／負／警告使用 positive `#2C7A68`、negative `#A04E58`、caution `#8A5A1F`。
@@ -189,3 +190,46 @@
 - **其他彈窗**：底部面板（Account、Add money、下單）的遮罩與登入同一種（變暗＋模糊），圓角 28px；面板與錢包選單裡的 `.btn` 一律膠囊。錢包選單 18px 圓角、白底、柔和陰影，每一列是 44px 的淺灰分組列。頁面上的一般按鈕不在這次範圍。
 - **Privy 自己的視窗**（選錢包、匯出私鑰）也畫在頁面裡，會被全站 0 圓角壓平：視窗補回 28px（440px 以下是底部面板，只有上緣圓角）、裡面的列與按鈕 14px、錢包圖示 8px。
 - 形狀登記在 `system.css` 的 `@layer app-shapes`；`prefers-reduced-motion` 關掉滑入動畫，`prefers-reduced-transparency` 改用不模糊的深色遮罩。
+
+## BNB family theme（2026-11-20）
+
+使用者決定：產品跑在 BNB Chain 的 bStock 上，介面要一眼看得出是 BNB 生態。研究 Binance、bnbchain.org、Lista、Venus、Pancake、Aster 等站後，唯一共通的訊號是「**近黑板岩底上的黃色主要按鈕＋深色字**」，配 1px 細線、不加陰影、8px 控制項、Binance 的綠紅。**預設主題改成深色**，取代上面「全站底色純白」與 2026-11-17 的深林綠＋暖金；淺色版保留，可以切換。
+
+### 主題切換
+
+- 預設深色。`<html data-theme="light">` 是淺色；沒有這個屬性就是深色。
+- 選擇記在 localStorage `cre8.theme`（`light`／`dark`）；`index.html` 在第一次繪製前讀它設好屬性與 `theme-color`，不會先閃一下另一個主題。程式在 `src/lib/theme.ts`。
+- 切換鈕（`components/ThemeToggle.tsx`）：桌機在頁首右側（只有圖示，aria-label 寫出動作）；手機在 Profile 的 Account 面板（一列「Theme」＋按鈕）。
+- 樣式：`theme-dark.css`（深色色票與深色專屬覆蓋，每條規則都限定 `html:not([data-theme="light"])`）→ `theme-bnb.css`（淺色色票、兩個主題共用的 BNB 規則、形狀），兩支最後載入。vendor 與 `src/reference/` 不動。
+
+### 色票
+
+| 角色 | 深色（預設） | 淺色 |
+| --- | --- | --- |
+| 頁面底 | `#0B0E11` | `#FFFFFF` |
+| 分組底（canvas） | `#07090C` | `#F7F8FA` |
+| 面板／卡片 | `#13171C` | `#FFFFFF` |
+| surface-2（滑過的列、輸入框、分段軌道） | `#1C2128` | `#F5F5F5` |
+| 細線／強線 | `#232930`／`#3A424D` | `#EAECEF`／`#D5D9DE` |
+| 主要字／次要字／停用 | `#EAECEF`／`#929AA5`／`#5E6673` | `#13171C`／`#646D7B`／`#B7BDC6` |
+| 主要動作（黃） | `#FCD535`，滑過 `#FFE55C` | `#FCD535`，滑過 `#F0B90B` |
+| 黃色上的字 | `#181A1E` | `#181A1E` |
+| 次要按鈕 | `#262D36` 底＋`#EAECEF` 字 | `#F5F5F5` 底＋`#13171C` 字 |
+| 漲／跌 | `#2EBD85`／`#F6465D` | `#087F58`／`#D9304E` |
+| 焦點環 | `#FCD535` 2px、外推 2px | `#F0B90B` 2px、外推 2px，加一圈 `#13171C` 內圈 |
+
+- 舊的 app 色票（`--ink`、`--steel`、`--white`、`--hair`…）與 vendor 色票都改指到上面的值，舊規則不用改就會跟著換。
+- 淺色版的綠用 `#087F58`：規格的 `#0B9B6B` 在白底只有約 3.6:1，報酬是小字，要 4.5:1。次要字同理，規格的 `#707A8A` 在白底只有 4.34:1，改用 `#646D7B`（5.2:1）。
+- 設計稿的 `--gold` 原本是強調用的**字色**（steel），不是品牌黃：兩個主題都指到次要字色，避免整站冒出黃字。
+
+### 規則
+
+- **黃色只用在**：主要動作、選取指示（頁首導覽與分頁的 2px 底線、手機分頁列的選中項）、焦點環、小品牌標記（Studio 標記、Studio 頁首底線）。不當大面積底色；**淺色底上不用黃色字**（手機分頁列淺色版用黃色淡底＋主色字）。
+- 主要按鈕：黃底、`#181A1E` 字、600、8px 圓角，一個畫面一顆。次要按鈕：slate 底、沒有外框。停用：surface-2 底＋停用字色，不用半透明的黃。
+- 登入面板：Continue with X 是黃色主要按鈕；Google 深色版是 slate、淺色版照它的規範白底細框；email、錢包、Follow 是 slate。
+- 分段控制：凹槽 canvas（淺色 surface-2），選中的滑塊 slate（淺色白色＋細陰影）。
+- 表格／排行榜：沒有外框、列間 1px 細線、列滑過 surface-2。卡片 1px 細線、不加陰影（交易面板、建立頁摘要也拿掉陰影）；只有彈出層有陰影。
+- Top performers：深色版是 surface 卡＋細線；淺色版維持一張 `#13171C` 的深色牌，是頁面上唯一的深色物件。
+- 點畫封面在深色版放在 `#EAECEF` 的淺色底板上（multiply 疊上去，墨線還是黑的），不反白人像。照片封面上的字與按鈕固定淺色。
+- 形狀：按鈕與輸入框 8px、卡片與面板 16px、標籤 6px；底部面板、登入卡、錢包選單、Privy 視窗 16px（手機底部面板只有上緣圓角）；面板裡的按鈕 8px，不再是膠囊。頭像、資產 logo 圓形；膠囊只留給手機上浮動的分頁列、底部 Buy 列與右上圓鈕。
+- 數字維持 Geist Mono；字體、版面、文案、`prefers-reduced-motion` 規則都沒變。

@@ -71,10 +71,11 @@ test("the 8 cryptos CRE8 added to the designer catalogue are there, testnet-list
     // 主網仍不在 38 個准入資產裡。
     expect(LAUNCH_ASSETS.some((launch) => launch.symbol.toLowerCase() === symbol.toLowerCase())).toBe(false);
   }
-  // 主網的 status 下 91 個可選（ZEC 沒有價格來源）；測試網的 build 打開 ZEC，92 個（cre8-app#93：明確指定鏈）。
+  // 主網的 status 下 103 個可選（ZEC 沒有價格來源）；測試網的 build 打開 ZEC，104 個（cre8-app#93：明確指定鏈）。
+  // 2026-11-20：地址簿加上 cre8-contracts#61 首發基金的 13 個模擬資產，其中 12 個在設計器目錄裡。
   const mainnet = B.ASSETS.map((asset) => ({ ...asset, status: MAINNET_STATUS.get(asset.key) ?? asset.status }));
-  expect(mainnet.filter((asset) => B.canPickAsset(asset) && isTestnetSymbol(asset.symbol)).length).toBe(91);
-  expect(B.ASSETS.filter((asset) => B.canPickAsset(asset) && isTestnetSymbol(asset.symbol)).length).toBe(IS_TESTNET ? 92 : 91);
+  expect(mainnet.filter((asset) => B.canPickAsset(asset) && isTestnetSymbol(asset.symbol)).length).toBe(103);
+  expect(B.ASSETS.filter((asset) => B.canPickAsset(asset) && isTestnetSymbol(asset.symbol)).length).toBe(IS_TESTNET ? 104 : 103);
   // 加得進設計（只能用 Buy & hold，跟其他 preview 資產一樣）。
   const design = B.addAsset(B.emptyBuilder(), "CAKE", "demo");
   expect(design.rows.map((row) => row.key)).toEqual(["CAKE"]);

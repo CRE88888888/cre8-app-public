@@ -50,5 +50,8 @@ import './styles/market.css';
 import './styles/fund-page.css';
 import './styles/pages.css';
 import './styles/covers.css';
-// 深色主題（深林綠＋暖金，2026-11-17）：只換色，一定最後載入。
+// 深色主題（BNB family，2026-11-20，預設）：只換色，<html data-theme="light"> 時不作用。
 import './styles/theme-dark.css';
+// BNB family（2026-11-20）：淺色版色票與兩個主題共用的規則（黃色主要按鈕、8／16px 圓角）。最後載入。
+import './styles/theme-bnb.css';
+import './styles/landing-style.css';

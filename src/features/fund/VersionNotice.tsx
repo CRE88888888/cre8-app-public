@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { StrategyVersion } from '../../lib/api';
 import type { VersionSchedule } from '../../lib/atp-contracts';
 import { FOLLOW_VERSIONS_PLAIN, FOLLOW_VERSIONS_SHORT } from '../../lib/atp-contracts';
+import { SHOW_STACK_AND_YIELD } from '../../lib/fund-execution';
 import { PUBLISH_RULES, assetPlays, changeLine, nextPublishAt, versionChanges, whenText, type AssetPlay } from '../../lib/fund-versions';
 
 /** 後端版本裡 activeAt 跟鏈上（unix 秒）相同的那一版的逐資產買法。找不到就 null（只說「買法有變」）。 */
@@ -56,7 +57,9 @@ export function VersionNotice({
   }
   const before = playsAt(versions, active.activeAt);
   const after = playsAt(versions, pending.activeAt);
-  const changes = versionChanges(active, pending, before !== null && after !== null ? { active: before, next: after } : null);
+  // 買法（逐資產的 hold／stack）先不顯示（SHOW_STACK_AND_YIELD）：只留資產、權重這類變更。
+  const changes = versionChanges(active, pending, before !== null && after !== null ? { active: before, next: after } : null)
+    .filter((change) => SHOW_STACK_AND_YIELD || (change.kind !== 'play' && change.kind !== 'settings'));
   return (
     <div data-entry="pending-version" role="status">
       <p className="fine warn"><b>New settings take effect on {whenText(pending.activeAt)}.</b> Accounts in this fund follow them automatically.</p>

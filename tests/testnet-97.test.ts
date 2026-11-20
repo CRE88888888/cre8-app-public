@@ -72,8 +72,8 @@ test("the address book records where it came from and holds well-formed addresse
   expect(TESTNET_97.source.sha256).toMatch(/^[0-9a-f]{64}$/);
   const addresses = [...Object.values(TESTNET_97.contracts), ...Object.values(TESTNET_97.assets)];
   for (const address of addresses) expect(address).toMatch(/^0x[0-9a-fA-F]{40}$/);
-  // 測試 USDT 之外 92 個模擬資產（cre8-contracts#43），地址不重複。
-  expect(Object.keys(TESTNET_97.assets).length).toBe(92);
+  // 測試 USDT 之外 105 個模擬資產（cre8-contracts#43 的 92 個＋#61 首發基金的 13 個），地址不重複。
+  expect(Object.keys(TESTNET_97.assets).length).toBe(105);
   expect(new Set(addresses.map((address) => address.toLowerCase())).size).toBe(addresses.length);
   expect(TESTNET_97.contracts.entryPoint).toBe("0x0000000071727De22E5E9d8BAf0edAc6f37da032");
 });

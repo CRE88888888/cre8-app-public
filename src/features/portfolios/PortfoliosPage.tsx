@@ -25,6 +25,7 @@ import { useAccountAddress, useConnectedSessionToken } from '../../lib/use-conne
 import { useMobile } from '../../lib/use-mobile';
 import { useOwnerWallet } from '../../lib/use-owner-wallet';
 import { decodeRebalanceSteps, hasVenue } from '../../lib/venues';
+import { ThemeToggle } from '../../components/ThemeToggle';
 
 function holdingState(status: PortfolioStatus | undefined) {
   if (status === undefined || !status.complete) return <Badge tone="warn">Value unavailable</Badge>;
@@ -120,9 +121,10 @@ export function PortfoliosPage(): ReactNode {
     const query = statuses[index];
     const status = query?.data;
     const slug = MOCK_FUNDS.find((fund) => fund.name === strategyName)?.slug;
-    const path = slug !== undefined
-      ? `/funds/${slug}?position=1&returnTo=%2Fportfolios`
-      : strategyId != null ? `/strategies/${strategyId}` : undefined;
+    // 用策略 id 進基金頁（使用者 2026-11-20）：目錄基金下架後 `/funds/:slug` 顯示已下架，持有的人仍要能看到、賣掉自己的部位。
+    const path = strategyId != null
+      ? `/funds/strategy/${strategyId}?position=1&returnTo=%2Fportfolios`
+      : slug !== undefined ? `/funds/${slug}?position=1&returnTo=%2Fportfolios` : undefined;
     return {
       id, status, name: strategyName ?? `Strategy ${id}`,
       cover: slug ? REFERENCE_METADATA[slug]?.cover : undefined,
@@ -284,6 +286,7 @@ export function PortfoliosPage(): ReactNode {
             {...(PRIVY_ENABLED ? { description: 'Link more ways to sign in, export your wallet key, or sign out.' } : {})}
           >
             <LinkedAccounts address={address} />
+            <ThemeToggle variant="row" />
             <SignOutButton onDone={() => setPanel(null)} />
           </AppBottomSheet>
         </>

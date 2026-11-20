@@ -9,7 +9,7 @@ import {
   periodSeries,
 } from "../../reference/lib/fund-explore";
 import type { Period } from "../../reference/lib/fund-explore";
-import { REFERENCE_METADATA, assetBySymbol, pct } from "../../lib/public-funds";
+import { DEFAULT_FUND_COVER, REFERENCE_METADATA, assetBySymbol, pct } from "../../lib/public-funds";
 import type { ReferenceFund } from "../../lib/public-funds";
 import { LAUNCH_COPY } from "../../lib/launch-admission";
 import { fundLaunchStatus } from "../../lib/launch-funds";
@@ -81,9 +81,12 @@ export function FundAvatar({ fund }: { fund: ReferenceFund }): ReactNode {
   const meta = REFERENCE_METADATA[fund.slug] as (typeof REFERENCE_METADATA)[string] | undefined;
   const person = fund.group === "people" || fund.group === "x-voices";
   if (meta === undefined) {
-    // 社群策略沒有封面：用名稱縮寫，不放假的圖。
-    const initials = fund.name.replace(/[^A-Za-z0-9一-鿿]/g, "").slice(0, 2).toUpperCase() || "C8";
-    return <span className="mkt-avatar mkt-avatar--initials" aria-hidden="true">{initials}</span>;
+    // 還沒有封面的基金：中性的預設圖（使用者 2026-11-20），封面等重新設計再補。
+    return (
+      <span className="mkt-avatar" aria-hidden="true">
+        <img src={DEFAULT_FUND_COVER} alt="" width="48" height="48" loading="lazy" />
+      </span>
+    );
   }
   return (
     <span className={`mkt-avatar${person ? " mkt-avatar--person" : ""}`} aria-hidden="true">

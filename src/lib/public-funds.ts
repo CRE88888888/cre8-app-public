@@ -90,6 +90,9 @@ const photoCover = (slug: string): ReferenceMetadata["cover"] => ({
 });
 const coverFor = (slug: string, meta: ReferenceMetadata): ReferenceMetadata["cover"] =>
   PHOTO_COVER_SLUGS.has(slug) ? photoCover(slug) : meta.cover;
+/** 還沒有封面的基金用的中性預設圖（首發新基金，使用者 2026-11-20）。 */
+export const DEFAULT_FUND_COVER = "/fund-covers/default.svg";
+
 export const REFERENCE_METADATA: Record<string, ReferenceMetadata> = Object.fromEntries(
   Object.entries(metadata as unknown as Record<string, ReferenceMetadata>).map(([slug, meta]) => [
     slug,

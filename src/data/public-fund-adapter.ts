@@ -1,6 +1,7 @@
 import { LISTED_FUNDS } from "../lib/public-funds";
 import type { ReferenceFund } from "../lib/public-funds";
 import type { MockFund, MockHolding } from "./mock-funds";
+import { parseRebalance } from "../lib/fund-execution";
 // 票券的目標配置取自原目標權重；不能把目前漂移後的持倉冒充 mandate。
 export function catalogueTargets(fund: ReferenceFund): MockHolding[] {
   const rows = fund.backtest.targets
@@ -30,11 +31,7 @@ export const PUBLIC_FUNDS: MockFund[] = LISTED_FUNDS.map((f) => ({
   kind: f.group || "stocks",
   mark: f.symbol,
   risk: f.risk,
-  rebalance:
-    f.backtest.rebalance === "monthly"
-      ? "monthly"
-      : f.backtest.rebalance === "drift"
-        ? "drift"
-        : "none",
+  // 不認得的值（例如 "source"）當作沒有固定排程，不會壞。
+  rebalance: parseRebalance(f.backtest.rebalance) ?? "none",
   holdings: catalogueTargets(f),
 }));

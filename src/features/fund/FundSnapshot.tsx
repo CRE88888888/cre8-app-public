@@ -5,6 +5,7 @@ import { fundHoldings } from "../vaults/FundBoard";
 const REBALANCE: Record<string, string> = {
   monthly: "Rebalances monthly",
   drift: "Rebalances when weights drift",
+  monthly_drift: "Rebalances monthly and when weights drift",
   source: "Follows source updates",
 };
 

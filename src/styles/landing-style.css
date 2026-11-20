@@ -1,0 +1,194 @@
+/*
+ * 新版首頁的版面語言（2026-11-20，使用者：「找 landing 那個風格把舊的 app 改了」）。
+ * 參考 CRE8Finance/landing-redesign 的 index.html：襯線大標、標題＋說明＋一條線的區塊頭、
+ * 黃色色板配黑色版畫（深色版是深灰色板配黃色版畫）、人物照片卡、數字用 Geist Mono。
+ * 色票沿用 theme-bnb.css／theme-dark.css 的 --bnb-*；這裡只加色板那幾個。最後載入。
+ */
+
+:root {
+  --lp-serif: 'Libre Caslon Display', Georgia, var(--sans);
+  --lp-ease: cubic-bezier(.16, 1, .3, 1);
+}
+:root[data-theme="light"] {
+  --lp-plate: #fcd535;
+  --lp-on-plate: #14151a;
+  --lp-art: #14151a;
+  --lp-rule: #14151a;
+}
+:root:not([data-theme="light"]) {
+  --lp-plate: #1e2329;
+  --lp-on-plate: #eaecef;
+  --lp-art: #fcd535;
+  --lp-rule: #474d57;
+}
+
+/* ── 頁首大標 ───────────────────────────────────── */
+#root .lp-hero { padding-bottom: 8px; }
+#root .lp-hero h1 {
+  font-size: clamp(44px, 6.4vw, 96px);
+  line-height: .95;
+  letter-spacing: -.04em !important;
+  max-width: 11em;
+  color: var(--bnb-text);
+}
+#root .lp-hero p {
+  margin-top: 18px;
+  max-width: 32em;
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--bnb-text-2);
+}
+#root .lp-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* ── 區塊頭：襯線標題＋數量、底下一條線（不放說明句，使用者 2026-11-20） ─────── */
+#root .lp-sec { margin-top: 96px; }
+#root .lp-sec:first-of-type { margin-top: 56px; }
+#root .lp-head {
+  display: grid;
+  grid-template-columns: 7fr 5fr;
+  gap: 48px;
+  align-items: end;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--lp-rule);
+}
+#root .lp-head h2 {
+  font-family: var(--lp-serif);
+  font-weight: 400;
+  font-size: clamp(36px, 4.4vw, 64px);
+  line-height: 1;
+  letter-spacing: -.03em;
+  color: var(--bnb-text);
+}
+#root .lp-head h2 span {
+  margin-left: 12px;
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 0;
+  color: var(--bnb-text-2);
+}
+
+/* ── 基金卡 ──────────────────────────────────────── */
+#root .lp-tiles {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+}
+#root .lp-tiles--person { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+#root .lp-tile-link {
+  position: relative;
+  display: block;
+  aspect-ratio: 5 / 4;
+  overflow: hidden;
+  background: var(--lp-plate);
+  color: var(--lp-on-plate);
+  text-decoration: none;
+}
+#root .lp-tile-link:focus-visible { outline: 2px solid var(--bnb-focus); outline-offset: 2px; }
+#root .lp-ink,
+#root .lp-cover-ink {
+  position: absolute;
+  background: var(--lp-art);
+  -webkit-mask: var(--src) right bottom / contain no-repeat;
+  mask: var(--src) right bottom / contain no-repeat;
+  pointer-events: none;
+}
+#root .lp-tile .lp-ink {
+  right: 0;
+  bottom: 0;
+  width: 72%;
+  height: 78%;
+  transition: transform .3s var(--lp-ease);
+}
+#root .lp-tile-link:hover .lp-ink { transform: scale(1.04); }
+#root .lp-tile-name {
+  position: absolute;
+  z-index: 1;
+  top: 18px;
+  left: 20px;
+  right: 20px;
+  margin: 0;
+  font-family: var(--lp-serif);
+  font-weight: 400;
+  font-size: clamp(22px, 2vw, 30px);
+  line-height: 1.05;
+  letter-spacing: -.02em;
+  color: inherit;
+}
+#root .lp-tile-foot {
+  position: absolute;
+  z-index: 1;
+  left: 20px;
+  bottom: 16px;
+  max-width: calc(100% - 40px);
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.3;
+}
+#root :is(.lp-tile--ink, .lp-tile--person) .lp-tile-foot { background: var(--lp-plate); padding: 4px 8px 2px 0; }
+#root .lp-tile-foot b {
+  display: block;
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 22px;
+  color: inherit;
+}
+#root .lp-tile-foot b small { margin-left: 2px; font-size: .55em; letter-spacing: .04em; }
+/* 人物：同樣是色板＋版畫（使用者 2026-11-20），卡片是正方形、肖像大一點。 */
+#root .lp-tiles--person .lp-tile-link { aspect-ratio: 1 / 1; }
+#root .lp-tile--person .lp-ink { right: -4%; bottom: 0; width: 80%; height: 84%; }
+/* 深色版的人物用反相遮罩（臉才不會變負片）；沒有深色版遮罩的圖照舊。 */
+:root:not([data-theme="light"]) #root :is(.lp-ink, .lp-cover-ink) {
+  -webkit-mask-image: var(--src-dark, var(--src));
+  mask-image: var(--src-dark, var(--src));
+}
+
+/* ── 基金頁封面：有版畫的用色板 ─────────────────────── */
+body.atp-formal-fund #root #atp-fund-cover.is-plate { background: var(--lp-plate); }
+body.atp-formal-fund #root #atp-fund-cover.is-plate .lp-cover-ink { inset: 6% 0 0 30%; }
+body.atp-formal-fund #root #atp-fund-cover.is-person .lp-cover-ink { inset: 4% 0 0 45%; }
+body.atp-formal-fund #root #atp-fund-cover.is-plate .atp-fund-cover-shade { display: none; }
+body.atp-formal-fund #root #atp-fund-cover.is-plate h1,
+body.atp-formal-fund #root #atp-fund-cover.is-plate h1 :is(a, button, span) { color: var(--lp-on-plate) !important; }
+
+/* ── 內頁的區塊標題也用襯線（基金頁、帳戶頁） ─────────── */
+/* 各頁 h2 的規則特異度不一（有的帶 !important），跟 theme-bnb.css 的 h1 一樣一次蓋過。 */
+html body.atp-formal-fund #root :is(.main h2, .snap > h2, .pros-sec .panel-h h3),
+html body.portfolio-page #root main h2 {
+  font-family: var(--lp-serif) !important;
+  font-weight: 400 !important;
+  letter-spacing: -.02em !important;
+}
+
+#root .lp-hero { display: grid; grid-template-columns: 7fr 5fr; gap: 48px; align-items: end; }
+
+@media (max-width: 1000px) {
+  #root .lp-hero { display: block; }
+  #root .lp-head { grid-template-columns: 1fr; gap: 12px; }
+  #root .lp-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  #root .lp-sec { margin-top: 64px; }
+  #root .lp-hero p { font-size: 16px; }
+  /* mobile-app.css 把工具列排成「搜尋＋按鈕」兩欄；這裡改成上下兩列，搜尋才不會被擠掉。 */
+  body.atp-formal-market #root #fund-explore .lp-toolbar { grid-template-columns: minmax(0, 1fr); }
+  #root #fund-explore .lp-toolbar .explore-search { width: 100%; max-width: none; }
+  #root .lp-sec:first-of-type { margin-top: 40px; }
+  #root .lp-tiles { gap: 12px; }
+  #root .lp-tiles--person { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #root .lp-tile--person .lp-ink { right: -6%; width: 80%; height: 74%; }
+  #root .lp-tile-name { top: 14px; left: 14px; right: 14px; font-size: 20px; }
+  #root .lp-tile-foot { left: 14px; bottom: 12px; max-width: calc(100% - 28px); }
+  #root .lp-tile-foot b { font-size: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #root .lp-tile .lp-ink { transition: none; }
+}

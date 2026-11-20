@@ -20,11 +20,49 @@ export type AssetExecution = { kind: 'hold' } | StackExecution;
 
 /**
  * 整檔再平衡（使用者決定，docs TESTNET_PARAMETERS；backend#93 的 `execution.rebalance`）：只在全部資產都是
- * Buy & hold 時可選。none＝不再平衡（預設）；monthly＝每個 UTC 月一次；drift＝任一資產偏離目標超過 5 個百分點。
+ * Buy & hold 時可選。none＝不再平衡（預設）；monthly＝每個 UTC 月一次；drift＝任一資產偏離目標超過 5 個百分點；
+ * monthly_drift＝兩個都做：每月一次，偏離超過 5 個百分點也調（首發 21 檔，使用者 2026-11-20；backend#171）。
  */
-export type Rebalance = 'none' | 'monthly' | 'drift';
+export type Rebalance = 'none' | 'monthly' | 'drift' | 'monthly_drift';
 /** drift 的門檻：5 個百分點（後端 500 bps，固定）。 */
 export const REBALANCE_DRIFT_POINTS = 5;
+
+const REBALANCES: readonly Rebalance[] = ['none', 'monthly', 'drift', 'monthly_drift'];
+
+/** 後端 `execution.rebalance` 的值；不認得（之後新增的選項、舊資料、型別不對）回 null，畫面改用別的說法，不會壞。 */
+export function parseRebalance(value: unknown): Rebalance | null {
+  return typeof value === 'string' && (REBALANCES as readonly string[]).includes(value) ? (value as Rebalance) : null;
+}
+
+/** 一個版本 `execution` 裡的再平衡設定（schema 2 的 `per_asset`）；沒有或不認得回 null。 */
+export function versionRebalance(execution: unknown): Rebalance | null {
+  if (execution === null || typeof execution !== 'object') return null;
+  return parseRebalance((execution as { rebalance?: unknown }).rebalance);
+}
+
+/** 基金頁「Rebalancing」那一格的短說法。 */
+export const REBALANCE_LABEL: Record<Rebalance, string> = {
+  none: 'No fixed schedule',
+  monthly: 'Monthly',
+  drift: 'On allocation drift',
+  monthly_drift: 'Monthly + on drift',
+};
+
+/**
+ * 基金頁「Rebalancing」用後端版本的設定：版本裡沒有 `rebalance` 回 null（用目錄的說法）；
+ * 有但不認得回「—」，不猜。
+ */
+export function rebalanceText(execution: unknown): string | null {
+  if (execution === null || typeof execution !== 'object' || !('rebalance' in execution)) return null;
+  const rebalance = versionRebalance(execution);
+  return rebalance === null ? '—' : REBALANCE_LABEL[rebalance];
+}
+
+/**
+ * 首發 21 檔（使用者 2026-11-20）：基金的策略只留再平衡。分批買入（stack）的每期金額、閒置生息、逐資產的買法
+ * 先不顯示；程式與後端都留著，要再打開改這裡。
+ */
+export const SHOW_STACK_AND_YIELD = false;
 
 /**
  * stack 可設的期數：最長一年，依頻率不同（使用者 2026-11-16 定案；db#52、backend#118）。
@@ -288,11 +326,18 @@ export const EXECUTION_COPY: Record<ExecutionKind, { name: string; short: string
 /** 有資產是 Stack 時不能再平衡的原因（設計器與錯誤訊息共用）。 */
 export const REBALANCE_STACK_NOTE = 'Rebalancing needs every asset on Buy & hold: a Stack asset is still being bought in slices.';
 
-/** 三個再平衡選項給人看的名稱與一句說明。 */
+/** 再平衡選項給人看的名稱與一句說明。 */
 export const REBALANCE_COPY: Record<Rebalance, { name: string; line: string }> = {
   none: { name: 'Off', line: 'Nothing is sold when prices move.' },
   monthly: { name: 'Monthly', line: 'Once a month (UTC), assets above their share are sold and those below are bought, back to your shares.' },
   drift: { name: `More than ${REBALANCE_DRIFT_POINTS} points off`, line: `When any asset is more than ${REBALANCE_DRIFT_POINTS} points off its share, the fund sells what is above and buys what is below, back to your shares.` },
+  monthly_drift: { name: `Monthly, and more than ${REBALANCE_DRIFT_POINTS} points off`, line: `Once a month (UTC), and whenever any asset is more than ${REBALANCE_DRIFT_POINTS} points off its share, the fund sells what is above and buys what is below, back to your shares.` },
+};
+
+const REBALANCE_WHEN: Record<Exclude<Rebalance, 'none'>, string> = {
+  monthly: 'once a month',
+  drift: `when an asset is more than ${REBALANCE_DRIFT_POINTS} points off its share`,
+  monthly_drift: `once a month, and when an asset is more than ${REBALANCE_DRIFT_POINTS} points off its share,`,
 };
 
 const LOCAL_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
@@ -308,7 +353,7 @@ export function stackWords(stack: StackExecution, now: Date = new Date()): strin
 
 /** 建立頁的確認句：只講這檔基金真的有的那幾種。 */
 export function executionConfirm(kinds: ReadonlySet<ExecutionKind>, rebalance: Rebalance = 'none'): string {
-  if (rebalance !== 'none') return `I understand: each new deposit is bought at these weights, and ${rebalance === 'monthly' ? 'once a month' : `when an asset is more than ${REBALANCE_DRIFT_POINTS} points off its share`} CRE8 sells and buys to bring every asset back to its share.`;
+  if (rebalance !== 'none') return `I understand: each new deposit is bought at these weights, and ${REBALANCE_WHEN[rebalance]} CRE8 sells and buys to bring every asset back to its share.`;
   if (!kinds.has('stack')) return EXECUTION_COPY.hold.confirm;
   if (!kinds.has('hold')) return EXECUTION_COPY.stack.confirm;
   return 'I understand: Buy & hold assets are bought with each deposit and kept, and Stack assets in the daily or weekly slices I set. A buy without enough USDT is skipped, and CRE8 does not sell or rebalance when prices move.';

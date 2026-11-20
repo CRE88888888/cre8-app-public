@@ -5,6 +5,8 @@ import { toast } from "../../components/Toast";
 import { ReferenceSheet } from "./ReferenceSheet";
 import { Link, useSearchParams } from "react-router-dom";
 import { REFERENCE_METADATA, assetBySymbol, editorial } from "../../lib/public-funds";
+import type { FundArt } from "../../lib/fund-art";
+import { artStyle } from "../vaults/FundTile";
 import { describeFundLaunch, fundLaunchStatus } from "../../lib/launch-funds";
 import type { ReferenceFund } from "../../lib/public-funds";
 import { performancePeriod } from "../../reference/lib/fund-navigation";
@@ -19,8 +21,14 @@ export function FundOverview({
   factsTrigger,
   onPosition,
   held,
+  art = null,
+  notices = [],
 }: {
   fund: ReferenceFund;
+  /** 新版首頁同一組封面（`lib/fund-art.ts`）；有的話優先用它。 */
+  art?: FundArt | null;
+  /** 封面下方的提醒（已下架、槓桿高風險），每則一句。 */
+  notices?: readonly { id: string; text: string }[];
   backTo: string;
   onFacts: () => void;
   factsTrigger: Ref<HTMLButtonElement>;
@@ -66,22 +74,13 @@ export function FundOverview({
             <AppIcon name="left" size={16} /> {fromPortfolio ? "Profile" : "All funds"}
           </Link>
           <div className="vault-heading">
-            <div className={`atp-fund-cover${meta?.cover.art === "hedcut" ? ` is-hedcut is-${meta.cover.subject ?? "person"}` : meta?.cover.art === "photo" ? " is-photo" : ""}`} id="atp-fund-cover" data-fund-cover>
-              {meta === undefined ? (
-                <div
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    display: 'grid',
-                    placeItems: 'center',
-                    fontSize: 72,
-                    fontWeight: 700,
-                    letterSpacing: '0.04em',
-                    color: 'rgba(255,255,255,0.85)',
-                  }}
-                >
-                  {fund.name.replace(/[^A-Za-z\u4e00-\u9fff]/g, '').slice(0, 2).toUpperCase() || 'C8'}
-                </div>
+            <div className={`atp-fund-cover${art || meta === undefined ? " is-plate" : meta.cover.art === "hedcut" ? ` is-hedcut is-${meta.cover.subject ?? "person"}` : meta.cover.art === "photo" ? " is-photo" : ""}${art?.srcDark ? " is-person" : ""}`} id="atp-fund-cover" data-fund-cover>
+              {art ? (
+                // 首頁的版畫：色板＋遮罩，顏色跟主題走。
+                <span className="lp-cover-ink" aria-hidden="true" data-entry="fund-art" style={artStyle(art)} />
+              ) : meta === undefined ? (
+                // 還沒有封面的基金：只有色板（中性，使用者 2026-11-20），封面等之後補。
+                null
               ) : (
                 <img
                   src={meta.cover.src}
@@ -131,6 +130,9 @@ export function FundOverview({
               {describeFundLaunch(launch, (symbol) => assetBySymbol(symbol)?.symbol ?? symbol)}
             </p>
           )}
+          {notices.map((notice) => (
+            <p key={notice.id} className="fine warn fund-notice" role="note" data-entry={notice.id}>{notice.text}</p>
+          ))}
         </header>
       </div>
       <ReferenceSheet

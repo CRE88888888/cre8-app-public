@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { AppIcon, type AppIconName } from './AppIcon';
 import { WalletMenu } from './WalletMenu';
+import { ThemeToggle } from './ThemeToggle';
 import { useMobile } from '../lib/use-mobile';
 import { useMastheadHeight } from '../lib/masthead-height';
 
@@ -108,6 +109,7 @@ export function TopBar(): ReactNode {
             </nav>
 
             <div className="head-right">
+              {!mobile && <ThemeToggle />}
               <WalletMenu iconOnly={mobile} />
             </div>
           </div>

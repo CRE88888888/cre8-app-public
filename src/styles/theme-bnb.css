@@ -1,0 +1,350 @@
+/*
+ * BNB family（2026-11-20，規格見 DESIGN.md「BNB family theme」）。
+ *
+ * 在 theme-dark.css 之後載入，最後一支。分三段：
+ *   1. 淺色版的色票（<html data-theme="light">）。深色版的色票在 theme-dark.css。
+ *   2. 兩個主題共用的 BNB 規則：黃色主要按鈕＋深字、slate 次要按鈕、黃色選取指示與焦點環、8px 控制項、16px 卡片與面板。
+ *   3. 淺色版自己的修補（深色的主打牌、焦點環的深色內圈……）。
+ * 黃色只給：主要動作、選取指示、焦點環、小品牌標記。淺色底上不用黃色字。
+ */
+
+/* ── 1. 淺色版色票 ───────────────────────────────────── */
+:root[data-theme="light"],
+:root[data-theme="light"] body:is(.atp-formal-market, .atp-formal-fund, .portfolio-page, .create-page, .atp-asset-page),
+:root[data-theme="light"] #root :is(.app-masthead, .app-mobile-nav),
+:root[data-theme="light"] .app-bottom-sheet {
+  --bnb-page: #ffffff;
+  --bnb-canvas: #f7f8fa;
+  --bnb-surface: #ffffff;
+  --bnb-surface-2: #f5f5f5;
+  --bnb-line: #eaecef;
+  --bnb-line-2: #d5d9de;
+  --bnb-text: #13171c;
+  /* 規格是 #707A8A，但白底只有 4.34:1；壓深到 #646D7B（白底 5.2:1、#F5F5F5 上 4.8:1）。 */
+  --bnb-text-2: #646d7b;
+  --bnb-text-3: #b7bdc6;
+  --bnb-yellow: #fcd535;
+  --bnb-yellow-hover: #f0b90b;
+  --bnb-on-yellow: #181a1e;
+  --bnb-yellow-soft: rgba(252, 213, 53, .22);
+  --bnb-secondary: #f5f5f5;
+  --bnb-secondary-hover: #eaecef;
+  /* 文字用的綠：規格的 #0B9B6B 在白底只有 3.6:1，小字不到 4.5:1，所以字再壓深一階（5.1:1）。 */
+  --bnb-up: #087f58;
+  --bnb-down: #d9304e;
+  --bnb-warn: #c99400;
+  --bnb-focus: #f0b90b;
+
+  --ink: var(--bnb-text);
+  --deep: #3a424d;
+  --steel: var(--bnb-text-2);
+  --slate: var(--bnb-text-3);
+  --fog: #848e9c;
+  --frost: var(--bnb-line-2);
+  --snow: var(--bnb-surface-2);
+  --paper: var(--bnb-canvas);
+  --white: #ffffff;
+  --hair: var(--bnb-line);
+  --hair-2: var(--bnb-line-2);
+  --positive: var(--bnb-up);
+  --negative: var(--bnb-down);
+  --caution: #946c00;
+  --signal: var(--bnb-focus);
+  --signal-soft: rgba(240, 185, 11, .2);
+  /* Top performers 在淺色版維持一張深色牌（#13171C），是頁面上唯一的深色物件。 */
+  --night: #13171c;
+  --night-2: #1c2128;
+  --night-line: #232930;
+  --night-text: #eaecef;
+  --night-muted: #929aa5;
+  --night-positive: #2ebd85;
+  --night-negative: #f6465d;
+  --app-action: var(--bnb-yellow);
+  --app-action-hover: var(--bnb-yellow-hover);
+  --app-grouped: var(--bnb-canvas);
+  --app-segment: var(--bnb-surface-2);
+  --app-card-line: var(--bnb-line);
+  --shadow-pop: 0 12px 32px rgba(24, 26, 32, .12), 0 2px 6px rgba(24, 26, 32, .06);
+  --gold: var(--bnb-text-2);
+  --gold-2: var(--bnb-text);
+  --gold-soft: rgba(112, 122, 138, .1);
+  --pos: var(--bnb-up);
+  --neg: var(--bnb-down);
+  --warn: #946c00;
+  color-scheme: light;
+}
+:root[data-theme="light"] body:is(.atp-formal-market, .atp-formal-fund) { --bg: #ffffff; --card: #ffffff; }
+html[data-theme="light"],
+html[data-theme="light"] body,
+html[data-theme="light"] body.atp-formal-market,
+html[data-theme="light"] body.atp-formal-fund { background: #ffffff !important; }
+
+/* 深色版也要有焦點色（theme-dark.css 沒定義這個）。 */
+:root:not([data-theme="light"]) { --bnb-focus: #fcd535; }
+
+/* shadcn（sx-）與 sonner 的色票：跟著主題走。sonner 讀 --popover（原本沒定義，通知會沒有底色）。 */
+:root {
+  --popover: var(--white);
+  --popover-foreground: var(--ink);
+  --radius: 16px;
+  --sx-background: var(--bnb-page);
+  --sx-foreground: var(--bnb-text);
+  --sx-card: var(--bnb-surface);
+  --sx-card-foreground: var(--bnb-text);
+  --sx-popover: var(--bnb-surface);
+  --sx-popover-foreground: var(--bnb-text);
+  --sx-primary: var(--bnb-yellow);
+  --sx-primary-foreground: var(--bnb-on-yellow);
+  --sx-secondary: var(--bnb-secondary);
+  --sx-secondary-foreground: var(--bnb-text);
+  --sx-muted: var(--bnb-surface-2);
+  --sx-muted-foreground: var(--bnb-text-2);
+  --sx-accent: var(--bnb-surface-2);
+  --sx-accent-foreground: var(--bnb-text);
+  --sx-border: var(--bnb-line);
+  --sx-input: var(--bnb-line-2);
+  --sx-ring: var(--bnb-focus);
+  /* 形狀：按鈕與輸入框 8、卡片與面板 16、標籤 6。 */
+  --r-ctl: 8px;
+  --r-lg: 16px;
+  --app-control-radius: 8px;
+  --app-card-radius: 16px;
+  --app-sheet-radius: 16px;
+}
+
+/* ── 2. 兩個主題共用 ───────────────────────────────── */
+html body { color: var(--ink); }
+::selection { background: var(--bnb-yellow-soft); }
+#root :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible,
+.app-bottom-sheet :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible,
+.signin-screen :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--bnb-focus);
+  outline-offset: 2px;
+}
+/* 淺色底上黃色焦點環只有約 2:1：在元件邊緣再加一圈深色，兩圈合起來一定看得到。 */
+html[data-theme="light"] #root :is(a, button, summary, [tabindex]):focus-visible,
+html[data-theme="light"] .app-bottom-sheet :is(a, button, summary, [tabindex]):focus-visible {
+  box-shadow: 0 0 0 2px var(--bnb-text);
+}
+
+/* 主要按鈕：黃底深字（一個畫面一顆）。 */
+html body #root .btn:not(.ghost, .light, .btn--ghost, :disabled),
+html body .btn:not(.ghost, .light, .btn--ghost, :disabled),
+html body #root .masthead .header-wallet[data-wallet-state="disconnected"],
+html body #root .wallet-menu .btn.primary:not(:disabled),
+html body #root .app-portfolio-guest .btn.primary,
+html body #root .signin-screen .btn.btn:not(.ghost),
+html body #root .signin-screen .btn.btn[data-method='x'] {
+  border-color: var(--bnb-yellow);
+  background: var(--bnb-yellow);
+  color: var(--bnb-on-yellow);
+}
+html body #root .btn:not(.ghost, .light, .btn--ghost, :disabled):hover,
+html body .btn:not(.ghost, .light, .btn--ghost, :disabled):hover,
+html body #root .masthead .header-wallet[data-wallet-state="disconnected"]:hover,
+html body #root .signin-screen .btn.btn:not(.ghost):hover:not(:disabled),
+html body #root .signin-screen .btn.btn[data-method='x']:hover:not(:disabled) {
+  border-color: var(--bnb-yellow-hover);
+  background: var(--bnb-yellow-hover);
+  color: var(--bnb-on-yellow);
+}
+/* 次要按鈕：slate 底、沒有外框。 */
+html body #root .btn:is(.ghost, .light, .btn--ghost):not(:disabled),
+html body .btn:is(.ghost, .light, .btn--ghost):not(:disabled) { border-color: transparent; background: var(--bnb-secondary); color: var(--ink); }
+html body #root .btn:is(.ghost, .light, .btn--ghost):not(:disabled):hover,
+html body .btn:is(.ghost, .light, .btn--ghost):not(:disabled):hover { border-color: transparent; background: var(--bnb-secondary-hover); color: var(--ink); }
+html body #root .btn:disabled,
+html body .btn:disabled { border-color: transparent; background: var(--bnb-surface-2); color: var(--bnb-text-3); }
+/* 頁首「Create a fund」維持安靜的文字按鈕。 */
+html body #root .masthead .app-mode-switch[data-target="studio"] { background: transparent; color: var(--ink); }
+html body #root .masthead .app-mode-switch[data-target="studio"]:hover { background: var(--bnb-surface-2); }
+
+/* 登入頁：email、錢包、Follow 是 slate；Google 深色版用 slate、淺色版照它的規範白底細框。 */
+html body #root .signin-screen .btn.btn.ghost:not([data-method='google']),
+html body #root .signin-screen .btn.btn.ghost[data-method='follow'] { background: var(--bnb-secondary); color: var(--ink); box-shadow: none; }
+html body #root .signin-screen .btn.btn.ghost:not([data-method='google']):hover:not(:disabled),
+html body #root .signin-screen .btn.btn.ghost[data-method='follow']:hover { background: var(--bnb-secondary-hover); }
+html:not([data-theme="light"]) body #root .signin-screen .btn.btn[data-method='google'] { background: var(--bnb-secondary); color: var(--ink); box-shadow: none; }
+html:not([data-theme="light"]) body #root .signin-screen .btn.btn[data-method='google']:hover:not(:disabled) { background: var(--bnb-secondary-hover); }
+html[data-theme="light"] body #root .signin-screen .btn.btn[data-method='google'] { background: #fff; box-shadow: inset 0 0 0 1px var(--bnb-line-2); }
+html[data-theme="light"] body #root .signin-screen .btn.btn[data-method='google']:hover:not(:disabled) { background: var(--bnb-surface-2); }
+.signin-screen__card { background: var(--bnb-surface); }
+html body #root .waitlist__invite input { background: var(--bnb-surface-2); color: var(--ink); box-shadow: 0 0 0 1px var(--bnb-line-2); }
+
+/* 輸入框、下拉。 */
+#root :is(.field input, .field textarea, .field select, .explore-filter-field select, .creator-filter-form select) {
+  border-color: var(--bnb-line-2);
+  background: var(--bnb-surface-2);
+  color: var(--ink);
+}
+#root :is(.field input, .field textarea, .field select, .explore-filter-field select, .creator-filter-form select):focus { border-color: var(--bnb-focus); box-shadow: 0 0 0 3px var(--signal-soft); }
+#fund-explore .explore-toolbar .explore-search,
+#root .creator-search { background: var(--bnb-surface-2); box-shadow: inset 0 0 0 1px var(--bnb-line); }
+#fund-explore .explore-toolbar .explore-search:focus-within,
+#root .creator-search:focus-within { border-color: var(--bnb-focus); box-shadow: 0 0 0 3px var(--signal-soft); }
+::placeholder { color: var(--bnb-text-2); opacity: 1; }
+
+/* 頁首導覽：選中是主色字＋2px 黃色底線（不再是淡色膠囊）。 */
+@media (min-width: 720px) {
+  #root .masthead.app-masthead { border-bottom-color: var(--bnb-line); }
+  #root .masthead.app-masthead .nav a { color: var(--bnb-text-2); }
+  #root .masthead.app-masthead .nav a:hover { background: transparent; color: var(--ink); }
+  #root .masthead.app-masthead .nav a.active { background: transparent; color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--bnb-yellow); }
+  html[data-theme="light"] #root .masthead.app-masthead { background: rgba(255, 255, 255, .9); }
+}
+/* 分頁（Funds 的分類、Profile 的 Holdings／Activity）：黃色底線。 */
+#fund-explore .collection-tabs > a[aria-current="page"] { border-color: var(--bnb-yellow); }
+.app-portfolio-tabs [data-slot="tabs-trigger"][data-state="active"] { border-color: var(--bnb-yellow); }
+
+/* 分段控制：凹槽 canvas／surface-2，選中的滑塊 slate（淺色版白色）。 */
+html body #root :is(.public-periods, .creator-periods, .seg) { background: var(--app-segment); }
+html body #root :is(.public-periods, .creator-periods, .seg) :is([aria-pressed="true"], [aria-current], [aria-selected="true"], .active, .on) {
+  background: var(--bnb-secondary);
+  color: var(--ink);
+  box-shadow: none;
+}
+html[data-theme="light"] body #root :is(.public-periods, .creator-periods, .seg) :is([aria-pressed="true"], [aria-current], [aria-selected="true"], .active, .on),
+html[data-theme="light"] .app-bottom-sheet #ticket .seg button.on {
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(24, 26, 32, .12);
+}
+
+/* 面板、卡片：1px 細線、沒有陰影。 */
+#root :is(.card, .panel) { border-color: var(--bnb-line); background: var(--bnb-surface); }
+
+/* 表格與排行榜：列滑過用 surface-2。 */
+#root .table tbody tr:hover > td { background: var(--bnb-surface-2); }
+
+/* Studio 標記與手機分頁列的選中項。深色底上可以用黃字；淺色底上只用黃色淡底＋主色字。 */
+.app-mode-label { background: var(--bnb-yellow-soft); color: var(--ink); }
+html:not([data-theme="light"]) .app-mode-label { color: var(--bnb-yellow); }
+@media (max-width: 719px) {
+  #root .app-mobile-nav a[aria-current="page"] { background: var(--bnb-yellow-soft); color: var(--ink); }
+  html:not([data-theme="light"]) #root .app-mobile-nav a[aria-current="page"] { color: var(--bnb-yellow); }
+  html:not([data-theme="light"]) #root .app-mobile-nav a[aria-current="page"] :is(path, circle, rect, g)[fill="currentColor"] { fill: var(--bnb-yellow); }
+  html[data-theme="light"] #root .app-mobile-nav a[aria-current="page"] :is(path, circle, rect, g)[fill="currentColor"] { fill: var(--ink); }
+  body.studio-mode #root .app-mobile-nav a[aria-current="page"] { color: var(--bnb-yellow); }
+  body.studio-mode #root .app-mobile-nav a[aria-current="page"] :is(path, circle, rect, g)[fill="currentColor"] { fill: var(--bnb-yellow); }
+}
+
+/* 通知（sonner）。 */
+[data-sonner-toaster] [data-sonner-toast] { border: 1px solid var(--bnb-line); background: var(--bnb-surface); color: var(--ink); box-shadow: var(--shadow-pop); }
+
+/* 主題切換鈕（components/ThemeToggle.tsx）。 */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--h-md);
+  height: var(--h-md);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--bnb-text-2);
+  cursor: pointer;
+  transition: background-color .15s var(--ease), color .15s var(--ease);
+}
+.theme-toggle:hover { background: var(--bnb-surface-2); color: var(--ink); }
+@media (max-width: 719px) { .masthead .theme-toggle { display: none; } }
+/* Account 面板裡的那一列：跟綁定帳號同一種列。 */
+.theme-row { display: flex; align-items: center; gap: 12px; min-height: 56px; margin: 0 0 12px; padding: 0 6px 0 14px; border: 1px solid var(--bnb-line); background: var(--bnb-surface); color: var(--ink); font-size: 15px; }
+.theme-row > span { flex: 1; }
+.theme-row .theme-toggle { width: auto; padding: 0 12px; gap: 8px; color: var(--ink); background: var(--bnb-secondary); font: 500 14px/1 var(--sans); }
+.theme-row .theme-toggle:hover { background: var(--bnb-secondary-hover); }
+
+/* ── 形狀（同一個 layer 裡後寫的贏；選擇器與 system.css 相同權重） ── */
+@layer app-shapes {
+  :is(#root#root, body:not(#_):not(#__)) :is(.signin-screen, .app-bottom-sheet, .wallet-menu__panel) .btn { border-radius: var(--r-ctl) !important; }
+  :is(#root#root, body:not(#_):not(#__)) :is(.signin-screen__card, .wallet-menu__panel, #privy-modal-content) { border-radius: var(--r-lg) !important; }
+  :is(#root#root, body:not(#_):not(#__)) :is(.wallet-menu__panel .wallet-menu__item, .signin-screen .field input, .waitlist__invite input, .waitlist__invite .btn) { border-radius: var(--r-ctl) !important; }
+  :is(#root#root, body:not(#_):not(#__)) #privy-modal-content :is(button, a, input) { border-radius: var(--r-ctl) !important; }
+  :is(#root#root, body:not(#_):not(#__)) :is(.theme-toggle, .theme-row .theme-toggle) { border-radius: var(--r-ctl) !important; }
+  :is(#root#root, body:not(#_):not(#__)) .theme-row { border-radius: var(--r-lg) !important; }
+  /* 頁首導覽的選中是一條平直的黃線：連結本身不要圓角（圓角會把底線彎成弧形）。 */
+  @media (min-width: 720px) {
+    :is(#root#root, body:not(#_):not(#__)) .masthead .nav a { border-radius: 0 !important; }
+  }
+  @media (max-width: 440px) {
+    :is(#root#root, body:not(#_):not(#__)) #privy-modal-content { border-radius: var(--r-lg) var(--r-lg) 0 0 !important; }
+  }
+  @media (max-width: 719px) {
+    :is(#root#root, body:not(#_):not(#__)) .signin-screen__card { border-radius: var(--r-lg) var(--r-lg) 0 0 !important; }
+    /* 浮在內容上的控制層維持膠囊。 */
+    :is(#root#root, body:not(#_):not(#__)) :is(.app-mobile-nav, .app-mobile-nav a, .public-mobile-cta, .public-mobile-cta .btn,
+        .app-nav-bar .header-wallet, .app-nav-bar .app-mode-switch, .masthead .app-mode-switch,
+        .masthead .header-wallet.app-wallet-toolbar, .app-fund-toolbar > :is(a, button)) { border-radius: var(--r-pill) !important; }
+  }
+}
+
+/* 停用的按鈕（Use code 等）：不要是半透明的黃色，看起來會像第二顆主要按鈕。 */
+html body #root .signin-screen .btn.btn:disabled { opacity: 1; background: var(--bnb-surface-2); color: var(--bnb-text-3); }
+
+/* 手機：基金頁底部 Buy／Sell、Profile 的連線鈕、下單抽屜的送出鈕（mobile-app.css 寫成 --app-action 底＋ --white 字）。 */
+@media (max-width: 719px) {
+  #root .public-mobile-cta .btn:not(.ghost, :disabled),
+  #root .app-portfolio-guest .wallet-menu--inline > .btn:not(:disabled),
+  body.atp-formal-fund .app-bottom-sheet #ticket .btn.primary:not(:disabled),
+  .app-bottom-sheet .app-sheet-actions > .btn.primary:not(:disabled) { color: var(--bnb-on-yellow); }
+  /* 原本是 --app-action 字（現在是黃色）：淺色底上不能用黃字。 */
+  #root .public-mobile-cta .btn.ghost:not(:disabled) { color: var(--ink); }
+}
+
+/* 設計稿的開關（input.sw）打開時用黃色（選取狀態）。 */
+#root input.sw:checked { background: var(--bnb-yellow); }
+
+/* 拿 --app-action（主要動作色）當字色的文字按鈕：現在 --app-action 是黃色，深色版可以，淺色版改主色字。 */
+html[data-theme="light"] .fund-introduction-trigger,
+html[data-theme="light"] #fund-explore .app-filter-trigger,
+html[data-theme="light"] .app-sheet-actions-stacked > .btn.ghost { color: var(--ink); }
+/* 「Who is …?」是次要連結：深色版也不用黃字，用主色字。 */
+.fund-introduction-trigger { color: var(--ink); }
+
+/* ── 3. 淺色版修補 ───────────────────────────────── */
+/* Top performers：淺色版仍是深色牌，牌上的名字用淺色字。 */
+html[data-theme="light"] #fund-explore .mkt-deck .mkt-id strong { color: var(--night-text); }
+html[data-theme="light"] #fund-explore .mkt-deck .mkt-feature-link { border: 1px solid var(--night); }
+/* Waitlist：原本是 iOS 淺紫灰底與藍灰漸層看板，改成白底＋canvas 看板。 */
+html[data-theme="light"] .signin-screen.waitlist { background: #fff; }
+html[data-theme="light"] .waitlist__board { background: var(--bnb-canvas); border-left-color: var(--bnb-line); }
+@media (max-width: 959px) {
+  html[data-theme="light"] .signin-screen.waitlist { background: #fff; }
+  html[data-theme="light"] .waitlist__board { background: none; }
+}
+html[data-theme="light"] .flap-board { background: #fff; box-shadow: 0 0 0 1px var(--bnb-line); }
+
+/* Studio：頁首底部那條區分模式的線改成黃色（原本是 ink，深色版會變成一條白線）。 */
+@media (min-width: 720px) {
+  body.studio-mode #root .masthead.app-masthead { box-shadow: inset 0 -2px 0 var(--bnb-yellow); }
+}
+
+/* 手機右上「Create a fund」：原本是品牌藍灰淡色底，改成 slate 次要按鈕。 */
+@media (max-width: 719px) {
+  html body #root .app-nav-bar .app-mode-switch[data-target="studio"],
+  html body #root .masthead .app-mode-switch[data-target="studio"] { background: var(--bnb-secondary); color: var(--ink); }
+}
+
+/* 交易面板與建立頁摘要：1px 細線、不加陰影（BNB 的卡片沒有陰影，只有彈出層有）。 */
+@media (min-width: 720px) {
+  body.atp-formal-fund #root #ticket.panel { box-shadow: none; }
+}
+body.atp-complete-create #root aside[class*="_side_"],
+#root .cf-summary { box-shadow: none; }
+
+/* ── 4. 與新版首頁對齊（2026-11-20）：頁面大標用襯線字 ─────────────────
+ * 字檔自帶在 public/fonts（Libre Caslon Display，OFL），不引入第三方 stylesheet。
+ * 只有拉丁字；中文與數字照舊退回 --sans。只改 h1，內文、數字、按鈕不動。
+ */
+@font-face {
+  font-family: 'Libre Caslon Display';
+  src: url('/fonts/libre-caslon-display-latin.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2212;
+}
+html body #root h1 {
+  /* 各頁的 h1 規則特異度不一，這裡用 !important 一次蓋過。 */
+  font-family: 'Libre Caslon Display', var(--sans) !important;
+  font-weight: 400 !important;
+  letter-spacing: -.02em !important;
+}

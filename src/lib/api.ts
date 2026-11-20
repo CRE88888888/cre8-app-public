@@ -755,6 +755,10 @@ export type StrategyDetail = {
   swapFeeBps: number;
   createdAt: string;
   onchainId: number | null;
+  category?: string | null;
+  catalogKey?: string | null;
+  /** 模型淨值（backend#173）：日線、最多兩年；還沒上線或沒資料時不存在或是 null。 */
+  modelNav?: { date: string; value: number }[] | null;
   versions: StrategyVersion[];
 };
 
@@ -772,6 +776,10 @@ export type StrategySummary = {
   swapFeeBps: number;
   createdAt: string;
   onchainId: number | null;
+  /** 首發分類（backend#170）：theme／person／leveraged；舊資料是 null，舊後端沒有這個欄位。見 `lib/fund-categories.ts`。 */
+  category?: string | null;
+  /** 參考目錄的穩定識別碼（backend#170），例如 Mag7 是 `mag7`；沒有對應是 null。 */
+  catalogKey?: string | null;
 };
 
 export function listStrategies(token: string): Promise<{ items: StrategySummary[]; total: number }> {

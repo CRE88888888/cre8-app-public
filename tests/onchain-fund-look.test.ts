@@ -16,27 +16,35 @@ test("testnet token addresses resolve to their symbols instead of 0x…", () => 
   expect(symbolOf("0x1234567890abcdef1234567890abcdef12345678")).toBe("0x12…78");
 });
 
-test("an on-chain fund with the same name as a catalogue fund uses that fund wholesale", () => {
-  const twin = catalogueTwin("Leopold Aschenbrenner");
-  expect(twin?.slug).toBe("leopold-aschenbrenner-situational");
+test("a backend fund with a catalogKey uses the catalogue fund; others show no model returns", () => {
+  const twin = catalogueTwin("mag7");
   const fund = synthesizeCommunityFund({
-    id: 11, name: "Leopold Aschenbrenner", provider: "0xeea7f54deda94d1bcdf448a03c4f6c1f19fed94f", onchainId: 1,
-    description: "x", createdAt: "2026-11-17T00:00:00Z", positions: [{ p: "MUB", loc: "MUB", w: 100 }], seed: 11,
+    id: 20, name: "Mag7", provider: "0xeea7f54deda94d1bcdf448a03c4f6c1f19fed94f", onchainId: 1,
+    description: "x", createdAt: "2026-11-17T00:00:00Z", positions: [{ p: "AAPL", loc: "AAPL", w: 100 }], catalogKey: "mag7",
   });
-  // 參考目錄的 slug：封面、人物介紹、持股更新都靠它（REFERENCE_METADATA）。
+  // 參考目錄的 slug：封面、介紹、持股更新都靠它（REFERENCE_METADATA）。
   expect(fund).toBe(twin!);
-  // 沒有同名的仍是合成的 community-<id>。
+  // 同名但沒有 catalogKey：不靠名稱對應。
+  const sameName = synthesizeCommunityFund({
+    id: 21, name: "Mag7", provider: "0x1", onchainId: 2, description: "", createdAt: "2026-11-17T00:00:00Z",
+    positions: [{ p: "USDT", loc: "USDT", w: 100 }],
+  });
+  expect(sameName.slug).toBe("community-21");
+  // 首發新基金不顯示模擬報酬（使用者 2026-11-20）：報酬、回撤、走勢都空著，畫面是「—」。
   const other = synthesizeCommunityFund({
     id: 99, name: "Someone else", provider: "0x1", onchainId: 50, description: "", createdAt: "2026-11-17T00:00:00Z",
-    positions: [{ p: "USDT", loc: "USDT", w: 100 }], seed: 99,
+    positions: [{ p: "USDT", loc: "USDT", w: 100 }], catalogKey: "ai-chips",
   });
   expect(other.slug).toBe("community-99");
+  expect(Object.values(other.returns).every((value) => value === null)).toBe(true);
+  expect(Object.values(other.maxDrawdown).every((value) => value === null)).toBe(true);
+  expect(other.nav).toEqual([]);
 });
 
-test("community rows link by strategy id, not by slug", () => {
+test("rows without a catalogue twin link by strategy id", () => {
   const vaults = fs.readFileSync("src/features/vaults/VaultsPage.tsx", "utf8");
-  expect(vaults).toContain('url={`/strategies/${strategy?.id ?? fund.slug.replace("community-", "")}`}');
-  expect(vaults).toContain("key={strategy?.id ?? fund.slug}");
+  expect(vaults).toContain(": `/strategies/${row.strategy.id}`;");
+  expect(vaults).toContain("key={row.strategy.id}");
 });
 
 test("notices are short: one line each, long text folded away", async () => {
