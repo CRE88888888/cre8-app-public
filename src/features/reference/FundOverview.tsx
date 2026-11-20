@@ -25,6 +25,7 @@ export function FundOverview({
   notices = [],
   modelNote = null,
   launchCopy,
+  hideModelTrades = false,
 }: {
   fund: ReferenceFund;
   /** 新版首頁同一組封面（`lib/fund-art.ts`）；有的話優先用它。 */
@@ -35,6 +36,8 @@ export function FundOverview({
   modelNote?: string | null;
   /** 首發基金的英文說明（`lib/fund-copy.ts`）；有的話取代目錄或後端的說明。 */
   launchCopy?: { description: string; method: string };
+  /** 不顯示「Recent trades」：那是目錄舊回測的調整紀錄，不是這檔基金實際的交易（C3 2026-11-20）。 */
+  hideModelTrades?: boolean;
   backTo: string;
   onFacts: () => void;
   factsTrigger: Ref<HTMLButtonElement>;
@@ -191,7 +194,7 @@ export function FundOverview({
           )}
         </details>
       </section>
-      <RecentTrades fund={fund} />
+      {!hideModelTrades && <RecentTrades fund={fund} />}
       <Assets fund={fund} />
       <section className="vault-about vault-disclaimer">
         {/* 使用者 2026-11-17：提示太吵。免責聲明收起來，點開才看。 */}

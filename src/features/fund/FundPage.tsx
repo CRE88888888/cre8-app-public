@@ -1051,7 +1051,7 @@ function FundPageBody(): ReactNode {
     <>
       <main className="wrap vault-content">
         <div className="vgrid">
-          <div className="main">{reference&&<FundOverview key={reference.slug} fund={reference} notices={notices} modelNote={strategyId !== null ? inclusionNote(communityStrategy.data?.modelComponents, communityStrategy.data?.modelNav) : null} launchCopy={launchCopyFor(strategyId !== null ? communityStrategy.data?.catalogKey : null)} art={fundArt(strategyId !== null ? communityStrategy.data?.catalogKey : slug)} backTo={backTo} factsTrigger={factsTrigger} onFacts={()=>setFacts(true)} onPosition={()=>setMyPosition(true)} held={held}/>}</div>
+          <div className="main">{reference&&<FundOverview key={reference.slug} fund={reference} notices={notices} modelNote={strategyId !== null ? inclusionNote(communityStrategy.data?.modelComponents, communityStrategy.data?.modelNav) : null} launchCopy={launchCopyFor(strategyId !== null ? communityStrategy.data?.catalogKey : null)} hideModelTrades={strategyId !== null && Boolean(communityStrategy.data?.catalogKey)} art={fundArt(strategyId !== null ? communityStrategy.data?.catalogKey : slug)} backTo={backTo} factsTrigger={factsTrigger} onFacts={()=>setFacts(true)} onPosition={()=>setMyPosition(true)} held={held}/>}</div>
 
           {mobile ? (
             <AppBottomSheet

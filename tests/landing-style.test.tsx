@@ -175,3 +175,11 @@ test("every launch fund has a short English description of its theme and core ho
   const page = fs.readFileSync("src/features/fund/FundPage.tsx", "utf8");
   expect(page).toContain("launchCopy={launchCopyFor(strategyId !== null ? communityStrategy.data?.catalogKey : null)}");
 });
+
+test("launch funds (with a catalogKey) do not show the old model's Recent trades", () => {
+  // 那是目錄舊回測的調整紀錄，不是這檔基金實際的交易（C3 2026-11-20）；之後有真實再平衡紀錄再決定。
+  const overview = fs.readFileSync("src/features/reference/FundOverview.tsx", "utf8");
+  expect(overview).toContain("{!hideModelTrades && <RecentTrades fund={fund} />}");
+  const page = fs.readFileSync("src/features/fund/FundPage.tsx", "utf8");
+  expect(page).toContain("hideModelTrades={strategyId !== null && Boolean(communityStrategy.data?.catalogKey)}");
+});
