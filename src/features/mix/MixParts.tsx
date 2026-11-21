@@ -1,7 +1,7 @@
 /**
  * My mix 各頁共用的小元件（cre8-app#132）。
  */
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { AssetLogo } from '../../components/AssetLogo';
 import { OPEN_WALLET_MENU } from '../../components/WalletMenu';
 import { useConnectedSessionToken } from '../../lib/use-connected-session';
@@ -85,4 +85,12 @@ export function useSignedIn(): boolean {
 /** 要付錢的那一刻才登入：打開登入頁，寫明是為了買什麼。 */
 export function askSignIn(subject: string): void {
   window.dispatchEvent(new CustomEvent(OPEN_WALLET_MENU, { detail: { purpose: 'buy', subject } }));
+}
+
+/**
+ * 組合名稱：數字換成等寬字體（跟金額同一套）。標題用的 Libre Caslon Display 的「0」是圓的，
+ * 「cre8admin 3」會看成「Ocre8admin 3」；這個字體沒有別種數字可切（`lining-nums` 畫出來一樣），所以只換數字。
+ */
+export function MixNameText({ name }: { name: string }): ReactNode {
+  return name.split(/(\d+)/).map((part, i) => (i % 2 === 1 ? <span key={i} className="mx-digits">{part}</span> : <Fragment key={i}>{part}</Fragment>));
 }

@@ -20,7 +20,7 @@ import { FALLBACK_MINIMUM_RAW, TEST_USDT_RAW, addMoneyCheck, formatReturnBps, fo
 import { FREQUENCY_LABEL, FUNDING_NOT_RECORDED, eventText, exitedText, marketNote, mixErrorText } from './mix-copy';
 import { mixApi, useMix, usePreview } from './mix-api';
 import { fundMix, readMixUsdt, settlePendingMixFunding, signMix, useWalletUsdt, withdrawMixUsdt } from './mix-chain';
-import { MixBar, PastYear, useSignedIn } from './MixParts';
+import { MixBar, MixNameText, PastYear, useSignedIn } from './MixParts';
 import { ShareSheet } from './ShareSheet';
 import { startChange } from './MixBuilderPage';
 import { useMixDraft } from './mix-draft';
@@ -180,7 +180,7 @@ function MixView({ mix }: { mix: MixDetail }): ReactNode {
           <h2 className="mx-h2">Recent</h2>
           <ol className="mx-events" role="list">
             {mix.events.slice(0, 3).map((event) => (
-              <li key={event.id}><time dateTime={event.at}>{shortDate(event.at)}</time><span>{eventText(event)}</span></li>
+              <li key={event.id}><time dateTime={event.at}>{shortDate(event.at)}</time><span>{eventText(event, mix.events)}</span></li>
             ))}
           </ol>
         </section>
@@ -231,7 +231,7 @@ function MixName({ mix, onSaved }: { mix: MixDetail; onSaved: () => Promise<unkn
   return (
     <h1 className="mx-name">
       <button type="button" onClick={() => setEditing(true)} aria-label={`${mix.name}, rename`}>
-        {mix.name}<AppIcon name="edit" size={20} />
+        <span><MixNameText name={mix.name} /></span><AppIcon name="edit" size={20} />
       </button>
     </h1>
   );

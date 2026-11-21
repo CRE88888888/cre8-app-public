@@ -18,7 +18,7 @@ export const FREQUENCY_LABEL: Record<Frequency, string> = {
 };
 
 const EVENT_FALLBACK: Record<MixEventKind, string> = {
-  mix_enrolled: 'Mix created and bought.',
+  mix_enrolled: 'Mix created.',
   mix_allocation_changed: 'New mix is in effect.',
   mix_rebalanced: 'Auto-balanced back to your mix.',
   mix_switch_residual: 'A few cents of an old pick were too small to sell and stay in your account.',
@@ -28,9 +28,29 @@ const EVENT_FALLBACK: Record<MixEventKind, string> = {
 
 const CJK = /[　-鿿＀-￯]/;
 
-export function eventText(event: { kind: MixEventKind; message: string }): string {
+type MixEventLike = { kind: MixEventKind; message: string };
+
+/** 會動到持倉的事件：建立、改比例、買入或再平衡、出場。 */
+const STEPS: readonly MixEventKind[] = ['mix_enrolled', 'mix_allocation_changed', 'mix_rebalanced', 'mix_exit_triggered'];
+
+/**
+ * Recent 的一行。`events` 是整份清單（新的在前，含 `event` 本身），用來看前後發生了什麼：
+ * 建立（`mix_enrolled`）時還沒買，買入是之後 scheduler 跑的（股票要等開盤），成交後後端另寫一筆 `mix_rebalanced`。
+ * 所以建立那行在還沒有成交紀錄前寫「Buying soon」，建立後的第一筆成交寫「First buy done」。
+ */
+export function eventText(event: MixEventLike, events: readonly MixEventLike[] = [event]): string {
   const message = event.message.trim();
-  return message !== '' && !CJK.test(message) ? message : EVENT_FALLBACK[event.kind];
+  if (message !== '' && !CJK.test(message)) return message;
+  const index = events.indexOf(event);
+  if (event.kind === 'mix_enrolled' && index >= 0) {
+    const bought = events.slice(0, index).some((e) => e.kind === 'mix_rebalanced');
+    return bought ? 'Mix created.' : 'Mix created. Buying soon.';
+  }
+  if (event.kind === 'mix_rebalanced' && index >= 0) {
+    const previous = events.slice(index + 1).find((e) => STEPS.includes(e.kind));
+    if (previous?.kind === 'mix_enrolled') return 'First buy done.';
+  }
+  return EVENT_FALLBACK[event.kind];
 }
 
 /** 收盤時 Buy 按鈕上面那一句。全部開市回 null。 */

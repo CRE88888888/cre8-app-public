@@ -5,7 +5,7 @@
 import { useState, type ReactNode } from 'react';
 import { AppBottomSheet } from '../../components/AppBottomSheet';
 import { formatPctString } from './mix-math';
-import { MixBar } from './MixParts';
+import { MixBar, MixNameText } from './MixParts';
 import type { MixAsset } from './mix-types';
 
 export function shareUrl(code: string, origin: string = window.location.origin): string {
@@ -28,7 +28,7 @@ export function ShareSheet({ open, onOpenChange, name, assets, shareCode, y1 }: 
     <AppBottomSheet open={open} onOpenChange={(next) => { setCopied(false); onOpenChange(next); }} title="Share your mix">
       <figure className="mx-sharecard" aria-label="Share card preview">
         <span className="mx-sharecard-brand">CRE8</span>
-        <b className="mx-sharecard-name">{name}</b>
+        <b className="mx-sharecard-name"><MixNameText name={name} /></b>
         <MixBar assets={assets} onPlate />
         {past !== null && <p className="mx-sharecard-past"><span>Past year</span><b>{past}</b></p>}
       </figure>

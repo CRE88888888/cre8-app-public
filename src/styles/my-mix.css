@@ -122,6 +122,16 @@ html body #root main.mx-wrap--list { max-width: 1344px; padding: 48px 40px 96px;
 #root .mx-name button { display: inline-flex; align-items: center; gap: 12px; flex: initial; cursor: pointer; }
 #root .mx-name button svg { flex: none; color: var(--bnb-text-3); }
 #root .mx-name--edit input { border-bottom-color: var(--bnb-text-3); }
+/* 沒填名字時疊在輸入框上的預設名稱（字型與輸入框相同；數字換等寬，見 MixNameText）。 */
+#root .mx-name { position: relative; }
+#root .mx-name input.is-auto::placeholder { color: transparent; }
+#root .mx-name-auto {
+  position: absolute; left: 0; top: 50%; right: 30px; transform: translateY(calc(-50% - 2px)); pointer-events: none;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--bnb-text);
+  font-family: var(--lp-serif); font-weight: 400; font-size: clamp(38px, 5.6vw, 60px); line-height: 1.05; letter-spacing: -.03em;
+}
+/* 名稱裡的數字：襯線字體的「0」像「O」（cre8admin），換成金額用的等寬字體。 */
+.mx-digits { font-family: var(--mono); font-size: .86em; letter-spacing: -.04em; }
 
 /* ── 金額 ── */
 #root .mx-amount-field {

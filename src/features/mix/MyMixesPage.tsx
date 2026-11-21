@@ -9,7 +9,7 @@ import { useBodyClass } from '../../lib/use-body-class';
 import { formatReturnBps, formatUsdt } from './mix-math';
 import { useMixDraft } from './mix-draft';
 import { useMixes } from './mix-api';
-import { MixLogos, useSignedIn } from './MixParts';
+import { MixLogos, MixNameText, useSignedIn } from './MixParts';
 import { valuedLabel } from './MixPage';
 import type { MixDetail } from './mix-types';
 
@@ -68,7 +68,7 @@ function MixTile({ mix }: { mix: MixDetail }): ReactNode {
   return (
     <li>
       <Link to={`/mixes/${mix.id}`} className="mx-tile" data-status={mix.status}>
-        <h3>{mix.name}</h3>
+        <h3><MixNameText name={mix.name} /></h3>
         <MixLogos assets={mix.assets} size={30} />
         <p className="mx-tile-foot">
           <b className={tone}>{pct ?? '—'}</b>

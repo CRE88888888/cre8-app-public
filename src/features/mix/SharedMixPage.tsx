@@ -11,7 +11,7 @@ import { mixAssetByAddress } from './mix-catalog';
 import { mixErrorText } from './mix-copy';
 import { mixApi, retryMixQuery } from './mix-api';
 import { useMixDraft } from './mix-draft';
-import { MixBar, MixLogos, PastYear } from './MixParts';
+import { MixBar, MixLogos, MixNameText, PastYear } from './MixParts';
 import type { SharedMix } from './mix-types';
 
 export function SharedMixPage(): ReactNode {
@@ -33,7 +33,7 @@ export function SharedMixPage(): ReactNode {
   return (
     <main className="explore-wrap mx-wrap mx-wrap--shared">
       <MixLogos assets={mix.assets} size={34} />
-      <h1 className="mx-title">{mix.name}</h1>
+      <h1 className="mx-title"><MixNameText name={mix.name} /></h1>
       {mix.copies > 0 && <p className="mx-note">{mix.copies.toLocaleString('en-US')} {mix.copies === 1 ? 'person has' : 'people have'} this</p>}
       <PastYear y1={mix.modelReturns?.y1} />
       <section className="mx-sec"><MixBar assets={mix.assets} /></section>

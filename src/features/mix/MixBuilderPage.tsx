@@ -23,7 +23,7 @@ import { FREQUENCY_LABEL, FUNDING_NOT_RECORDED, mixErrorText, marketNote } from 
 import { createBody, creationKey, draftAssets, editBody, retriedName, useMixDraft } from './mix-draft';
 import { mixApi, needsSignature, newIdempotencyKey, useMixes, usePreview } from './mix-api';
 import { freshCreationPayload, fundMix, signMix, useWalletUsdt, type MixStage } from './mix-chain';
-import { MixLogo, MixLogos, PastYear, askSignIn, useSignedIn } from './MixParts';
+import { MixLogo, MixLogos, MixNameText, PastYear, askSignIn, useSignedIn } from './MixParts';
 import type { Frequency } from './mix-types';
 
 const QUICK_AMOUNTS = [100, 500, 1000];
@@ -235,7 +235,9 @@ function BuyStep(): ReactNode {
     <>
       <label className="mx-name">
         <span className="sr-only">Name</span>
-        <input value={draft.name} placeholder={autoName} maxLength={100} onChange={(e) => draft.set({ name: e.target.value })} />
+        <input value={draft.name} placeholder={autoName} maxLength={100} className={draft.name === '' ? 'is-auto' : undefined} onChange={(e) => draft.set({ name: e.target.value })} />
+        {/* placeholder 不能只換數字的字體：沒填名字時把預設名稱疊在輸入框上（點下去還是輸入框）。 */}
+        {draft.name === '' && <span className="mx-name-auto" aria-hidden="true"><MixNameText name={autoName} /></span>}
         <AppIcon name="edit" size={20} />
       </label>
 
