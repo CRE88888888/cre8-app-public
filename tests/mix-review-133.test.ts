@@ -161,3 +161,16 @@ test("re-check 3. while a change is waiting, Add money is off; leftover funding 
   expect(page).toContain("disabled={exiting || mix.portfolioId === null || mix.pendingChange}");
   expect(page).toContain("Finishing your change…");
 });
+
+// 預設名稱用 X handle 加序號（tests/mix-default-name.test.ts）；草稿 store 要用這個檔的 storage，所以放這裡。
+test("default name: sending the same mix again keeps the name sent the first time, so the Idempotency-Key does not change", async () => {
+  const { EMPTY_DRAFT, createBody, retriedName } = await draftModule();
+  const draft = { ...EMPTY_DRAFT, symbols: ["NVDAB", "TSLAB"], weights: [5000, 5000] };
+  const today = "2026-11-21";
+  expect(retriedName(draft, "cre8admin 2", today)).toBe("cre8admin 2");
+  // 第一次送出「cre8admin 1」，組合已建好，清單多一筆 → 新算出來是 2，但重送要沿用 1。
+  const sent = { ...draft, creation: { body: JSON.stringify(createBody(draft, "cre8admin 1", today)), key: "k1" } };
+  expect(retriedName(sent, "cre8admin 2", today)).toBe("cre8admin 1");
+  // 換了比例就是另一次建立：用新的序號。
+  expect(retriedName({ ...sent, weights: [6000, 4000] }, "cre8admin 2", today)).toBe("cre8admin 2");
+});

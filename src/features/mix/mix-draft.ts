@@ -117,6 +117,17 @@ export function editBody(draft: MixDraft, name: string, assetsChanged: boolean):
   return body;
 }
 
+/**
+ * 同一次建立重送（名稱以外都一樣）時沿用上次送出的預設名稱。
+ * 不然第一次其實已經建好、清單多了一筆，序號往上跳，body 變了就換新的 Idempotency-Key，又多建一個組合。
+ */
+export function retriedName(draft: MixDraft, fresh: string, today: string): string {
+  if (draft.creation === null) return fresh;
+  const prior = (JSON.parse(draft.creation.body) as { name?: unknown }).name;
+  if (typeof prior !== 'string') return fresh;
+  return JSON.stringify(createBody(draft, prior, today)) === draft.creation.body ? prior : fresh;
+}
+
 /** 這次建立要用的 Idempotency-Key：body 跟上次一樣就沿用（存在草稿裡，重整也在），不一樣才換新的。 */
 export function creationKey(body: CreateMixInput, newKey: () => string): string {
   const json = JSON.stringify(body);

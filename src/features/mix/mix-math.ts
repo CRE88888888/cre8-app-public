@@ -80,6 +80,18 @@ export function defaultMixName(symbols: readonly string[]): string {
   return `${tickers[0]} + ${tickers[1]} + ${tickers.length - 2} more`;
 }
 
+/**
+ * 登入後有 X handle 時的預設名稱：「cre8admin 3」。
+ * 序號 = 已有的組合數（`GET /me/mixes`，含已出場）+ 1；跟現有名稱撞了就往上加到不撞（不分大小寫）。
+ */
+export function handleMixName(handle: string, existingNames: readonly string[]): string {
+  const base = handle.trim().replace(/^@/, '');
+  const taken = new Set(existingNames.map((name) => name.trim().toLowerCase()));
+  let n = existingNames.length + 1;
+  while (taken.has(`${base} ${n}`.toLowerCase())) n += 1;
+  return `${base} ${n}`;
+}
+
 /** 用戶輸入的金額（「1,000.5」）→ 18 位小數的 raw。不合法回 null。 */
 export function parseUsdtInput(text: string): bigint | null {
   const clean = text.replace(/,/g, '').trim();

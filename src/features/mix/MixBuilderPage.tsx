@@ -16,11 +16,12 @@ import { useBodyClass } from '../../lib/use-body-class';
 import { IS_TESTNET } from '../../lib/testnet-catalogue';
 import { useConnectedSessionToken } from '../../lib/use-connected-session';
 import { useOwnerWallet } from '../../lib/use-owner-wallet';
+import { usePrivyAuth } from '../../store/privy';
 import { MIX_CATALOG, MIX_GROUPS, POPULAR, mixAsset, searchMixAssets, type MixGroup } from './mix-catalog';
-import { FALLBACK_MINIMUM_RAW, MIN_WEIGHT_BPS, TEST_USDT_RAW, defaultMixName, formatUsdt, maxWeight, parseUsdtInput, sameAssets, todayUtc, weightLabel } from './mix-math';
+import { FALLBACK_MINIMUM_RAW, MIN_WEIGHT_BPS, TEST_USDT_RAW, defaultMixName, formatUsdt, handleMixName, maxWeight, parseUsdtInput, sameAssets, todayUtc, weightLabel } from './mix-math';
 import { FREQUENCY_LABEL, FUNDING_NOT_RECORDED, mixErrorText, marketNote } from './mix-copy';
-import { createBody, creationKey, draftAssets, editBody, useMixDraft } from './mix-draft';
-import { mixApi, needsSignature, newIdempotencyKey, usePreview } from './mix-api';
+import { createBody, creationKey, draftAssets, editBody, retriedName, useMixDraft } from './mix-draft';
+import { mixApi, needsSignature, newIdempotencyKey, useMixes, usePreview } from './mix-api';
 import { freshCreationPayload, fundMix, signMix, useWalletUsdt, type MixStage } from './mix-chain';
 import { MixLogo, MixLogos, PastYear, askSignIn, useSignedIn } from './MixParts';
 import type { Frequency } from './mix-types';
@@ -139,7 +140,14 @@ function BuyStep(): ReactNode {
   const minimum = BigInt(preview.data?.minimumDepositRaw ?? FALLBACK_MINIMUM_RAW);
   const amount = parseUsdtInput(draft.amount);
   const tooLow = !editing && (amount === null || amount < minimum);
-  const autoName = defaultMixName(draft.symbols);
+  // 預設名稱：登入後有 X handle 就是「cre8admin 2」（新建才用；改組合、從分享連結複製照舊）。
+  // 還沒登入或清單還沒回來時先用成分名稱；用戶自己填的名字永遠優先。
+  const handle = usePrivyAuth((state) => state.profile.handle);
+  const handleName = !editing && draft.importCode === null && signedIn && handle !== null ? handle : null;
+  const mixes = useMixes();
+  const autoName = handleName !== null && mixes.data !== undefined
+    ? retriedName(draft, handleMixName(handleName, mixes.data.mixes.map((mix) => mix.name)), todayUtc())
+    : defaultMixName(draft.symbols);
   const name = draft.name.trim() || autoName;
   const hasCrypto = draft.symbols.some((symbol) => mixAsset(symbol)?.crypto);
   const closed = preview.data ? marketNote(preview.data.markets, hasCrypto) : null;
@@ -176,7 +184,13 @@ function BuyStep(): ReactNode {
         return;
       }
       // Idempotency-Key 跟草稿一起存在 sessionStorage：重整或登入回來重送，還是同一個組合。
-      const body = createBody(draft, name, todayUtc());
+      const today = todayUtc();
+      let createName = name;
+      if (draft.name.trim() === '' && handleName !== null) {
+        const list = mixes.data ?? await mixApi.list(token);
+        createName = retriedName(draft, handleMixName(handleName, list.mixes.map((mix) => mix.name)), today);
+      }
+      const body = createBody(draft, createName, today);
       const created = await mixApi.create(token, body, creationKey(body, newIdempotencyKey));
       // 重送時第一次的簽名意圖可能已過期（calls 是空的）：重讀一組；已經確認過就不用再簽。
       const payload = await freshCreationPayload(token, created);
