@@ -41,14 +41,14 @@ test("a bad API_ORIGIN is refused instead of forwarding somewhere unexpected", a
   expect(seen).toHaveLength(0);
 });
 
-test("/api/* goes to the backend without the /api prefix, keeping method, query, body and Authorization only", async () => {
+test("/api/* goes to the backend without the /api prefix, keeping method, query, body, Authorization and Idempotency-Key only", async () => {
   const seen = capture(() => new Response('{"ok":true}', { status: 201, headers: { "content-type": "application/json", "x-request-id": "r1", "set-cookie": "s=1", "retry-after": "3" } }));
   const env = { ASSETS: noAssets, API_ORIGIN: ORIGIN + "/" };
   const response = await worker.fetch(new Request("https://tst.cre8.finance/api/waitlist/join?ref=x", {
     method: "POST",
     body: JSON.stringify({ identityToken: "fixture" }),
     headers: {
-      Authorization: "Bearer fixture-only", "Content-Type": "application/json", Accept: "application/json",
+      Authorization: "Bearer fixture-only", "Content-Type": "application/json", Accept: "application/json", "Idempotency-Key": "f51cea77-6b3d-4aed-ab3b-8e5a8bb4ffc9",
       Cookie: "session=browser", "X-Forwarded-For": "6.6.6.6", Origin: "https://evil.example", "CF-Connecting-IP": "203.0.113.7", "X-Custom": "1",
     },
   }), env);
@@ -64,6 +64,8 @@ test("/api/* goes to the backend without the /api prefix, keeping method, query,
     authorization: "Bearer fixture-only",
     "content-type": "application/json",
     accept: "application/json",
+    // My mix 建立靠它辨認重試；沒轉的話後端一律回 INVALID_MIX_REQUEST_KEY。
+    "idempotency-key": "f51cea77-6b3d-4aed-ab3b-8e5a8bb4ffc9",
     // 來源 IP 用 Cloudflare 看到的，不用瀏覽器自己帶的 X-Forwarded-For。
     "x-forwarded-for": "203.0.113.7",
   });

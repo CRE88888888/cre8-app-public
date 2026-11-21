@@ -7,7 +7,7 @@
  * **`API_ORIGIN` 是空的**時照舊回 `503 {"error":{"code":"PREVIEW_ONLY",...}}`，前端讀成 `ApiError`。
  * 轉發規則（`proxyApi`）：路徑原樣轉、**保留 `/api` 前綴**（後端在 Railway 由 website 服務對外，它自己剝掉 `/api`
  * 再走私網轉給 API；總管 2026-11-17），
- * 保留 method、查詢參數、body 與 `Authorization`／`Content-Type`／`Accept`；cookie 與其他標頭一律不轉；
+ * 保留 method、查詢參數、body 與 `Authorization`／`Content-Type`／`Accept`／`Idempotency-Key`（My mix 建立重試用）；cookie 與其他標頭一律不轉；
  * `X-Forwarded-For` 由 Worker 用 Cloudflare 看到的來源 IP 設定（不信任瀏覽器自己帶的）；不跟隨上游轉址；
  * 30 秒逾時回 504；連不上回 502。上游回應的狀態與 body 原樣回傳，只拿掉 `set-cookie`。
  *
@@ -53,7 +53,7 @@ function apiError(status, code, message) {
 }
 
 /** 轉給後端的請求標頭：只有這幾個（cookie 與其他標頭不轉）。 */
-const FORWARDED_HEADERS = ['authorization', 'content-type', 'accept'];
+const FORWARDED_HEADERS = ['authorization', 'content-type', 'accept', 'idempotency-key'];
 /** 等後端多久（毫秒）。 */
 const API_TIMEOUT_MS = 30_000;
 
