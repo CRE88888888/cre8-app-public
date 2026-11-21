@@ -179,11 +179,18 @@ export type RenewalRecorded = {
 };
 
 type RequestInitLite = {
-  method?: 'GET' | 'POST';
+  method?: 'GET' | 'POST' | 'PATCH';
   token?: string | null;
   body?: unknown;
   signal?: AbortSignal;
+  /** 額外標頭（My mix 建立要帶 `Idempotency-Key`）。 */
+  headers?: Record<string, string>;
 };
+
+/** 給各功能自己的 API 檔用（例如 `features/mix/mix-api.ts`）：同一套錯誤格式與 `ApiError`。 */
+export function apiRequest<T>(path: string, init: RequestInitLite = {}): Promise<T> {
+  return request<T>(path, init);
+}
 
 async function request<T>(path: string, init: RequestInitLite = {}): Promise<T> {
   return (await requestWithStatus<T>(path, init)).body;
@@ -191,7 +198,7 @@ async function request<T>(path: string, init: RequestInitLite = {}): Promise<T> 
 
 /** 同 `request`，另外回 HTTP 狀態（202 這類「成功但還沒好」要分開處理時用）。 */
 async function requestWithStatus<T>(path: string, init: RequestInitLite = {}): Promise<{ status: number; body: T }> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...init.headers };
   if (init.body !== undefined) headers['content-type'] = 'application/json';
   if (init.token) headers.authorization = `Bearer ${init.token}`;
 

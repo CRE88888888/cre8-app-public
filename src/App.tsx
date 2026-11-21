@@ -23,6 +23,10 @@ import { OperatorPage } from './features/operator/OperatorPage';
 import { PortfoliosPage } from './features/portfolios/PortfoliosPage';
 const AssetPage=lazy(()=>import('./features/reference/AssetPage').then(module=>({default:module.AssetPage})));
 import { VaultsPage } from './features/vaults/VaultsPage';
+import { MixBuilderPage } from './features/mix/MixBuilderPage';
+import { MixPage } from './features/mix/MixPage';
+import { MyMixesPage } from './features/mix/MyMixesPage';
+import { SharedMixPage } from './features/mix/SharedMixPage';
 import { WaitlistGate } from './features/waitlist/WaitlistScreen';
 
 /**
@@ -68,6 +72,12 @@ export function App(): ReactNode {
         <Route path="/start" element={<Navigate to="/vaults" replace />} />
         <Route path="/vaults" element={<VaultsPage />} />
         <Route path="/portfolio" element={<PortfoliosPage />} />
+        {/* My mix（cre8-app#132）：自己挑、自己配比例、平台自動平衡。挑和看都不用登入，買的那一刻才登入。 */}
+        <Route path="/mixes" element={<MyMixesPage />} />
+        <Route path="/mixes/:id" element={<MixPage />} />
+        <Route path="/mix/new" element={<MixBuilderPage />} />
+        <Route path="/mix/new/:step" element={<MixBuilderPage />} />
+        <Route path="/m/:code" element={<SharedMixPage />} />
         {/* 基金只由平台上架（2026-11-19 產品說明 §3.2）：建立基金（/create*）、Studio（/studio*）、
             創作者頁（/creator/:id）與 /leaderboard 都拿掉了（cre8-app#123），舊網址交給最後的 * 回到 /vaults。 */}
         {/* 內部營運後台：不在任何導覽裡，保留網址給營運團隊。 */}

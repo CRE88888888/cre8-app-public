@@ -38,10 +38,11 @@ function C8Logo(): ReactNode {
 type Destination = { to: string; label: string; icon: AppIconName; paths: string[] };
 
 /**
- * 導覽只剩逛基金與個人頁。建立基金、Studio 與 Creators 分頁已拿掉（基金只由平台上架，cre8-app#123）。
+ * 導覽：逛基金、My mix（自己組，cre8-app#132）、個人頁。建立基金、Studio 與 Creators 分頁已拿掉（基金只由平台上架，cre8-app#123）。
  */
 const destinations: Destination[] = [
   { to: '/vaults', label: 'Funds', icon: 'explore', paths: ['/vaults', '/funds', '/vault', '/assets', '/asset'] },
+  { to: '/mixes', label: 'My mix', icon: 'portfolio', paths: ['/mixes', '/mix', '/m'] },
   { to: '/portfolios', label: 'Profile', icon: 'profile', paths: ['/portfolios', '/portfolio'] },
 ];
 
@@ -57,6 +58,7 @@ const tabRootTitles: Record<string, string> = {
   // 首頁就是 Funds（main 的 6565628 讓 Pages 首頁直接開 Explore）。
   '/': 'Funds',
   '/vaults': 'Funds',
+  '/mixes': 'My mix',
   '/portfolio': 'Profile',
   '/portfolios': 'Profile',
 };

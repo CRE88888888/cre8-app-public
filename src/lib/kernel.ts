@@ -186,6 +186,8 @@ export async function sendSudoCalls(args: {
   strategyId: number;
   timeoutMs?: number;
   onSubmitted?: (userOpHash: Hex) => void;
+  /** 後端給的完整 nonce（My mix，見下方 `getNonce`）。 */
+  nonce?: bigint;
 }): Promise<RenewalReceipt> {
   await assertRpcChain(); // RPC 連到的不是這條鏈（例如測試網的 build 讀主網）：不簽、不送（cre8-app#93）。
   // 內建地址簿（chain 97）要和後端在用的 registry／executor 一樣，不然不簽、不送（審查 #95 第 1 項）。
@@ -215,6 +217,10 @@ export async function sendSudoCalls(args: {
     kernelVersion,
     useMetaFactory: true,
   });
+  // My mix（cre8-app#132）：後端在意圖裡存了完整 nonce，sponsor 只代付同一個 nonce 的 UserOp；
+  // 帶了就固定用它（SDK 準備 UserOp 時向帳戶要 nonce），沒帶照舊向 EntryPoint 讀。
+  const pinnedNonce = args.nonce;
+  const opAccount = pinnedNonce === undefined ? sudoAccount : { ...sudoAccount, getNonce: async () => pinnedNonce };
 
   // 「連錯錢包」要講清楚，不要讓它變成 AA24。
   //
@@ -238,7 +244,7 @@ export async function sendSudoCalls(args: {
   let sponsorFailure: SponsorshipError | null = null;
 
   const accountClient = createKernelAccountClient({
-    account: sudoAccount,
+    account: opAccount,
     chain: bsc,
     client: publicClient,
     ...(paymasterAddress === undefined

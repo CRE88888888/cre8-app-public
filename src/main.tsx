@@ -50,6 +50,8 @@ import './styles/market.css';
 import './styles/fund-page.css';
 import './styles/pages.css';
 import './styles/covers.css';
+// My mix（cre8-app#132）的版面；主題層（深色、BNB、landing）仍在最後。
+import './styles/my-mix.css';
 // 深色主題（BNB family，2026-11-20，預設）：只換色，<html data-theme="light"> 時不作用。
 import './styles/theme-dark.css';
 // BNB family（2026-11-20）：淺色版色票與兩個主題共用的規則（黃色主要按鈕、8／16px 圓角）。最後載入。
