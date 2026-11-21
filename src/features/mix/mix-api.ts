@@ -7,6 +7,7 @@
  *
  * 假資料只留在測試（`tests/fixtures/mix-fixtures.ts`）。
  */
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ApiError, apiRequest } from '../../lib/api';
 import { useConnectedSessionToken } from '../../lib/use-connected-session';
@@ -46,16 +47,39 @@ export function newIdempotencyKey(): string {
   return crypto.randomUUID();
 }
 
-export function usePreview(assets: MixAsset[]) {
-  const key = assets.map((a) => `${a.assetId}:${a.weightBps}`).join(',');
-  return useQuery({
-    queryKey: ['mix-preview', key],
-    queryFn: () => mixApi.preview(assets),
-    enabled: assets.length > 0,
+/** 調比例時連按 + / −：停手這麼久才打 `POST /mixes/preview`（後端有速率限制，連打第 4 次就 429）。 */
+export const PREVIEW_DEBOUNCE_MS = 400;
+
+const previewKey = (assets: readonly MixAsset[]) => assets.map((a) => `${a.assetId}:${a.weightBps}`).join(',');
+
+/** `value` 停在同一個 `key` 超過 `ms` 才換；第一次直接用，不等。 */
+export function useSettled<T>(value: T, key: string, ms: number): { value: T; key: string } {
+  const [settled, setSettled] = useState({ value, key });
+  useEffect(() => {
+    if (key === settled.key) return;
+    const timer = setTimeout(() => setSettled({ value, key }), ms);
+    return () => clearTimeout(timer);
+  }, [key]); // 只看 key：同一組成分比例換了陣列物件不算變
+  return settled;
+}
+
+/**
+ * Past year、最低金額、開收盤。`data` 一律是最近一次成功的結果：
+ * 還在等停手、正在打、或這次失敗（例如 429）都保留上一次的數字，不變成「—」。
+ */
+export function usePreview(assets: MixAsset[]): { data: MixPreview | undefined; isFetching: boolean } {
+  const settled = useSettled(assets, previewKey(assets), PREVIEW_DEBOUNCE_MS);
+  const query = useQuery({
+    queryKey: ['mix-preview', settled.key],
+    queryFn: () => mixApi.preview(settled.value),
+    enabled: settled.value.length > 0,
     staleTime: 60_000,
     retry: retryMixQuery,
     placeholderData: (previous) => previous,
   });
+  const last = useRef<MixPreview | undefined>(undefined);
+  if (query.data !== undefined) last.current = query.data;
+  return { data: query.data ?? last.current, isFetching: query.isFetching || settled.key !== previewKey(assets) };
 }
 
 export function useMixes() {

@@ -17,7 +17,7 @@ import { useConnectedSessionToken } from '../../lib/use-connected-session';
 import { useOwnerWallet } from '../../lib/use-owner-wallet';
 import { mixAssetByAddress } from './mix-catalog';
 import { FALLBACK_MINIMUM_RAW, TEST_USDT_RAW, addMoneyCheck, formatReturnBps, formatUsdt, parseUsdtInput, shortDate } from './mix-math';
-import { FREQUENCY_LABEL, FUNDING_NOT_RECORDED, eventText, exitedText, marketNote, mixErrorText } from './mix-copy';
+import { FREQUENCY_LABEL, FUNDING_NOT_RECORDED, eventText, exitedText, freshNote, marketNote, mixErrorText } from './mix-copy';
 import { mixApi, useMix, usePreview } from './mix-api';
 import { fundMix, readMixUsdt, settlePendingMixFunding, signMix, useWalletUsdt, withdrawMixUsdt } from './mix-chain';
 import { MixBar, MixNameText, PastYear, useSignedIn } from './MixParts';
@@ -125,7 +125,7 @@ function MixView({ mix }: { mix: MixDetail }): ReactNode {
         <span className="mx-created">Created {shortDate(mix.createdAt)}</span>
       </header>
 
-      {fresh && fundError === null && <p className="mx-done" role="status"><AppIcon name="check" size={18} />{mix.events[0]?.kind === 'mix_allocation_changed' || mix.pendingChange ? 'Saved.' : closed ? 'Bought. Stocks buy when the US market opens.' : 'Bought.'}</p>}
+      {fresh && fundError === null && <p className="mx-done" role="status"><AppIcon name="check" size={18} />{freshNote(mix.events, mix.pendingChange, closed !== null)}</p>}
       {fundError !== null && <p className="mx-error" role="alert">{fundError}</p>}
       {mix.pendingChange && (
         <div className="mx-actions">

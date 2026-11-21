@@ -53,6 +53,18 @@ export function eventText(event: MixEventLike, events: readonly MixEventLike[] =
   return EVENT_FALLBACK[event.kind];
 }
 
+/**
+ * 建好或改好後回到組合頁時頂部那一行。跟 Recent（`eventText`）同一套判斷：
+ * 建立後還沒有成交紀錄（`mix_rebalanced`）就不說 Bought，買入是之後 scheduler 才跑。
+ */
+export function freshNote(events: readonly MixEventLike[], pendingChange: boolean, marketClosed: boolean): string {
+  if (pendingChange || events[0]?.kind === 'mix_allocation_changed') return 'Saved.';
+  const created = events.findIndex((e) => e.kind === 'mix_enrolled');
+  const bought = (created < 0 ? events : events.slice(0, created)).some((e) => e.kind === 'mix_rebalanced');
+  const head = bought ? 'Bought.' : 'Buying soon.';
+  return marketClosed ? `${head} Stocks buy when the US market opens.` : head;
+}
+
 /** 收盤時 Buy 按鈕上面那一句。全部開市回 null。 */
 export function marketNote(
   markets: readonly { open: boolean; nextOpenAt: string | null }[],
