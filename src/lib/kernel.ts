@@ -28,7 +28,7 @@ import type { Address, Chain, Hex, LocalAccount, PublicClient, WalletClient } fr
 import { getPlatformStatusText, postSponsor } from './api';
 import { assertAddressBook } from './address-book-check';
 import { chainProfile, checkedContract, readChainId, verifyRpcChain, viemBlockTime } from './chain-config';
-import { SponsorshipError, packForSponsorship, sponsorshipFromResponse, stubPaymasterData } from './paymaster';
+import { SponsorshipError, packForSponsorship, retryMixBusy, sponsorshipFromResponse, stubPaymasterData } from './paymaster';
 import { userOpReceiptFrom } from './yield-pending';
 import { broadcastPrepared, sendUserOp } from './userop-send';
 import { formatUserOperationRequest, getUserOperationHash } from 'viem/account-abstraction';
@@ -257,7 +257,8 @@ export async function sendSudoCalls(args: {
             getPaymasterStubData: async () => stubPaymasterData(paymasterAddress),
             getPaymasterData: async (operation) => {
               try {
-                const body = await postSponsor(args.token, packForSponsorship(operation));
+                const packed = packForSponsorship(operation);
+                const body = await retryMixBusy(() => postSponsor(args.token, packed));
                 return sponsorshipFromResponse(body, paymasterAddress);
               } catch (cause) {
                 sponsorFailure = SponsorshipError.from(cause);

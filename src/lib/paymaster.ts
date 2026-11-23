@@ -143,6 +143,7 @@ const NO_TOP_UP = 'You do not need to add BNB yourself.';
  * - 押金不足（503 `PAYMASTER_DEPOSIT_INSUFFICIENT`）：平台的 paymaster 存款不夠，是我們這邊的事。
  */
 export function explainSponsorFailure(code: string, status: number): string {
+  if (code === 'MIX_BUSY') return `This basket is finishing another transaction. ${NOT_SENT} Wait a few seconds, then try again.`;
   if (code === 'PAYMASTER_QUOTA_EXCEEDED') {
     return `Today’s free network-fee allowance is used up. ${NOT_SENT} It resets tomorrow (UTC). ${NO_TOP_UP}`;
   }
@@ -185,5 +186,30 @@ export class SponsorshipError extends Error {
     if (cause instanceof SponsorshipError) return cause;
     if (cause instanceof ApiError) return new SponsorshipError(cause.status === 0 ? 'NETWORK' : cause.code, cause.message, cause.status);
     return new SponsorshipError('PAYMASTER_BAD_RESPONSE', cause instanceof Error ? cause.message : String(cause));
+  }
+}
+
+/**
+ * 代付回 409 `MIX_BUSY`（My mix 正在處理別的交易：排程器買賣、剛確認完的組合在刷新）時，短暫等一下重問。
+ * 這時什麼都還沒簽、沒送；幾秒內鎖就會放開。其他錯誤、或重試用完，照原樣丟出去。
+ */
+export const MIX_BUSY_RETRY_DELAYS_MS: readonly number[] = [1_000, 2_000, 3_000, 4_000];
+export function isMixBusy(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 409 && error.code === 'MIX_BUSY';
+}
+export async function retryMixBusy<T>(
+  run: () => Promise<T>,
+  options: { delaysMs?: readonly number[]; sleep?: (ms: number) => Promise<void> } = {},
+): Promise<T> {
+  const delays = options.delaysMs ?? MIX_BUSY_RETRY_DELAYS_MS;
+  const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await run();
+    } catch (error) {
+      const delay = delays[attempt];
+      if (!isMixBusy(error) || delay === undefined) throw error;
+      await sleep(delay);
+    }
   }
 }
