@@ -19,6 +19,9 @@ export type ChainContracts = {
   entryPoint: string;
 };
 
+/** BSC 測試網的出塊間隔（毫秒）。 */
+export const TESTNET_BLOCK_TIME_MS = 450;
+
 export type ChainProfile = {
   id: number;
   name: string;
@@ -38,6 +41,11 @@ export type ChainProfile = {
   faucetFunded: boolean;
   /** 前端自己知道的合約地址（只有測試網有地址簿）。主網與本機 fork 一律由後端回報。 */
   contracts: ChainContracts | null;
+  /**
+   * 出塊間隔（毫秒），交給 viem 的 `chain.blockTime`。沒寫時 viem 當成 12 秒，等收據每 4 秒才問一次鏈，
+   * 每筆交易確認都白等約 3 秒。只有測試網有：主網與本機 fork 照舊。
+   */
+  blockTimeMs?: number;
 };
 
 const isHttpUrl = (value: string | undefined): value is string => value !== undefined && /^https?:\/\//.test(value);
@@ -97,6 +105,8 @@ export function chainProfile(chainId: number, rpcOverride?: string, testnetRpcOv
       sponsored: true,
       faucetFunded: true,
       contracts: { registry, executor, usdt, paymaster, entryPoint },
+      // 2026-11-23 實測 publicnode：100 個區塊 45 秒。viem 據此每 500ms 問一次收據（原本 4 秒）。
+      blockTimeMs: TESTNET_BLOCK_TIME_MS,
     };
   }
   return {
@@ -110,6 +120,11 @@ export function chainProfile(chainId: number, rpcOverride?: string, testnetRpcOv
     faucetFunded: false,
     contracts: null,
   };
+}
+
+/** viem 的 `chain.blockTime`：設定檔有寫才帶，沒寫就不帶（viem 照它自己的預設）。 */
+export function viemBlockTime(profile: ChainProfile): { blockTime?: number } {
+  return profile.blockTimeMs === undefined ? {} : { blockTime: profile.blockTimeMs };
 }
 
 /** `wallet_addEthereumChain` 的參數：錢包不認識這條鏈時用來把它加進去。 */

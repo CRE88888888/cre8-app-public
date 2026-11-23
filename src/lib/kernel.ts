@@ -27,7 +27,7 @@ import type { Address, Chain, Hex, LocalAccount, PublicClient, WalletClient } fr
 
 import { getPlatformStatusText, postSponsor } from './api';
 import { assertAddressBook } from './address-book-check';
-import { chainProfile, checkedContract, readChainId, verifyRpcChain } from './chain-config';
+import { chainProfile, checkedContract, readChainId, verifyRpcChain, viemBlockTime } from './chain-config';
 import { SponsorshipError, packForSponsorship, sponsorshipFromResponse, stubPaymasterData } from './paymaster';
 import { userOpReceiptFrom } from './yield-pending';
 import { broadcastPrepared, sendUserOp } from './userop-send';
@@ -82,6 +82,8 @@ export const bsc = {
   name: CHAIN.name,
   nativeCurrency: { name: CHAIN.nativeSymbol, symbol: CHAIN.nativeSymbol, decimals: 18 },
   rpcUrls: { default: { http: [CHAIN.rpcUrl] } },
+  // 測試網 0.45 秒出塊：讓 viem 每 500ms 問一次收據（沒寫是 4 秒；買入的轉帳、水龍頭、My mix 都在等它）。
+  ...viemBlockTime(CHAIN),
 } as const satisfies Chain;
 
 /**
