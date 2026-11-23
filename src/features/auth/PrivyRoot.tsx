@@ -396,7 +396,9 @@ export default function PrivyRoot(): ReactNode {
       config={{
         loginMethods: [...PRIVY_LOGIN_METHODS],
         // 只幫沒有錢包的人建錢包：錢包登入的人不會多一個嵌入式錢包（後端要求首次登入恰好一個錢包）。
-        embeddedWallets: { ethereum: { createOnLogin: 'users-without-wallets' } },
+        // 嵌入式錢包（email／Google 登入）不再跳 Privy 自己的確認頁與「All Done」：用戶已在我們的畫面按過買入／存入，
+        // 再確認一次只是多按鈕（2026-11-23 使用者：按鈕要最少）。外接錢包（MetaMask 等）照常由錢包自己確認。
+        embeddedWallets: { ethereum: { createOnLogin: 'users-without-wallets' }, showWalletUIs: false },
         defaultChain: chain,
         supportedChains: [chain],
         appearance: {

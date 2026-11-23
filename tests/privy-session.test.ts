@@ -93,7 +93,7 @@ test("the app id is never hard-coded", () => {
 test("linking is refused until there is a CRE8 session, and the config matches the work order", () => {
   const root = fs.readFileSync("src/features/auth/PrivyRoot.tsx", "utf8");
   expect(root).toContain("if (!latest.current.privySession) return;");
-  expect(root).toContain("embeddedWallets: { ethereum: { createOnLogin: 'users-without-wallets' } }");
+  expect(root).toContain("embeddedWallets: { ethereum: { createOnLogin: 'users-without-wallets' }, showWalletUIs: false }");
   expect(fs.readFileSync("src/lib/privy-config.ts", "utf8")).toContain("['email', 'google', 'twitter', 'wallet']");
   // 加綁的按鈕只在已登入的那一段畫面裡。
   const menu = fs.readFileSync("src/components/PrivyWalletMenu.tsx", "utf8");
