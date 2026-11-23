@@ -22,6 +22,7 @@ import { faucetFailure } from '../../lib/faucet';
 import { waitForAccountCode } from '../../lib/first-enroll';
 import { CHAIN, assertRpcChain, bsc as appChain, publicClientFor, readOnlyClient, readRpcUrl, sendSudoCalls, sendWithdraw, transferCalldata, type RenewalWallet } from '../../lib/kernel';
 import { ensureOwnerGas } from '../../lib/testnet-wallet-buy';
+import { TESTNET_97 } from '../../lib/testnet-97';
 import { MIX_CATALOG } from './mix-catalog';
 import { mixApi } from './mix-api';
 import type { MixAsset, MixSigningPayload } from './mix-types';
@@ -40,15 +41,20 @@ export class MixPayloadError extends Error {
   }
 }
 
-/** 核對 calls 用的地址：registry、executor，以及可以 approve 的資產（目錄 40 個＋USDT）。 */
+/**
+ * 核對 calls 用的地址：registry、executor，以及可以 approve 的資產。
+ * 資產＝測試網地址簿的全部代幣（後端 My mix 收的 103 個都在裡面）＋目錄 40 個＋USDT。
+ * 只認目錄 40 個時，選了目錄外的資產（例如 AMD）後端照樣建好，App 卻在簽名前擋下，一直顯示「組合沒建好」。
+ */
 export type MixCallBook = { registry: string; executor: string; assets: Set<string> };
 
 export function mixCallBook(): MixCallBook {
   const contracts = CHAIN.contracts;
+  const book = CHAIN.id === TESTNET_97.chainId ? Object.values(TESTNET_97.assets as Record<string, string>) : [];
   return {
     registry: lower(contracts?.registry ?? ''),
     executor: lower(contracts?.executor ?? ''),
-    assets: new Set([...(contracts === null ? [] : [contracts.usdt]), ...MIX_CATALOG.map((asset) => asset.address)].map(lower)),
+    assets: new Set([...(contracts === null ? [] : [contracts.usdt]), ...book, ...MIX_CATALOG.map((asset) => asset.address)].map(lower)),
   };
 }
 

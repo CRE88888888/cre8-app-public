@@ -191,3 +191,13 @@ test("a missing mix or expired sign-in is not retried; a network blip is retried
   expect(retryMixQuery(0, new ApiError(0, "NETWORK", "x"))).toBe(true);
   expect(retryMixQuery(1, new ApiError(503, "MIX_UNAVAILABLE", "x"))).toBe(false);
 });
+
+test("call book on chain 97 accepts every address-book asset, not just the 40-asset catalog (AMD mix stayed unsigned)", async () => {
+  const { mixCallBook } = await import("../src/features/mix/mix-chain");
+  const { CHAIN } = await import("../src/lib/kernel");
+  const { TESTNET_97 } = await import("../src/lib/testnet-97");
+  const assets = mixCallBook().assets;
+  if (CHAIN.id !== 97) { expect(assets.has(TESTNET_97.assets.AMDB.toLowerCase())).toBe(false); return; }
+  for (const address of Object.values(TESTNET_97.assets)) expect(assets.has(address.toLowerCase())).toBe(true);
+  expect(assets.has(TESTNET_97.assets.AMDB.toLowerCase())).toBe(true);
+});
