@@ -402,15 +402,12 @@ export async function sendSweep(args: {
    * 為什麼不能事後再送一筆：連續兩筆 UserOp 時，第二筆的 account nonce 可能還沒推進，
    * 模擬階段就以 `AA25 invalid account nonce` 失敗（實測清倉後掃 BNB 就是這樣掛的）。
    * 合併成一筆同時也省一次 overhead。
+   *
+   * 代付（`CHAIN.sponsored`）時忽略：paymaster 不代付帶 value 的 call（見 `sweepCalls`）。
    */
   nativeWei?: bigint;
 }): Promise<RenewalReceipt | null> {
-  const calls = args.balances
-    .filter((row) => row.amountWei > 0n)
-    .map((row) => ({ to: row.asset, data: transferCalldata(args.recipient, row.amountWei), value: 0n }));
-  if (args.nativeWei !== undefined && args.nativeWei > 0n) {
-    calls.push({ to: args.recipient, data: '0x', value: args.nativeWei });
-  }
+  const calls = sweepCalls(args);
   if (calls.length === 0) return null;
   return sendSudoCalls({
     wallet: args.wallet,
@@ -419,6 +416,25 @@ export async function sendSweep(args: {
     strategyId: args.strategyId,
     calls,
   });
+}
+
+/**
+ * 清倉掃回的 calls：每個非零代幣一筆 transfer，原生幣只在**自付 gas** 時才一起退。
+ *
+ * 代付（測試網）時 paymaster 拒絕任何 value != 0 的 call，帶上 BNB 轉帳整筆 sweep 就被拒；
+ * 而代付帳戶裡的 BNB 只是用不到的 gas 渣，所以直接不掃（代幣照常掃回）。
+ */
+export function sweepCalls(
+  args: { recipient: Address; balances: readonly { asset: Address; amountWei: bigint }[]; nativeWei?: bigint },
+  sponsored: boolean = CHAIN.sponsored,
+): { to: Address; data: Hex; value: bigint }[] {
+  const calls = args.balances
+    .filter((row) => row.amountWei > 0n)
+    .map((row) => ({ to: row.asset, data: transferCalldata(args.recipient, row.amountWei), value: 0n }));
+  if (!sponsored && args.nativeWei !== undefined && args.nativeWei > 0n) {
+    calls.push({ to: args.recipient, data: '0x', value: args.nativeWei });
+  }
+  return calls;
 }
 
 export function transferCalldata(to: Address, amount: bigint): Hex {
