@@ -1,7 +1,8 @@
 import { afterEach, expect, test } from "bun:test";
+import { encodeFunctionData } from "viem";
 import { ApiError } from "../src/lib/api";
 import { mixApi, needsSignature, newIdempotencyKey } from "../src/features/mix/mix-api";
-import { MixPayloadError, checkSigningPayload, freshCreationPayload, pendingMixFunding, recordMixFunding, versionMatchesPicks } from "../src/features/mix/mix-chain";
+import { MixPayloadError, checkSigningPayload, mixCallBook, freshCreationPayload, pendingMixFunding, recordMixFunding, versionMatchesPicks } from "../src/features/mix/mix-chain";
 import { errorText, mixErrorText } from "../src/features/mix/mix-copy";
 import { sameAssets } from "../src/features/mix/mix-math";
 import { ACCOUNT, BACKEND_CODES, SELL_ONLY, CREATED, DETAIL, EXECUTOR, NVDAB, ONCHAIN_ID, REGISTRY, TSLAB, USDT, approveData, enrollData, transferData } from "./fixtures/mix-fixtures";
@@ -123,8 +124,8 @@ test("the last call must enroll this account, version 1, at registry", () => {
   expect(withCalls([{ to: REGISTRY, data: enrollData(ACCOUNT, ONCHAIN_ID, 2) }])).toThrow("enroll.version");
   expect(withCalls([{ to: REGISTRY, data: enrollData(ACCOUNT, 0n) }])).toThrow("enroll.id");
   expect(withCalls([{ to: REGISTRY, data: approveData(EXECUTOR) }])).toThrow("enroll.function");
-  // enroll 只能是最後一筆。
-  expect(withCalls([enrollCall, enrollCall])).toThrow("approve.to");
+  // enroll 後面只能接加息策略的重新同意：再一筆 enroll 不簽。
+  expect(withCalls([enrollCall, enrollCall])).toThrow("consent.");
 });
 
 test("the strategy being enrolled holds exactly the picks, plus the USDT 0 bp line every mix has on-chain", () => {
@@ -200,4 +201,53 @@ test("call book on chain 97 accepts every address-book asset, not just the 40-as
   if (CHAIN.id !== 97) { expect(assets.has(TESTNET_97.assets.AMDB.toLowerCase())).toBe(false); return; }
   for (const address of Object.values(TESTNET_97.assets)) expect(assets.has(address.toLowerCase())).toBe(true);
   expect(assets.has(TESTNET_97.assets.AMDB.toLowerCase())).toBe(true);
+});
+
+// ---- 加息策略開著時改比例：enroll 後接重新同意（backend consentCalls） ------------------------------------------
+const SE = { executor: "0x16ab59a8bacb578c6437528ac0961e234e4b717b", registry: "0x973341a0ba6a725630f2a4f66d7dbba92fea4e00",
+  venus: "0x93ab77260c8c62b26698bbb0ee8da3e175b9ad8d", lista: "0x993237ac050512f3749bfee2de759b6b86aea653", vault: "0x2e915b874a5a544736f5afd97f3fa1dd45d417a9" };
+const NVDA_MARKET = "0xfa06dd03eff35e3337a8b5b93a8a7943155b4f20e4d19bb0583db20bdd9f5415";
+const QQQ_MARKET = "0xd8def95e75d2489c340ac4d9769646707cf55d17d7aa7f8644c89b64b41844e7";
+const QQQB = "0x00000000000000000000000000000000000000aa";
+const seBook = { ...book, strategy: { executor: SE.executor, registry: SE.registry, venus: SE.venus, lista: SE.lista, vault: SE.vault, usdt: USDT.toLowerCase(),
+  markets: new Map([[NVDA_MARKET, { token: NVDAB, protocol: "venus" as const }], [QQQ_MARKET, { token: QQQB, protocol: "lista" as const }]]) } };
+const consentAbi = [
+  { type: "function", name: "updateDelegate", stateMutability: "nonpayable", inputs: [{ type: "address" }, { type: "bool" }], outputs: [] },
+  { type: "function", name: "setAuthorization", stateMutability: "nonpayable", inputs: [{ type: "address" }, { type: "bool" }], outputs: [] },
+  { type: "function", name: "setBorrowPolicy", stateMutability: "nonpayable", inputs: [{ type: "bytes32" }, { type: "uint256" }, { type: "bool" }], outputs: [] },
+] as const;
+const delegate = (to: string, fn: "updateDelegate" | "setAuthorization", who = SE.executor, allow = true) => ({ to, data: encodeFunctionData({ abi: consentAbi, functionName: fn, args: [who as `0x${string}`, allow] }) });
+const policy = (id: string, maxDebt = 10n ** 20n, enabled = true) => ({ to: SE.registry, data: encodeFunctionData({ abi: consentAbi, functionName: "setBorrowPolicy", args: [id as `0x${string}`, maxDebt, enabled] }) });
+const seApprove = (token: string, spender = SE.executor) => ({ to: token, data: approveData(spender) });
+/** backend consentCalls([NVDAB, QQQB]) 的順序：委託、每個市場的上限＋抵押品核准、USDT、策略 vault。 */
+const consent = [delegate(SE.venus, "updateDelegate"), delegate(SE.lista, "setAuthorization"), policy(NVDA_MARKET), seApprove(NVDAB), policy(QQQ_MARKET), seApprove(QQQB),
+  seApprove(USDT), seApprove(SE.vault)];
+const withConsent = (tail: { to: string; data: string }[]) => () => checkSigningPayload({ ...CREATED, calls: [...CREATED.calls, ...tail].map((c) => ({ value: "0", ...c })) }, seBook);
+
+test("yield strategy on: the re-consent after the enroll is signed as sent; only to AtpBorrowExecutor", () => {
+  expect(withConsent(consent)().calls).toHaveLength(CREATED.calls.length + consent.length);
+  expect(withConsent([delegate(SE.venus, "updateDelegate"), policy(NVDA_MARKET), seApprove(NVDAB), seApprove(USDT), seApprove(SE.vault)])().onchainId).toBe(ONCHAIN_ID);
+  const swap = (i: number, call: { to: string; data: string }) => consent.map((c, n) => (n === i ? call : c));
+  expect(withConsent(swap(7, seApprove(SE.vault, EXECUTOR)))).toThrow("consent.spender");
+  expect(withConsent(swap(0, delegate(SE.venus, "updateDelegate", "0x000000000000000000000000000000000000dEaD")))).toThrow("consent.delegate");
+  expect(withConsent(swap(2, policy(NVDA_MARKET, 0n)))).toThrow("consent.policy");
+  expect(withConsent(swap(2, policy(NVDA_MARKET, 1n, false)))).toThrow("consent.policy");
+  expect(withConsent(swap(2, policy("0x" + "11".repeat(32))))).toThrow("consent.policy");
+  expect(withConsent(swap(3, seApprove(TSLAB)))).toThrow("consent.asset");
+  expect(withConsent(swap(6, { to: USDT, data: transferData(SE.executor, 1n) }))).toThrow("consent.to");
+  expect(withConsent([...consent, seApprove(USDT)])).toThrow("consent.duplicate");
+  expect(withConsent(consent.filter((_, n) => n !== 6))).toThrow("consent.incomplete");
+  expect(withConsent(consent.filter((_, n) => n !== 1))).toThrow("consent.incomplete");
+  expect(withConsent(consent.filter((_, n) => n !== 5))).toThrow("consent.incomplete");
+  // 沒有地址簿（不是 chain 97）就不簽任何同意。
+  expect(() => checkSigningPayload({ ...CREATED, calls: [...CREATED.calls, ...consent].map((c) => ({ value: "0", ...c })) }, book)).toThrow("consent.chain");
+  // 同意放在 enroll 之前會被 enroll 作廢：不簽。
+  expect(() => checkSigningPayload({ ...CREATED, calls: [...consent, ...CREATED.calls].map((c) => ({ value: "0", ...c })) }, seBook)).toThrow(MixPayloadError);
+});
+
+test("the chain 97 call book carries the 31 yield strategy markets (leveraged ones excluded)", () => {
+  const b = mixCallBook();
+  if (b.strategy === undefined) return; // built for another chain
+  expect(b.strategy.markets.size).toBe(31);
+  expect(b.strategy.executor).toBe(SE.executor);
 });

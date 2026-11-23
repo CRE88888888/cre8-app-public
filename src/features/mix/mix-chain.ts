@@ -5,7 +5,10 @@
  * App 照原樣用帳戶 owner 簽一個 sudo UserOp（經既有 sponsor 與 `POST /bundler`），nonce 用後端給的。
  * 簽之前把每一筆 calldata 解碼核對（C3 審查 #133 第 4 點）：
  * - 前面只能是 `approve(executor, max)`，目標是目錄裡的資產或 USDT；
- * - 最後一筆必須是 registry 的 `enroll(payload.account, id, 1)`，而且鏈上這個 id 的第 1 版就是用戶挑的資產與比例；
+ * - 接著是 registry 的 `enroll(payload.account, id, 1)`，而且鏈上這個 id 的第 1 版就是用戶挑的資產與比例；
+ * - 加息策略開著時改比例，enroll 後面接重新同意（backend `consentCalls`，重新 enroll 會讓舊同意失效）：
+ *   只能是 Venus／Lista 委託給 AtpBorrowExecutor、開啟且上限 > 0 的 `setBorrowPolicy`、對 AtpBorrowExecutor 的全額核准
+ *   （有借款市場的資產、USDT、策略 vault），絕不給 AtpExecutor；
  * - 其他函式一律不簽。
  * 不重組 calls——sponsor 只代付後端存下的那一組。上鏈後 `POST /me/mixes/:id/confirm`；確認不到也沒關係，
  * 後端的排程與明細查詢會自己找 Enrolled 對帳。
@@ -46,16 +49,94 @@ export class MixPayloadError extends Error {
  * 資產＝測試網地址簿的全部代幣（後端 My mix 收的 103 個都在裡面）＋目錄 40 個＋USDT。
  * 只認目錄 40 個時，選了目錄外的資產（例如 AMD）後端照樣建好，App 卻在簽名前擋下，一直顯示「組合沒建好」。
  */
-export type MixCallBook = { registry: string; executor: string; assets: Set<string> };
+export type MixCallBook = { registry: string; executor: string; assets: Set<string>; strategy?: MixStrategyBook };
+/** 加息策略（chain 97）同意用的地址：AtpBorrowExecutor、AtpBorrowRegistry、Venus comptroller、Lista Moolah、策略 vault，以及可抵押資產（市場 id → 代幣）。 */
+export type MixStrategyBook = { executor: string; registry: string; venus: string; lista: string; vault: string; usdt: string;
+  markets: ReadonlyMap<string, { token: string; protocol: 'venus' | 'lista' }> };
+
+/**
+ * backend `src/strategy-earn-guard.ts` 的 `STRATEGY_EARN_97`（cre8-contracts#65/#67 `deployments/testnet-97.json` 的 `borrow`）：
+ * 31 個有借款市場的資產，槓桿類不在內。只用來核對簽名資料，不用來組 call。
+ */
+const STRATEGY_EARN_97 = {
+  executor: '0x16ab59a8bacb578c6437528ac0961e234e4b717b', registry: '0x973341a0ba6a725630f2a4f66d7dbba92fea4e00',
+  venus: '0x93ab77260c8c62b26698bbb0ee8da3e175b9ad8d', lista: '0x993237ac050512f3749bfee2de759b6b86aea653', vault: '0x2e915b874a5a544736f5afd97f3fa1dd45d417a9',
+  markets: [
+    ['NVDAB', '0xfa06dd03eff35e3337a8b5b93a8a7943155b4f20e4d19bb0583db20bdd9f5415', 'venus'], ['TSLAB', '0x00f2152bbbefde7b3e65c4b7de0af83a87875c02b6c84ef96410ac14edd850fe', 'venus'],
+    ['SPCXB', '0x4632539a0ba6e5e9843b401d97b66b8b34d23fdab2005feacefd5452055c410e', 'venus'], ['QQQB', '0xd8def95e75d2489c340ac4d9769646707cf55d17d7aa7f8644c89b64b41844e7', 'lista'],
+    ['MSTRB', '0x208d888e7c3d5ef4d9ccc51083daffe7ddfbce978d339ce258544022cfd9804a', 'lista'], ['BTCB', '0x8d48b0483eb33d02f26569ab02c254eac8ac10be954fdbb157243bd09e85d2fb', 'lista'],
+    ['WBNB', '0x88ca3237e09f509dd0919d6fb3c3acc3e481a174ab584dc1166db05e13addd1b', 'lista'], ['SPYB', '0x51b9790c89e3f45fd09429a276cc3993d150efbd931929a2efb5246ff5b2dbea', 'lista'],
+    ['EWYB', '0xf18d92ea0ab3910af1b41c7fa590e1782c3c360272885c8654c5553ae1b5aec0', 'lista'], ['XAUt', '0xdc90c169476591d0bdaf94c8604483851a71f6f968cc6e715caaa44bc5343ddf', 'lista'],
+    ['AAPLB', '0x5d49d81cb9a6ad5100cc45fea95acba206f8c2d430de244b56bd1b37c26052dc', 'lista'], ['MSFTB', '0x0011e09537679494eab5cf79e82e709c512444aace283a42af962de31caa9d6d', 'lista'],
+    ['GOOGLB', '0x689d5419e2cfe939bd0eeca62624dba7d1169bf119071f6b5692af3373ecee86', 'lista'], ['AMZNB', '0xcb0b5108bfac66dc1b0ceb41dff04d840999a64a65557be8cffdf220c5a7c638', 'lista'],
+    ['METAB', '0x46b15315b0d7a132ab8c1d3951dc129924f35a65cc6d362fd916ea043efc967e', 'lista'], ['TSMB', '0x4089dd869febe66e083235a22ddc27aa974608c37706e09b7c9f58d886309207', 'lista'],
+    ['AVGOB', '0x22e0e2119c0a4fbc0c511fb32e9119935da28f53891d72a7b2e42ed0a19c8acb', 'lista'], ['NFLXB', '0x45a53fd0ab814504600a9d3e853a5c00fb37ca236e0dcaeb228999a0647763a9', 'lista'],
+    ['INTCB', '0x7ef21622fbb4199611e5c89b5c9c7f1aba3e007f69cee91dd93d877d04a16a6e', 'lista'], ['SKHYB', '0xdfd536b4566dabdece5a60e14d8767f609ed2c12b718495336de4502e30ddf21', 'lista'],
+    ['MUB', '0x8e55d0583de7b419e1d6bd4f862a23e415f13390f8f422cef7d5869380882cb9', 'lista'], ['SNDKB', '0x26a12b6c8cb5088c7b1a7565a305d615b4a10a6f7b14dc7292f9b66d1f4573a5', 'lista'],
+    ['ANTB', '0x17cf8ebc51ff714d19d45dc586262ae95acfa859bfbe66936917421aef9f1ccc', 'lista'], ['BABAB', '0x0d94a872df3df2ed65010cdef0fff4b52be888a41879252f5422b51dcf849600', 'lista'],
+    ['PDDB', '0xe387a4f77009e8b616e63fa02da3b600104bd4bb57f8cabad624622dea78a287', 'lista'], ['CRCLB', '0x41fe2e63f5c26f448cd67dd3b651304c6fbc36345b4ead814d76ce76f51d3fe7', 'lista'],
+    ['HOODB', '0xc917a20897841a10d848200e0aab4696ba797b43b8d32ca25635ff373bdbb870', 'lista'], ['GMEB', '0xb4d9a1acb4b5cfe346b540b2aaa901c25ded7bd33d376a1721c259e13f217728', 'lista'],
+    ['COINB', '0x656cf332a101a485a7e87d5877f92c555edc4929568aad341900b2ae633ca6c9', 'lista'], ['BMNRB', '0x2dd522761a2d39270426cd13075002b480bfcb137442a9b261762620e6b6148b', 'lista'],
+    ['BNCB', '0xf0a9425ffd3c0b4f472854252db963cd714ae711c2ceeb84647f1bbd444e5283', 'lista'],
+  ] as const,
+} as const;
 
 export function mixCallBook(): MixCallBook {
   const contracts = CHAIN.contracts;
-  const book = CHAIN.id === TESTNET_97.chainId ? Object.values(TESTNET_97.assets as Record<string, string>) : [];
+  const testnet = CHAIN.id === TESTNET_97.chainId;
+  const book = testnet ? Object.values(TESTNET_97.assets as Record<string, string>) : [];
+  const tokens = TESTNET_97.assets as Record<string, string | undefined>;
+  const S = STRATEGY_EARN_97;
   return {
     registry: lower(contracts?.registry ?? ''),
     executor: lower(contracts?.executor ?? ''),
     assets: new Set([...(contracts === null ? [] : [contracts.usdt]), ...book, ...MIX_CATALOG.map((asset) => asset.address)].map(lower)),
+    ...(testnet && contracts !== null ? { strategy: { executor: S.executor, registry: S.registry, venus: S.venus, lista: S.lista, vault: S.vault, usdt: lower(contracts.usdt),
+      markets: new Map(S.markets.flatMap(([symbol, id, protocol]) => tokens[symbol] ? [[id, { token: lower(tokens[symbol] as string), protocol }] as const] : [])) } } : {}),
   };
+}
+
+const STRATEGY_CONSENT_ABI = [
+  { type: 'function', name: 'updateDelegate', stateMutability: 'nonpayable', inputs: [{ name: 'delegate', type: 'address' }, { name: 'allowBorrows', type: 'bool' }], outputs: [] },
+  { type: 'function', name: 'setAuthorization', stateMutability: 'nonpayable', inputs: [{ name: 'authorized', type: 'address' }, { name: 'newIsAuthorized', type: 'bool' }], outputs: [] },
+  { type: 'function', name: 'setBorrowPolicy', stateMutability: 'nonpayable', inputs: [{ name: 'id', type: 'bytes32' }, { name: 'maxDebt', type: 'uint256' }, { name: 'enabled', type: 'bool' }], outputs: [] },
+] as const;
+
+/** enroll 之後的加息策略重新同意：每一筆只能是下面幾種之一，而且同一筆不重複；有上限的資產一定也有核准。 */
+function checkStrategyConsent(calls: readonly { to: string; data: Hex }[], book: MixCallBook): void {
+  if (calls.length === 0) return;
+  const s = book.strategy;
+  if (s === undefined) throw new MixPayloadError('consent.chain');
+  const seen = new Set<string>(), ceilings = new Set<string>(), approved = new Set<string>(), protocols = new Set<string>();
+  const once = (key: string) => { if (seen.has(key)) throw new MixPayloadError('consent.duplicate'); seen.add(key); };
+  for (const c of calls) {
+    const to = lower(c.to);
+    if (to === s.venus || to === s.lista) {
+      const d = decodeOrNull(STRATEGY_CONSENT_ABI, c.data);
+      const [delegate, allow] = (d?.args ?? []) as readonly [string, boolean];
+      if (d?.functionName !== (to === s.venus ? 'updateDelegate' : 'setAuthorization') || lower(delegate) !== s.executor || allow !== true) throw new MixPayloadError('consent.delegate');
+      once(to);
+    } else if (to === s.registry) {
+      const d = decodeOrNull(STRATEGY_CONSENT_ABI, c.data);
+      if (d?.functionName !== 'setBorrowPolicy') throw new MixPayloadError('consent.function');
+      const [id, maxDebt, enabled] = d.args as readonly [Hex, bigint, boolean];
+      const market = s.markets.get(lower(id));
+      if (!market || maxDebt <= 0n || enabled !== true) throw new MixPayloadError('consent.policy');
+      once('policy:' + lower(id)); ceilings.add(market.token); protocols.add(market.protocol);
+    } else {
+      const d = decodeOrNull(erc20Abi, c.data);
+      if (d?.functionName !== 'approve') throw new MixPayloadError('consent.to');
+      const [spender, amount] = d.args as readonly [string, bigint];
+      if (lower(spender) !== s.executor || amount !== maxUint256) throw new MixPayloadError('consent.spender');
+      if (to !== s.usdt && to !== s.vault && ![...s.markets.values()].some((m) => m.token === to)) throw new MixPayloadError('consent.asset');
+      once('approve:' + to);
+      if (to !== s.usdt && to !== s.vault) approved.add(to);
+    }
+  }
+  if (ceilings.size === 0 || [...ceilings].some((t) => !approved.has(t)) || [...approved].some((t) => !ceilings.has(t)) ||
+      !seen.has('approve:' + s.usdt) || !seen.has('approve:' + s.vault) || [...protocols].some((p) => !seen.has(p === 'venus' ? s.venus : s.lista))) {
+    throw new MixPayloadError('consent.incomplete');
+  }
 }
 
 /** 核對過的簽名資料，外加最後一筆 enroll 的鏈上 strategy id（和 payload 的 `strategyId` 是後端資料庫的 id，兩者不同）。 */
@@ -71,18 +152,24 @@ export function checkSigningPayload(body: unknown, book: MixCallBook = mixCallBo
   if (p.signingMode !== 'sudo') throw new MixPayloadError('signingMode');
   if (p.expectedVersion !== 1) throw new MixPayloadError('expectedVersion');
   if (typeof p.nonce !== 'string' || !/^\d{1,78}$/.test(p.nonce)) throw new MixPayloadError('nonce');
-  if (!Array.isArray(p.calls) || p.calls.length === 0 || p.calls.length > 12) throw new MixPayloadError('calls');
+  // 12 筆 approve＋enroll，加息策略開著時再加完整的重新同意（2 個委託＋每個資產上限與核准＋2 筆核准），同 backend MAX_MIX_OWNER_CALLS。
+  if (!Array.isArray(p.calls) || p.calls.length === 0 || p.calls.length > 36) throw new MixPayloadError('calls');
   if (book.registry === '' || book.executor === '') throw new MixPayloadError('address book');
   const calls = p.calls as unknown[];
   let onchainId: bigint | null = null;
+  // enroll 的位置：registry 上第一筆能解成 enroll 的 call；沒有就當最後一筆（下面會報 enroll.*）。
+  const at = (() => { const i = calls.findIndex((call) => { const c = call as Record<string, unknown> | null;
+    return c !== null && typeof c.to === 'string' && lower(c.to) === book.registry && typeof c.data === 'string' && HEX.test(c.data) &&
+      decodeOrNull(REGISTRY_ABI, c.data as Hex)?.functionName === 'enroll'; }); return i < 0 ? calls.length - 1 : i; })();
+  const consent: { to: string; data: Hex }[] = [];
   calls.forEach((call, index) => {
     const c = call as Record<string, unknown> | null;
     if (c === null || typeof c.to !== 'string' || !ADDRESS.test(c.to)) throw new MixPayloadError('calls.to');
     if (c.value !== '0') throw new MixPayloadError('calls.value');
     if (typeof c.data !== 'string' || !HEX.test(c.data) || c.data.length < 10) throw new MixPayloadError('calls.data');
-    const last = index === calls.length - 1;
-    if (last) {
-      // 最後一筆：registry 的 enroll(帳戶, id, 1)。
+    if (index > at) { consent.push({ to: c.to, data: c.data as Hex }); return; }
+    if (index === at) {
+      // enroll：registry 的 enroll(帳戶, id, 1)。
       if (lower(c.to) !== book.registry) throw new MixPayloadError('enroll.to');
       const decoded = decodeOrNull(REGISTRY_ABI, c.data as Hex);
       if (decoded?.functionName !== 'enroll') throw new MixPayloadError('enroll.function');
@@ -102,6 +189,7 @@ export function checkSigningPayload(body: unknown, book: MixCallBook = mixCallBo
     if (amount !== maxUint256) throw new MixPayloadError('approve.amount');
   });
   if (onchainId === null) throw new MixPayloadError('enroll');
+  checkStrategyConsent(consent, book);
   return { ...(p as unknown as MixSigningPayload), onchainId };
 }
 
