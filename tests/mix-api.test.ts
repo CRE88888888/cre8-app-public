@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { encodeFunctionData } from "viem";
 import { ApiError } from "../src/lib/api";
 import { mixApi, needsSignature, newIdempotencyKey } from "../src/features/mix/mix-api";
-import { MixPayloadError, checkSigningPayload, mixCallBook, freshCreationPayload, pendingMixFunding, recordMixFunding, versionMatchesPicks } from "../src/features/mix/mix-chain";
+import { MixPayloadError, assertStrategyV2, checkSigningPayload, mixCallBook, freshCreationPayload, pendingMixFunding, recordMixFunding, versionMatchesPicks, type MixChainRead } from "../src/features/mix/mix-chain";
 import { errorText, mixErrorText } from "../src/features/mix/mix-copy";
 import { sameAssets } from "../src/features/mix/mix-math";
 import { ACCOUNT, BACKEND_CODES, SELL_ONLY, CREATED, DETAIL, EXECUTOR, NVDAB, ONCHAIN_ID, REGISTRY, TSLAB, USDT, approveData, enrollData, transferData } from "./fixtures/mix-fixtures";
@@ -243,6 +243,100 @@ test("yield strategy on: the re-consent after the enroll is signed as sent; only
   expect(() => checkSigningPayload({ ...CREATED, calls: [...CREATED.calls, ...consent].map((c) => ({ value: "0", ...c })) }, book)).toThrow("consent.chain");
   // 同意放在 enroll 之前會被 enroll 作廢：不簽。
   expect(() => checkSigningPayload({ ...CREATED, calls: [...consent, ...CREATED.calls].map((c) => ({ value: "0", ...c })) }, seBook)).toThrow(MixPayloadError);
+});
+
+// ---- 路由 v2 的重新同意（backend v2ReconsentCalls）：地址由後端在簽名資料宣告，App 自己核對形狀、參數與鏈上 ----------------
+const OWNER = "0x00000000000000000000000000000000000000b1";
+const V2 = { registry: "0x7eae73a76ff2359fe1ab059a77dd36840a32559e", executor: "0x494c106498e8221d3f72474f36995c191acf6bb5" };
+const v2Abi = [{ type: "function", name: "setStrategyPolicy", stateMutability: "nonpayable", inputs: [{ type: "uint256" }, { type: "address" }, { type: "bool" }], outputs: [] }] as const;
+const v2Policy = (maxDebt = 10n ** 20n, recipient = OWNER, enabled = true, to = V2.registry) =>
+  ({ to, data: encodeFunctionData({ abi: v2Abi, functionName: "setStrategyPolicy", args: [maxDebt, recipient as `0x${string}`, enabled] }) });
+const v2Approve = (token: string, spender = V2.executor) => ({ to: token, data: approveData(spender) });
+/** backend v2ReconsentCalls：一筆 setStrategyPolicy＋新比例裡可抵押資產的核准。 */
+const reconsent = [v2Policy(), v2Approve(NVDAB), v2Approve(TSLAB)];
+const withV2 = (tail: { to: string; data: string }[], patch: Record<string, unknown> = {}, owner: string | undefined = OWNER, b: typeof seBook | typeof book = seBook) => () =>
+  checkSigningPayload({ ...CREATED, strategyV2: V2, ...patch, calls: [...CREATED.calls, ...tail].map((c) => ({ value: "0", ...c })) }, b, owner);
+
+test("routing v2 re-consent: setStrategyPolicy for this wallet plus approvals to the declared v2 executor are signed as sent", () => {
+  const checked = withV2(reconsent)();
+  expect(checked.calls).toHaveLength(CREATED.calls.length + reconsent.length);
+  expect(checked.strategyV2).toEqual(V2);
+  // 只有 setStrategyPolicy（沒有新增資產）也可以；checksum 大小寫的宣告一樣認得。
+  expect(withV2([v2Policy()])().strategyV2).toEqual(V2);
+  expect(withV2(reconsent, { strategyV2: { registry: "0x7eae73a76Ff2359fE1aB059A77Dd36840A32559E", executor: "0x494C106498e8221D3f72474f36995C191ACf6bB5" } })().strategyV2).toEqual(V2);
+  // 完整的 v2 同意（委託＋上限＋核准）也認得，委託的場所記下來給鏈上核對。
+  expect(withV2([delegate(SE.venus, "updateDelegate", V2.executor), delegate(SE.lista, "setAuthorization", V2.executor), ...reconsent])().strategyV2)
+    .toEqual({ ...V2, venus: SE.venus, lista: SE.lista });
+});
+
+test("routing v2 re-consent is refused for a wrong spender, a wrong owner, an extra call or a missing policy", () => {
+  const swap = (i: number, call: { to: string; data: string }) => reconsent.map((c, n) => (n === i ? call : c));
+  // 核准的對象不是宣告的 v2 executor（別的地址、AtpExecutor、v1 的 AtpBorrowExecutor）。
+  expect(withV2(swap(1, v2Approve(NVDAB, "0x000000000000000000000000000000000000dEaD")))).toThrow("consent.spender");
+  expect(withV2(swap(1, v2Approve(NVDAB, EXECUTOR)))).toThrow("consent.spender");
+  expect(withV2(swap(1, v2Approve(NVDAB, SE.executor)))).toThrow("consent.spender");
+  expect(withV2(swap(1, { to: NVDAB, data: approveData(V2.executor, 5n) }))).toThrow("consent.spender");
+  // 獎勵收款人不是簽名的錢包；不知道錢包是誰也不簽。
+  expect(withV2(swap(0, v2Policy(10n ** 20n, "0x000000000000000000000000000000000000dEaD")))).toThrow("consent.owner");
+  expect(withV2(swap(0, v2Policy(10n ** 20n, ACCOUNT)))).toThrow("consent.owner");
+  expect(withV2(reconsent, {}, "0x00000000000000000000000000000000000000b2")).toThrow("consent.owner");
+  expect(() => checkSigningPayload({ ...CREATED, strategyV2: V2, calls: [...CREATED.calls, ...reconsent].map((c) => ({ value: "0", ...c })) }, seBook)).toThrow("consent.owner");
+  // 上限 0、關閉：不是同意。
+  expect(withV2(swap(0, v2Policy(0n)))).toThrow("consent.policy");
+  expect(withV2(swap(0, v2Policy(10n ** 20n, OWNER, false)))).toThrow("consent.policy");
+  // 多餘的呼叫：轉帳、registry 上別的函式、不在地址簿的代幣、重複、對別人的委託、v1 的呼叫混進來。
+  expect(withV2([...reconsent, { to: USDT, data: transferData(V2.executor, 1n) }])).toThrow("consent.to");
+  expect(withV2([...reconsent, { to: V2.registry, data: enrollData() }])).toThrow("consent.function");
+  expect(withV2([...reconsent, v2Approve("0x00000000000000000000000000000000000000cc")])).toThrow("consent.to");
+  expect(withV2([...reconsent, v2Approve(NVDAB)])).toThrow("consent.duplicate");
+  expect(withV2([...reconsent, v2Policy()])).toThrow("consent.duplicate");
+  expect(withV2([...reconsent, delegate(SE.venus, "updateDelegate", SE.executor)])).toThrow("consent.delegate");
+  expect(withV2([...reconsent, delegate(SE.venus, "updateDelegate", V2.executor, false)])).toThrow("consent.delegate");
+  expect(withV2([...reconsent, policy(NVDA_MARKET)])).toThrow("consent.to");
+  expect(withV2([...reconsent, { to: V2.registry, data: (v2Policy().data + "00") as string }])).toThrow("consent.function");
+  // 沒有給宣告的 registry 的呼叫：照 v1 核對，對 v2 executor 的核准不會過。
+  expect(withV2([v2Approve(NVDAB), v2Approve(TSLAB)])).toThrow("consent.");
+  expect(withV2(reconsent, { strategyV2: undefined })).toThrow("consent.");
+  // 後端沒宣告地址時，給「看起來像 v2 registry」的呼叫照 v1 規則擋下。
+  expect(withV2([v2Policy()], { strategyV2: undefined })).toThrow("consent.to");
+});
+
+test("the declared v2 addresses must be two new addresses, never a contract or token the app already knows", () => {
+  for (const strategyV2 of [{ registry: V2.registry }, { registry: "0x12", executor: V2.executor }, "0x00", { registry: V2.registry, executor: V2.registry },
+    { registry: V2.registry, executor: EXECUTOR }, { registry: REGISTRY, executor: V2.executor }, { registry: V2.registry, executor: SE.executor },
+    { registry: SE.registry, executor: V2.executor }, { registry: V2.registry, executor: NVDAB }]) {
+    expect(withV2(reconsent, { strategyV2 })).toThrow("strategyV2");
+  }
+  // 不是 chain 97（地址簿沒有加息策略）就不簽任何同意。
+  expect(withV2(reconsent, {}, OWNER, book)).toThrow("consent.chain");
+  // 沒有同意的 calls 時，宣告的地址不影響一般的建立／改比例。
+  expect(withV2([])().strategyV2).toBeUndefined();
+});
+
+test("routing v2 addresses are checked on-chain before signing: registry.executor(), the venues, and an existing USDT allowance", async () => {
+  const chain = (over: Partial<Record<"executor" | "allowance" | "venusComptroller" | "moolah", unknown>> = {}): MixChainRead => async (call) => {
+    const values: Record<string, unknown> = { executor: "0x494C106498e8221D3f72474f36995C191ACf6bB5", allowance: 2n ** 256n - 1n, venusComptroller: SE.venus, moolah: SE.lista, ...over };
+    if (call.functionName === "allowance") {
+      expect(call.address.toLowerCase()).toBe(USDT.toLowerCase());
+      expect(call.args).toEqual([ACCOUNT, V2.executor]);
+    } else expect(call.address).toBe(V2.registry);
+    const value = values[call.functionName];
+    if (value instanceof Error) throw value;
+    return value;
+  };
+  const full = { ...V2, venus: SE.venus, lista: SE.lista };
+  await assertStrategyV2(undefined, ACCOUNT, USDT, async () => { throw new Error("must not read"); });
+  await assertStrategyV2(V2, ACCOUNT, USDT, chain());
+  await assertStrategyV2(full, ACCOUNT, USDT, chain());
+  // registry 自己說的 executor 不是宣告的那個。
+  await expect(assertStrategyV2(V2, ACCOUNT, USDT, chain({ executor: "0x000000000000000000000000000000000000dEaD" }))).rejects.toThrow("consent.v2 executor");
+  // 帳戶從沒核准過這個 executor：不把資產交給新對象。
+  await expect(assertStrategyV2(V2, ACCOUNT, USDT, chain({ allowance: 0n }))).rejects.toThrow("consent.v2 allowance");
+  // 委託的場所不是 registry 釘住的那個。
+  await expect(assertStrategyV2(full, ACCOUNT, USDT, chain({ venusComptroller: "0x000000000000000000000000000000000000dEaD" }))).rejects.toThrow("consent.v2 venue");
+  await expect(assertStrategyV2(full, ACCOUNT, USDT, chain({ moolah: "0x000000000000000000000000000000000000dEaD" }))).rejects.toThrow("consent.v2 venue");
+  // 讀不到就不簽。
+  await expect(assertStrategyV2(V2, ACCOUNT, USDT, chain({ executor: new Error("rpc down") }))).rejects.toThrow("consent.v2 unreadable");
 });
 
 test("the chain 97 call book carries the 31 yield strategy markets (leveraged ones excluded)", () => {

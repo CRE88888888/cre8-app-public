@@ -9,6 +9,9 @@
  * - 加息策略開著時改比例，enroll 後面接重新同意（backend `consentCalls`，重新 enroll 會讓舊同意失效）：
  *   只能是 Venus／Lista 委託給 AtpBorrowExecutor、開啟且上限 > 0 的 `setBorrowPolicy`、對 AtpBorrowExecutor 的全額核准
  *   （有借款市場的資產、USDT、策略 vault），絕不給 AtpExecutor；
+ * - 帳戶在加息策略路由 v2 時，重新同意是 v2 的呼叫（backend `v2ReconsentCalls`）。v2 的地址不在 App 裡，由後端在簽名資料
+ *   宣告（`strategyV2: { registry, executor }`），App 仍自己核對形狀與參數，並在鏈上核對那兩個地址（見 `checkStrategyConsentV2`、
+ *   `assertStrategyV2`）；
  * - 其他函式一律不簽。
  * 不重組 calls——sponsor 只代付後端存下的那一組。上鏈後 `POST /me/mixes/:id/confirm`；確認不到也沒關係，
  * 後端的排程與明細查詢會自己找 Enrolled 對帳。
@@ -139,11 +142,94 @@ function checkStrategyConsent(calls: readonly { to: string; data: Hex }[], book:
   }
 }
 
-/** 核對過的簽名資料，外加最後一筆 enroll 的鏈上 strategy id（和 payload 的 `strategyId` 是後端資料庫的 id，兩者不同）。 */
-export type CheckedPayload = MixSigningPayload & { onchainId: bigint };
+/** 路由 v2 的地址（小寫）：後端在簽名資料裡宣告的 registry 與 executor；`venus`／`lista` 是這次 calls 裡委託的借貸場所。 */
+export type CheckedStrategyV2 = { registry: string; executor: string; venus?: string; lista?: string };
 
-/** 核對後端的簽名資料：形狀、每一筆 calldata 解碼後的函式與參數。不改內容。 */
-export function checkSigningPayload(body: unknown, book: MixCallBook = mixCallBook()): CheckedPayload {
+const STRATEGY_V2_ABI = [
+  { type: 'function', name: 'setStrategyPolicy', stateMutability: 'nonpayable', inputs: [{ name: 'maxDebt', type: 'uint256' }, { name: 'rewardRecipient', type: 'address' }, { name: 'enabled', type: 'bool' }], outputs: [] },
+  { type: 'function', name: 'executor', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'venusComptroller', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'moolah', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+] as const;
+
+/**
+ * 路由 v2 的重新同意（backend `v2ReconsentCalls`／`v2ConsentCalls`）。地址是後端宣告的，所以這裡只認三種呼叫，其他一律不簽：
+ * - 宣告的 registry 上一筆 `setStrategyPolicy(上限 > 0, 獎勵收款人＝這個錢包, true)`，剛好一筆；
+ * - 地址簿裡的資產對宣告的 executor 的全額核准（不重複）；
+ * - 借貸場所的委託 `updateDelegate(executor, true)`／`setAuthorization(executor, true)`，各最多一筆。
+ * 宣告的地址本身、以及委託的場所，簽名前再由 `assertStrategyV2` 在鏈上核對。v1 與 v2 的呼叫不能混在同一組。
+ */
+function checkStrategyConsentV2(calls: readonly { to: string; data: Hex }[], book: MixCallBook, v2: { registry: string; executor: string }, owner: string | undefined): CheckedStrategyV2 {
+  if (owner === undefined || !ADDRESS.test(owner)) throw new MixPayloadError('consent.owner');
+  const seen = new Set<string>(), out: CheckedStrategyV2 = { ...v2 };
+  const once = (key: string) => { if (seen.has(key)) throw new MixPayloadError('consent.duplicate'); seen.add(key); };
+  for (const c of calls) {
+    const to = lower(c.to);
+    if (to === v2.registry) {
+      const d = decodeOrNull(STRATEGY_V2_ABI, c.data);
+      if (d?.functionName !== 'setStrategyPolicy') throw new MixPayloadError('consent.function');
+      const [maxDebt, recipient, enabled] = d.args as readonly [bigint, string, boolean];
+      if (maxDebt <= 0n || enabled !== true) throw new MixPayloadError('consent.policy');
+      if (lower(recipient) !== lower(owner)) throw new MixPayloadError('consent.owner');
+      once('policy');
+    } else if (book.assets.has(to)) {
+      const d = decodeOrNull(erc20Abi, c.data);
+      if (d?.functionName !== 'approve') throw new MixPayloadError('consent.to');
+      const [spender, amount] = d.args as readonly [string, bigint];
+      if (lower(spender) !== v2.executor || amount !== maxUint256) throw new MixPayloadError('consent.spender');
+      once('approve:' + to);
+    } else {
+      const d = decodeOrNull(STRATEGY_CONSENT_ABI, c.data);
+      if (d?.functionName !== 'updateDelegate' && d?.functionName !== 'setAuthorization') throw new MixPayloadError('consent.to');
+      const [delegate, allow] = d.args as readonly [string, boolean];
+      if (lower(delegate) !== v2.executor || allow !== true) throw new MixPayloadError('consent.delegate');
+      const venue = d.functionName === 'updateDelegate' ? 'venus' : 'lista';
+      once(venue); out[venue] = to;
+    }
+  }
+  if (!seen.has('policy')) throw new MixPayloadError('consent.incomplete');
+  return out;
+}
+
+/** 讀鏈（`readOnlyClient().readContract` 的形狀）；測試換成假的。 */
+export type MixChainRead = (call: { address: Address; abi: readonly unknown[]; functionName: string; args?: readonly unknown[] }) => Promise<unknown>;
+
+/**
+ * 路由 v2 的地址是後端宣告的，簽名前在鏈上核對（讀不到就不簽）：
+ * - 宣告的 registry 自己說的 `executor()` 就是宣告的 executor；委託的場所就是它的 `venusComptroller()`／`moolah()`；
+ * - 這個帳戶已經核准過這個 executor 動用 USDT（開啟加息時的同意就有這一筆；USDT 的地址在 App 的地址簿裡，假不了）。
+ *   所以改比例這一筆不會把資產交給帳戶沒授權過的新對象，只會延續既有的授權。
+ */
+export async function assertStrategyV2(v2: CheckedStrategyV2 | undefined, account: string, usdt: string | undefined = CHAIN.contracts?.usdt,
+  read: MixChainRead = (call) => readOnlyClient().readContract(call as never)): Promise<void> {
+  if (v2 === undefined) return;
+  if (usdt === undefined) throw new MixPayloadError('address book');
+  const registry = v2.registry as Address;
+  let executor: unknown, allowance: unknown, venus: unknown, lista: unknown;
+  try {
+    [executor, allowance, venus, lista] = await Promise.all([
+      read({ address: registry, abi: STRATEGY_V2_ABI, functionName: 'executor' }),
+      read({ address: usdt as Address, abi: erc20Abi, functionName: 'allowance', args: [account, v2.executor] }),
+      v2.venus === undefined ? null : read({ address: registry, abi: STRATEGY_V2_ABI, functionName: 'venusComptroller' }),
+      v2.lista === undefined ? null : read({ address: registry, abi: STRATEGY_V2_ABI, functionName: 'moolah' }),
+    ]);
+  } catch {
+    throw new MixPayloadError('consent.v2 unreadable');
+  }
+  if (typeof executor !== 'string' || lower(executor) !== v2.executor) throw new MixPayloadError('consent.v2 executor');
+  if (typeof allowance !== 'bigint' || allowance <= 0n) throw new MixPayloadError('consent.v2 allowance');
+  if (v2.venus !== undefined && (typeof venus !== 'string' || lower(venus) !== v2.venus)) throw new MixPayloadError('consent.v2 venue');
+  if (v2.lista !== undefined && (typeof lista !== 'string' || lower(lista) !== v2.lista)) throw new MixPayloadError('consent.v2 venue');
+}
+
+/**
+ * 核對過的簽名資料，外加最後一筆 enroll 的鏈上 strategy id（和 payload 的 `strategyId` 是後端資料庫的 id，兩者不同）。
+ * `strategyV2`：這組 calls 帶了路由 v2 的重新同意（形狀已核對，地址還要 `assertStrategyV2` 在鏈上核對）。
+ */
+export type CheckedPayload = Omit<MixSigningPayload, 'strategyV2'> & { onchainId: bigint; strategyV2?: CheckedStrategyV2 };
+
+/** 核對後端的簽名資料：形狀、每一筆 calldata 解碼後的函式與參數。不改內容。`owner`：簽名的錢包（路由 v2 的獎勵收款人只能是它）。 */
+export function checkSigningPayload(body: unknown, book: MixCallBook = mixCallBook(), owner?: string): CheckedPayload {
   if (typeof body !== 'object' || body === null) throw new MixPayloadError('body');
   const p = body as Record<string, unknown>;
   if (!Number.isSafeInteger(p.mixId) || (p.mixId as number) <= 0) throw new MixPayloadError('mixId');
@@ -189,8 +275,26 @@ export function checkSigningPayload(body: unknown, book: MixCallBook = mixCallBo
     if (amount !== maxUint256) throw new MixPayloadError('approve.amount');
   });
   if (onchainId === null) throw new MixPayloadError('enroll');
+  const { strategyV2: _declared, ...rest } = p as unknown as MixSigningPayload;
+  // 路由 v2：後端宣告了 v2 的地址，而且 enroll 後面有一筆是給那個 registry 的。其餘情況照 v1 核對（v1 的行為不變）。
+  const v2 = declaredStrategyV2(p.strategyV2, book);
+  if (v2 !== undefined && consent.some((c) => lower(c.to) === v2.registry)) {
+    if (book.strategy === undefined) throw new MixPayloadError('consent.chain');
+    return { ...rest, onchainId, strategyV2: checkStrategyConsentV2(consent, book, v2, owner) };
+  }
   checkStrategyConsent(consent, book);
-  return { ...(p as unknown as MixSigningPayload), onchainId };
+  return { ...rest, onchainId };
+}
+
+/** 後端宣告的 v2 地址：兩個不同的地址，而且不是 App 已知的任何合約或資產（AtpRegistry、AtpExecutor、v1 的加息合約、代幣）。 */
+function declaredStrategyV2(value: unknown, book: MixCallBook): { registry: string; executor: string } | undefined {
+  if (value === undefined || value === null) return undefined;
+  const v = value as Record<string, unknown>;
+  if (typeof v !== 'object' || typeof v.registry !== 'string' || !ADDRESS.test(v.registry) || typeof v.executor !== 'string' || !ADDRESS.test(v.executor)) throw new MixPayloadError('strategyV2');
+  const registry = lower(v.registry), executor = lower(v.executor), s = book.strategy;
+  const known = new Set([book.registry, book.executor, ...book.assets, ...(s ? [s.executor, s.registry, s.venus, s.lista, s.vault] : [])]);
+  if (registry === executor || known.has(registry) || known.has(executor)) throw new MixPayloadError('strategyV2');
+  return { registry, executor };
 }
 
 function decodeOrNull<const Abi extends readonly unknown[]>(abi: Abi, data: Hex) {
@@ -260,11 +364,12 @@ export async function signMix(args: {
   onStage?: (stage: MixStage) => void;
   wait?: (ms: number) => Promise<void>;
 }): Promise<{ mixId: number; account: Address; portfolioId: number | null }> {
-  const payload = checkSigningPayload(args.payload);
+  const payload = checkSigningPayload(args.payload, mixCallBook(), args.wallet.address);
   const account = payload.account as Address;
   const wait = args.wait ?? sleep;
   args.onStage?.('sign');
   await assertEnrollTarget(payload.onchainId, args.picks);
+  await assertStrategyV2(payload.strategyV2, account);
   await waitForAccountCode((address) => readOnlyClient().getCode({ address }), account);
   const receipt = await sendSudoCalls({
     wallet: args.wallet,
