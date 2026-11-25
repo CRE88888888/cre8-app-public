@@ -339,6 +339,121 @@ test("routing v2 addresses are checked on-chain before signing: registry.executo
   await expect(assertStrategyV2(V2, ACCOUNT, USDT, chain({ executor: new Error("rpc down") }))).rejects.toThrow("consent.v2 unreadable");
 });
 
+// ---- 路由 v2 的補差額合約 AtpBorrowCashSwapper：地址依 chainId 釘在 App 裡，後端宣告的 `cashSwapper` 要就是它 --------------------
+const SWAPPER = "0x99811a1115b36f8310deadada818cae685360798";
+const USDC = "0xb887ca3379dc41f1155dd0cb1b2e3c1d85d17ed5", USD1 = "0xea13862cb4612d228ba89b4319feec60f05ab3ac", U = "0xc71e4efb5a36bd54ad8de9e9742bfa8fbd750875";
+const swBook = { ...seBook, cashSwapper: { address: SWAPPER, tokens: new Set([USDT.toLowerCase(), USDC, USD1, U]) } };
+const V2S = { ...V2, cashSwapper: SWAPPER };
+const swApprove = (token: string, spender = SWAPPER, amount?: bigint) => ({ to: token, data: approveData(spender, amount) });
+const swapperAbi = [
+  { type: "function", name: "topUp", stateMutability: "nonpayable", inputs: [{ type: "address" }, { type: "uint256" }, { type: "uint256" }, { type: "uint256" }], outputs: [] },
+  { type: "function", name: "cashOut", stateMutability: "nonpayable", inputs: [{ type: "address" }, { type: "uint256" }, { type: "uint256" }, { type: "uint256" }], outputs: [] },
+  { type: "function", name: "setPool", stateMutability: "nonpayable", inputs: [{ type: "address" }, { type: "address" }], outputs: [] },
+] as const;
+/** backend v2ReconsentCalls 帶上 swapperApprovals：重新同意的最後面是 USDT 與借款幣對 swapper 的核准（只補缺的）。 */
+const swTail = [...reconsent, swApprove(USDT), swApprove(USDC), swApprove(USD1), swApprove(U)];
+const withSwapper = (tail: { to: string; data: string }[], strategyV2: unknown = V2S, b: typeof swBook | typeof seBook = swBook) => withV2(tail, { strategyV2 }, OWNER, b as typeof seBook);
+
+test("routing v2 re-consent may approve USDT and the loan tokens to the pinned cash swapper when the backend declares it", () => {
+  const checked = withSwapper(swTail)();
+  expect(checked.calls).toHaveLength(CREATED.calls.length + swTail.length);
+  expect(checked.strategyV2).toEqual({ ...V2, cashSwapper: SWAPPER });
+  // 只補缺的那幾筆也可以；checksum 大小寫的宣告一樣認得。
+  expect(withSwapper([...reconsent, swApprove(USD1)])().strategyV2).toEqual({ ...V2, cashSwapper: SWAPPER });
+  expect(withSwapper([v2Policy(), swApprove(USDT)], { ...V2, cashSwapper: "0x99811a1115B36F8310deaDAda818cAE685360798" })().strategyV2).toEqual({ ...V2, cashSwapper: SWAPPER });
+  // 宣告了 swapper、但這次沒有核准給它：跟沒宣告時一樣，不多讀鏈。
+  expect(withSwapper(reconsent)().strategyV2).toEqual(V2);
+  // 沒宣告 `cashSwapper`（後端還沒帶這個欄位）：原本的重新同意照舊。
+  expect(withSwapper(reconsent, V2)().strategyV2).toEqual(V2);
+  // 宣告的 swapper 不是 App 釘住的、或這條鏈沒有釘：只要沒有核准給它，改比例不受影響。
+  expect(withSwapper(reconsent, { ...V2, cashSwapper: "0x00000000000000000000000000000000000000d1" })().strategyV2).toEqual(V2);
+  expect(withSwapper(reconsent, V2S, seBook)().strategyV2).toEqual(V2);
+});
+
+test("cash swapper approvals are refused unless the declared swapper is the pinned one, for USDT or a loan token, in full", () => {
+  const other = "0x00000000000000000000000000000000000000d1";
+  // 後端沒宣告 swapper：就算地址是對的也不簽。
+  expect(withSwapper(swTail, V2)).toThrow("consent.swapper");
+  // 宣告的不是 App 釘住的那個：核准給宣告的、或給釘住的，都不簽。
+  expect(withSwapper([...reconsent, swApprove(USDT, other)], { ...V2, cashSwapper: other })).toThrow("consent.swapper");
+  expect(withSwapper([...reconsent, swApprove(USDT)], { ...V2, cashSwapper: other })).toThrow("consent.swapper");
+  // 這條鏈沒有釘 swapper（主網還沒部署）：後端宣告什麼都不簽。
+  expect(withSwapper([...reconsent, swApprove(USDT)], V2S, seBook)).toThrow("consent.swapper");
+  expect(withSwapper([...reconsent, swApprove(USDC)], V2S, seBook)).toThrow("consent.");
+  // 只能是 USDT 與借款幣：投資組合資產不行。
+  expect(withSwapper([...reconsent, swApprove(NVDAB)])).toThrow("consent.asset");
+  expect(withSwapper([v2Policy(), swApprove(TSLAB)])).toThrow("consent.asset");
+  // 只認全額核准；同一個代幣不重複。
+  expect(withSwapper([...reconsent, swApprove(USDT, SWAPPER, 5n)])).toThrow("consent.spender");
+  expect(withSwapper([...swTail, swApprove(USDC)])).toThrow("consent.duplicate");
+  // 借款幣只能核准給 swapper：給 v2 executor、給別的地址都不簽。
+  expect(withSwapper([...reconsent, swApprove(USDC, V2.executor)])).toThrow("consent.spender");
+  expect(withSwapper([...reconsent, swApprove(USDC, other)])).toThrow("consent.spender");
+  expect(withSwapper([...reconsent, swApprove(USDT, other)])).toThrow("consent.spender");
+  // 借款幣上別的函式（轉帳）不簽。
+  expect(withSwapper([...reconsent, { to: USDC, data: transferData(SWAPPER, 1n) }])).toThrow("consent.to");
+  // 一定還是要有 setStrategyPolicy：只有核准不是重新同意。
+  expect(withSwapper([swApprove(USDT), swApprove(USDC)])).toThrow("consent.");
+});
+
+test("no call to the cash swapper itself is signed in a weight change: topUp, cashOut, setPool", () => {
+  const call = (functionName: "topUp" | "cashOut", to = SWAPPER) => ({ to, data: encodeFunctionData({ abi: swapperAbi, functionName, args: [USDC as `0x${string}`, 10n ** 18n, 10n ** 18n, 1_800_000_000n] }) });
+  const setPool = { to: SWAPPER, data: encodeFunctionData({ abi: swapperAbi, functionName: "setPool", args: [USDC as `0x${string}`, "0x000000000000000000000000000000000000dEaD"] }) };
+  for (const extra of [call("topUp"), call("cashOut"), setPool, { to: SWAPPER, data: approveData(V2.executor) }, delegate(SWAPPER, "setAuthorization", V2.executor)]) {
+    expect(withSwapper([...swTail, extra])).toThrow("consent.swapper");
+    // 沒宣告時也一樣不簽。
+    expect(withSwapper([...reconsent, extra], V2)).toThrow("consent.swapper");
+  }
+  // 宣告的 swapper 不是釘住的那個：給它的呼叫一樣不簽。
+  const other = "0x00000000000000000000000000000000000000d1";
+  expect(withSwapper([...reconsent, call("topUp", other)], { ...V2, cashSwapper: other })).toThrow("consent.swapper");
+});
+
+test("the declared cash swapper must be a third new address; the pinned swapper is never accepted as the v2 registry or executor", () => {
+  for (const cashSwapper of ["0x12", 7, {}, V2.registry, V2.executor, EXECUTOR, REGISTRY, SE.executor, SE.vault, NVDAB, USDT, USDC]) {
+    expect(withSwapper(swTail, { ...V2, cashSwapper })).toThrow("strategyV2");
+  }
+  // 把釘住的 swapper（帳戶之後會核准 USDT 給它）或借款幣宣告成 v2 的 executor／registry：不簽。
+  for (const strategyV2 of [{ registry: V2.registry, executor: SWAPPER }, { registry: SWAPPER, executor: V2.executor }, { registry: V2.registry, executor: USDC }, { registry: USD1, executor: V2.executor }]) {
+    expect(withSwapper(reconsent, strategyV2)).toThrow("strategyV2");
+  }
+  // null 當成沒宣告。
+  expect(withSwapper(reconsent, { ...V2, cashSwapper: null })().strategyV2).toEqual(V2);
+});
+
+test("the cash swapper is checked on-chain before signing: its executor(), borrowRegistry() and usdt() are the set already verified", async () => {
+  const chain = (over: Partial<Record<"executor" | "borrowRegistry" | "usdt", unknown>> = {}): MixChainRead => async (call) => {
+    if (call.functionName === "allowance") return 2n ** 256n - 1n;
+    if (call.address === V2.registry) { expect(call.functionName).toBe("executor"); return "0x494C106498e8221D3f72474f36995C191ACf6bB5"; }
+    expect(call.address).toBe(SWAPPER);
+    const values: Record<string, unknown> = { executor: "0x494C106498e8221D3f72474f36995C191ACf6bB5", borrowRegistry: "0x7eae73a76Ff2359fE1aB059A77Dd36840A32559E", usdt: USDT, ...over };
+    const value = values[call.functionName];
+    if (value instanceof Error) throw value;
+    return value;
+  };
+  const checked = { ...V2, cashSwapper: SWAPPER };
+  await assertStrategyV2(checked, ACCOUNT, USDT, chain());
+  // 沒有核准給 swapper 的那一組不讀 swapper。
+  await assertStrategyV2(V2, ACCOUNT, USDT, async (call) => { if (call.address === SWAPPER) throw new Error("must not read the swapper"); return chain()(call); });
+  // swapper 綁的是別的 executor／registry（換了 v2 合約組、App 還釘著舊的），或用的不是地址簿的 USDT。
+  await expect(assertStrategyV2(checked, ACCOUNT, USDT, chain({ executor: "0x000000000000000000000000000000000000dEaD" }))).rejects.toThrow("consent.v2 swapper");
+  await expect(assertStrategyV2(checked, ACCOUNT, USDT, chain({ borrowRegistry: "0x000000000000000000000000000000000000dEaD" }))).rejects.toThrow("consent.v2 swapper");
+  await expect(assertStrategyV2(checked, ACCOUNT, USDT, chain({ usdt: USDC }))).rejects.toThrow("consent.v2 swapper");
+  await expect(assertStrategyV2(checked, ACCOUNT, USDT, chain({ usdt: undefined }))).rejects.toThrow("consent.v2 swapper");
+  // 讀不到就不簽。
+  await expect(assertStrategyV2(checked, ACCOUNT, USDT, chain({ borrowRegistry: new Error("rpc down") }))).rejects.toThrow("consent.v2 unreadable");
+});
+
+test("the cash swapper is pinned for chain 97 only: USDT from the address book plus USDC, USD1 and U", async () => {
+  const { CHAIN } = await import("../src/lib/kernel");
+  const b = mixCallBook();
+  if (CHAIN.id !== 97) { expect(b.cashSwapper).toBeUndefined(); return; }
+  expect(b.cashSwapper?.address).toBe(SWAPPER);
+  expect([...(b.cashSwapper?.tokens ?? [])].sort()).toEqual([CHAIN.contracts!.usdt.toLowerCase(), USDC, USD1, U].sort());
+  // 釘住的地址不跟 App 已知的合約或資產撞（否則宣告會被當成已知地址擋下）。
+  for (const a of [SWAPPER, USDC, USD1, U]) expect(b.assets.has(a) || a === b.registry || a === b.executor).toBe(false);
+});
+
 test("the chain 97 call book carries the 31 yield strategy markets (leveraged ones excluded)", () => {
   const b = mixCallBook();
   if (b.strategy === undefined) return; // built for another chain

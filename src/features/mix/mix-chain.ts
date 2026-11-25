@@ -12,6 +12,8 @@
  * - 帳戶在加息策略路由 v2 時，重新同意是 v2 的呼叫（backend `v2ReconsentCalls`）。v2 的地址不在 App 裡，由後端在簽名資料
  *   宣告（`strategyV2: { registry, executor }`），App 仍自己核對形狀與參數，並在鏈上核對那兩個地址（見 `checkStrategyConsentV2`、
  *   `assertStrategyV2`）；
+ * - 路由 v2 的補差額合約 AtpBorrowCashSwapper：後端多宣告 `strategyV2.cashSwapper` 時，重新同意可以帶「USDT 與借款幣對它的全額核准」。
+ *   它的地址依 chainId 釘在 App 裡（`CASH_SWAPPER`），宣告的不是釘住的那個、或這條鏈沒有釘，就不簽；給 swapper 本身的呼叫一律不簽；
  * - 其他函式一律不簽。
  * 不重組 calls——sponsor 只代付後端存下的那一組。上鏈後 `POST /me/mixes/:id/confirm`；確認不到也沒關係，
  * 後端的排程與明細查詢會自己找 Enrolled 對帳。
@@ -52,7 +54,9 @@ export class MixPayloadError extends Error {
  * 資產＝測試網地址簿的全部代幣（後端 My mix 收的 103 個都在裡面）＋目錄 40 個＋USDT。
  * 只認目錄 40 個時，選了目錄外的資產（例如 AMD）後端照樣建好，App 卻在簽名前擋下，一直顯示「組合沒建好」。
  */
-export type MixCallBook = { registry: string; executor: string; assets: Set<string>; strategy?: MixStrategyBook };
+export type MixCallBook = { registry: string; executor: string; assets: Set<string>; strategy?: MixStrategyBook; cashSwapper?: MixCashSwapperBook };
+/** 路由 v2 的補差額合約（這條鏈釘住的地址），以及可以核准給它的代幣：USDT 與借款幣。全部小寫。 */
+export type MixCashSwapperBook = { address: string; tokens: Set<string> };
 /** 加息策略（chain 97）同意用的地址：AtpBorrowExecutor、AtpBorrowRegistry、Venus comptroller、Lista Moolah、策略 vault，以及可抵押資產（市場 id → 代幣）。 */
 export type MixStrategyBook = { executor: string; registry: string; venus: string; lista: string; vault: string; usdt: string;
   markets: ReadonlyMap<string, { token: string; protocol: 'venus' | 'lista' }> };
@@ -84,18 +88,30 @@ const STRATEGY_EARN_97 = {
   ] as const,
 } as const;
 
+/**
+ * 路由 v2 的補差額合約 AtpBorrowCashSwapper（規格 §17）：帳戶的 USDT 換成它欠的借款幣補進策略盒（`topUp`）、結清後換回 USDT（`cashOut`）。
+ * 地址依 chainId 釘在這裡（cre8-contracts `deployments/testnet-97.borrowV2.json` 的 `cashSwapper.address` 與 `loanTokens`），不採信後端宣告的地址：
+ * 後端宣告的 `strategyV2.cashSwapper` 必須就是這裡的地址。這條鏈沒有釘（主網還沒部署）就不簽任何跟 swapper 有關的呼叫。
+ * `loanTokens`：USDT 以外的借款幣（USDC、USD1、U）；USDT 用 App 自己的地址簿。換了 v2 合約組就有新的 swapper，要改這裡。
+ */
+const CASH_SWAPPER: Readonly<Record<number, { address: string; loanTokens: readonly string[] }>> = {
+  97: { address: '0x99811a1115b36f8310deadada818cae685360798',
+    loanTokens: ['0xb887ca3379dc41f1155dd0cb1b2e3c1d85d17ed5', '0xea13862cb4612d228ba89b4319feec60f05ab3ac', '0xc71e4efb5a36bd54ad8de9e9742bfa8fbd750875'] },
+};
+
 export function mixCallBook(): MixCallBook {
   const contracts = CHAIN.contracts;
   const testnet = CHAIN.id === TESTNET_97.chainId;
   const book = testnet ? Object.values(TESTNET_97.assets as Record<string, string>) : [];
   const tokens = TESTNET_97.assets as Record<string, string | undefined>;
-  const S = STRATEGY_EARN_97;
+  const S = STRATEGY_EARN_97, swapper = CASH_SWAPPER[CHAIN.id];
   return {
     registry: lower(contracts?.registry ?? ''),
     executor: lower(contracts?.executor ?? ''),
     assets: new Set([...(contracts === null ? [] : [contracts.usdt]), ...book, ...MIX_CATALOG.map((asset) => asset.address)].map(lower)),
     ...(testnet && contracts !== null ? { strategy: { executor: S.executor, registry: S.registry, venus: S.venus, lista: S.lista, vault: S.vault, usdt: lower(contracts.usdt),
       markets: new Map(S.markets.flatMap(([symbol, id, protocol]) => tokens[symbol] ? [[id, { token: lower(tokens[symbol] as string), protocol }] as const] : [])) } } : {}),
+    ...(swapper !== undefined && contracts !== null ? { cashSwapper: { address: swapper.address, tokens: new Set([lower(contracts.usdt), ...swapper.loanTokens]) } } : {}),
   };
 }
 
@@ -142,8 +158,11 @@ function checkStrategyConsent(calls: readonly { to: string; data: Hex }[], book:
   }
 }
 
-/** 路由 v2 的地址（小寫）：後端在簽名資料裡宣告的 registry 與 executor；`venus`／`lista` 是這次 calls 裡委託的借貸場所。 */
-export type CheckedStrategyV2 = { registry: string; executor: string; venus?: string; lista?: string };
+/**
+ * 路由 v2 的地址（小寫）：後端在簽名資料裡宣告的 registry 與 executor；`venus`／`lista` 是這次 calls 裡委託的借貸場所；
+ * `cashSwapper`：這次 calls 裡有核准給補差額合約（已經是 App 釘住的那個地址）。
+ */
+export type CheckedStrategyV2 = { registry: string; executor: string; venus?: string; lista?: string; cashSwapper?: string };
 
 const STRATEGY_V2_ABI = [
   { type: 'function', name: 'setStrategyPolicy', stateMutability: 'nonpayable', inputs: [{ name: 'maxDebt', type: 'uint256' }, { name: 'rewardRecipient', type: 'address' }, { name: 'enabled', type: 'bool' }], outputs: [] },
@@ -151,20 +170,32 @@ const STRATEGY_V2_ABI = [
   { type: 'function', name: 'venusComptroller', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'moolah', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const;
+/** AtpBorrowCashSwapper 自己說的綁定：路由 v2 的 executor、registry，以及它用的 USDT。 */
+const CASH_SWAPPER_ABI = [
+  { type: 'function', name: 'executor', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'borrowRegistry', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'usdt', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+] as const;
 
 /**
  * 路由 v2 的重新同意（backend `v2ReconsentCalls`／`v2ConsentCalls`）。地址是後端宣告的，所以這裡只認三種呼叫，其他一律不簽：
  * - 宣告的 registry 上一筆 `setStrategyPolicy(上限 > 0, 獎勵收款人＝這個錢包, true)`，剛好一筆；
  * - 地址簿裡的資產對宣告的 executor 的全額核准（不重複）；
  * - 借貸場所的委託 `updateDelegate(executor, true)`／`setAuthorization(executor, true)`，各最多一筆。
- * 宣告的地址本身、以及委託的場所，簽名前再由 `assertStrategyV2` 在鏈上核對。v1 與 v2 的呼叫不能混在同一組。
+ * 後端另外宣告了 `cashSwapper`、而且它就是 App 在這條鏈釘住的補差額合約（`book.cashSwapper`）時，再多認一種：
+ * - USDT 或借款幣對它的全額核准（不重複）。別的代幣、沒宣告、宣告的不是釘住的那個、這條鏈沒有釘：不簽。
+ * 給 swapper 本身的呼叫（`topUp`、`cashOut`、`setPool`…）不屬於改比例，一律不簽。
+ * 宣告的地址本身、委託的場所、swapper 的綁定，簽名前再由 `assertStrategyV2` 在鏈上核對。v1 與 v2 的呼叫不能混在同一組。
  */
-function checkStrategyConsentV2(calls: readonly { to: string; data: Hex }[], book: MixCallBook, v2: { registry: string; executor: string }, owner: string | undefined): CheckedStrategyV2 {
+function checkStrategyConsentV2(calls: readonly { to: string; data: Hex }[], book: MixCallBook, v2: DeclaredStrategyV2, owner: string | undefined): CheckedStrategyV2 {
   if (owner === undefined || !ADDRESS.test(owner)) throw new MixPayloadError('consent.owner');
-  const seen = new Set<string>(), out: CheckedStrategyV2 = { ...v2 };
+  const pin = book.cashSwapper, swapper = pin !== undefined && v2.cashSwapper === pin.address ? pin : undefined;
+  const isSwapper = (address: string) => address === v2.cashSwapper || address === pin?.address;
+  const seen = new Set<string>(), out: CheckedStrategyV2 = { registry: v2.registry, executor: v2.executor };
   const once = (key: string) => { if (seen.has(key)) throw new MixPayloadError('consent.duplicate'); seen.add(key); };
   for (const c of calls) {
     const to = lower(c.to);
+    if (isSwapper(to)) throw new MixPayloadError('consent.swapper');
     if (to === v2.registry) {
       const d = decodeOrNull(STRATEGY_V2_ABI, c.data);
       if (d?.functionName !== 'setStrategyPolicy') throw new MixPayloadError('consent.function');
@@ -172,11 +203,20 @@ function checkStrategyConsentV2(calls: readonly { to: string; data: Hex }[], boo
       if (maxDebt <= 0n || enabled !== true) throw new MixPayloadError('consent.policy');
       if (lower(recipient) !== lower(owner)) throw new MixPayloadError('consent.owner');
       once('policy');
-    } else if (book.assets.has(to)) {
+    } else if (book.assets.has(to) || pin?.tokens.has(to)) {
       const d = decodeOrNull(erc20Abi, c.data);
       if (d?.functionName !== 'approve') throw new MixPayloadError('consent.to');
       const [spender, amount] = d.args as readonly [string, bigint];
-      if (lower(spender) !== v2.executor || amount !== maxUint256) throw new MixPayloadError('consent.spender');
+      const who = lower(spender);
+      if (isSwapper(who)) {
+        // 補差額合約：宣告的就是釘住的那個才認，而且只能是 USDT 與借款幣。
+        if (swapper === undefined || who !== swapper.address) throw new MixPayloadError('consent.swapper');
+        if (!swapper.tokens.has(to)) throw new MixPayloadError('consent.asset');
+        if (amount !== maxUint256) throw new MixPayloadError('consent.spender');
+        once('swapper:' + to); out.cashSwapper = swapper.address;
+        continue;
+      }
+      if (who !== v2.executor || amount !== maxUint256 || !book.assets.has(to)) throw new MixPayloadError('consent.spender');
       once('approve:' + to);
     } else {
       const d = decodeOrNull(STRATEGY_CONSENT_ABI, c.data);
@@ -199,19 +239,23 @@ export type MixChainRead = (call: { address: Address; abi: readonly unknown[]; f
  * - 宣告的 registry 自己說的 `executor()` 就是宣告的 executor；委託的場所就是它的 `venusComptroller()`／`moolah()`；
  * - 這個帳戶已經核准過這個 executor 動用 USDT（開啟加息時的同意就有這一筆；USDT 的地址在 App 的地址簿裡，假不了）。
  *   所以改比例這一筆不會把資產交給帳戶沒授權過的新對象，只會延續既有的授權。
+ * - 有核准給補差額合約時（地址已經是 App 釘住的）：它自己說的 `executor()`、`borrowRegistry()` 就是上面核對過的那一組，
+ *   `usdt()` 就是地址簿的 USDT。換了 v2 合約組而 App 還釘著舊 swapper 時會在這裡擋下。
  */
 export async function assertStrategyV2(v2: CheckedStrategyV2 | undefined, account: string, usdt: string | undefined = CHAIN.contracts?.usdt,
   read: MixChainRead = (call) => readOnlyClient().readContract(call as never)): Promise<void> {
   if (v2 === undefined) return;
   if (usdt === undefined) throw new MixPayloadError('address book');
   const registry = v2.registry as Address;
-  let executor: unknown, allowance: unknown, venus: unknown, lista: unknown;
+  const swapper = v2.cashSwapper as Address | undefined;
+  let executor: unknown, allowance: unknown, venus: unknown, lista: unknown, bound: unknown[] | null;
   try {
-    [executor, allowance, venus, lista] = await Promise.all([
+    [executor, allowance, venus, lista, bound] = await Promise.all([
       read({ address: registry, abi: STRATEGY_V2_ABI, functionName: 'executor' }),
       read({ address: usdt as Address, abi: erc20Abi, functionName: 'allowance', args: [account, v2.executor] }),
       v2.venus === undefined ? null : read({ address: registry, abi: STRATEGY_V2_ABI, functionName: 'venusComptroller' }),
       v2.lista === undefined ? null : read({ address: registry, abi: STRATEGY_V2_ABI, functionName: 'moolah' }),
+      swapper === undefined ? null : Promise.all((['executor', 'borrowRegistry', 'usdt'] as const).map((functionName) => read({ address: swapper, abi: CASH_SWAPPER_ABI, functionName }))),
     ]);
   } catch {
     throw new MixPayloadError('consent.v2 unreadable');
@@ -220,6 +264,7 @@ export async function assertStrategyV2(v2: CheckedStrategyV2 | undefined, accoun
   if (typeof allowance !== 'bigint' || allowance <= 0n) throw new MixPayloadError('consent.v2 allowance');
   if (v2.venus !== undefined && (typeof venus !== 'string' || lower(venus) !== v2.venus)) throw new MixPayloadError('consent.v2 venue');
   if (v2.lista !== undefined && (typeof lista !== 'string' || lower(lista) !== v2.lista)) throw new MixPayloadError('consent.v2 venue');
+  if (bound !== null && [v2.executor, v2.registry, lower(usdt)].some((want, i) => typeof bound[i] !== 'string' || lower(bound[i] as string) !== want)) throw new MixPayloadError('consent.v2 swapper');
 }
 
 /**
@@ -286,15 +331,27 @@ export function checkSigningPayload(body: unknown, book: MixCallBook = mixCallBo
   return { ...rest, onchainId };
 }
 
-/** 後端宣告的 v2 地址：兩個不同的地址，而且不是 App 已知的任何合約或資產（AtpRegistry、AtpExecutor、v1 的加息合約、代幣）。 */
-function declaredStrategyV2(value: unknown, book: MixCallBook): { registry: string; executor: string } | undefined {
+/** 後端宣告的 v2 地址（小寫）。`cashSwapper`：補差額合約，沒宣告就沒有這一項。 */
+type DeclaredStrategyV2 = { registry: string; executor: string; cashSwapper?: string };
+
+/**
+ * 後端宣告的 v2 地址：兩個不同的地址，而且不是 App 已知的任何合約或資產（AtpRegistry、AtpExecutor、v1 的加息合約、代幣、
+ * 釘住的補差額合約與借款幣）。`cashSwapper` 可以不宣告；宣告了就要是第三個不同的地址，同樣不能是已知的合約或代幣。
+ * 它是不是 App 釘住的那個，到 `checkStrategyConsentV2` 真的有核准給它時才要求（沒用到就不影響改比例）。
+ */
+function declaredStrategyV2(value: unknown, book: MixCallBook): DeclaredStrategyV2 | undefined {
   if (value === undefined || value === null) return undefined;
   const v = value as Record<string, unknown>;
   if (typeof v !== 'object' || typeof v.registry !== 'string' || !ADDRESS.test(v.registry) || typeof v.executor !== 'string' || !ADDRESS.test(v.executor)) throw new MixPayloadError('strategyV2');
-  const registry = lower(v.registry), executor = lower(v.executor), s = book.strategy;
+  const registry = lower(v.registry), executor = lower(v.executor), s = book.strategy, pin = book.cashSwapper;
   const known = new Set([book.registry, book.executor, ...book.assets, ...(s ? [s.executor, s.registry, s.venus, s.lista, s.vault] : [])]);
-  if (registry === executor || known.has(registry) || known.has(executor)) throw new MixPayloadError('strategyV2');
-  return { registry, executor };
+  const pinned = new Set(pin ? [pin.address, ...pin.tokens] : []);
+  if (registry === executor || [registry, executor].some((a) => known.has(a) || pinned.has(a))) throw new MixPayloadError('strategyV2');
+  if (v.cashSwapper === undefined || v.cashSwapper === null) return { registry, executor };
+  if (typeof v.cashSwapper !== 'string' || !ADDRESS.test(v.cashSwapper)) throw new MixPayloadError('strategyV2');
+  const cashSwapper = lower(v.cashSwapper);
+  if (cashSwapper === registry || cashSwapper === executor || known.has(cashSwapper) || pin?.tokens.has(cashSwapper)) throw new MixPayloadError('strategyV2');
+  return { registry, executor, cashSwapper };
 }
 
 function decodeOrNull<const Abi extends readonly unknown[]>(abi: Abi, data: Hex) {

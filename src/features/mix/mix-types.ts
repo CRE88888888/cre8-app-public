@@ -105,8 +105,8 @@ export type MixSigningPayload = {
   message: string;
   name?: string;
   shareCode?: string;
-  /** 加息策略路由 v2 的地址（後端宣告；只有 v2 對象內的 owner 才有）。簽名前核對用，見 `mix-chain.ts`。 */
-  strategyV2?: { registry: Address; executor: Address };
+  /** 加息策略路由 v2 的地址（後端宣告；只有 v2 對象內的 owner 才有）。簽名前核對用，見 `mix-chain.ts`。`cashSwapper`：補差額合約，可能沒有。 */
+  strategyV2?: { registry: Address; executor: Address; cashSwapper?: Address };
 };
 
 export type MixApiError = { code: string; message: string };
