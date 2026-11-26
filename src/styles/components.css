@@ -1,0 +1,1353 @@
+/* 版面 */
+.page {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: var(--sp-6) var(--sp-5) var(--sp-7);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.spread {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+/* 卡片 */
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: var(--sp-5);
+  box-shadow: var(--shadow);
+}
+
+.card--flat {
+  box-shadow: none;
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.lead {
+  margin: 10px 0 0;
+  color: var(--ink-2);
+  max-width: 70ch;
+}
+
+/* 同功能按鈕共用 DESIGN.md 尺寸；兩種既有 class 拼法都保留。 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: 46px;
+  height: auto;
+  padding: 0 22px;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  background: var(--ink);
+  color: var(--snow);
+  font: 500 15px/1.3 var(--sans);
+  letter-spacing: 0;
+  text-transform: none;
+  box-shadow: none;
+  cursor: pointer;
+  transition: background .14s ease, border-color .14s ease, color .14s ease;
+}
+.btn:hover:not(:disabled) { background: var(--deep); border-color: var(--deep); color: var(--snow); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:is(.ghost, .light, .btn--ghost) { background: transparent; color: var(--ink); border-color: var(--hair-2); }
+.btn:is(.ghost, .light, .btn--ghost):hover:not(:disabled) { background: var(--snow); border-color: var(--ink); color: var(--ink); }
+.btn:is(.sm, .btn--sm) { min-height: 38px; padding: 0 16px; font-size: 14px; }
+.btn:disabled { background: var(--snow); color: var(--slate); border-color: var(--hair); opacity: 1; cursor: not-allowed; }
+@media (pointer: coarse) { .btn:is(.sm, .btn--sm) { min-height: 40px; } }
+
+/* 表單 */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 設計稿的欄位用 `> span` 當標籤、`> small` 當提示（見 components/ui.tsx 的 Field）。 */
+.field > span {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.field > small {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.field input,
+.field select {
+  height: 40px;
+  width: 100%;
+  min-width: 0;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--hair-2);
+  border-radius: var(--r-sm);
+  background: var(--white);
+}
+
+.field input:focus-visible,
+.field select:focus-visible {
+  outline: none;
+  border-color: var(--ink);
+}
+
+.field__hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* 表格 */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0 var(--sp-3) var(--sp-2);
+  border-bottom: 1px solid var(--hair);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: var(--sp-3);
+  border-bottom: 1px solid var(--hair);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.table .num {
+  text-align: right;
+  font-family: var(--mono);
+}
+
+/* 語意 */
+.pos {
+  color: var(--pos);
+}
+
+.neg {
+  color: var(--neg);
+}
+
+.warn {
+  color: var(--warn);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/*
+ * badge：狀態用「色點＋文字」，不用外框小方塊。外框＋等寬字的標籤一多，畫面就像模板；
+ * 色點已足夠分辨狀態，文字本身仍寫出狀態（不只靠顏色）。
+ */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--steel);
+  font: 500 13px/1.3 var(--sans);
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.badge::before {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+
+.badge--ok { color: var(--pos); }
+.badge--warn { color: var(--warn); }
+.badge--bad { color: var(--neg); }
+
+/* 提示區塊 */
+.note {
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hair);
+  background: var(--white);
+  padding: var(--sp-3) var(--sp-4);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+
+.note--bad {
+  border-color: rgba(178, 59, 59, 0.35);
+  background: rgba(178, 59, 59, 0.06);
+  color: var(--neg);
+}
+
+.note--warn {
+  border-color: rgba(138, 90, 31, 0.35);
+  background: rgba(138, 90, 31, 0.06);
+  color: var(--warn);
+}
+
+.note strong {
+  font-weight: 600;
+}
+
+/* 可展開的技術細節（後端原文）。主要訊息在上面，這裡預設收起來。 */
+.tech-details {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.tech-details summary {
+  width: fit-content;
+  min-height: 24px;
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+/* 手機收據整塊置中：展開鈕跟著置中，原文仍靠左。 */
+.app-ticket-result .tech-details summary {
+  margin-inline: auto;
+}
+
+.tech-details summary:hover,
+.tech-details[open] summary {
+  opacity: 1;
+}
+
+.tech-details pre {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: rgba(0, 0, 0, 0.05);
+  color: inherit;
+  font: 400 12px/1.5 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 180px;
+  overflow: auto;
+}
+
+/* 鍵值列 */
+.kv {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px var(--sp-4);
+  font-size: 13px;
+}
+
+.kv dt {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.kv dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 頁首 */
+.topbar {
+  border-bottom: 1px solid var(--hair);
+  background: var(--bg-2);
+}
+
+.topbar__inner {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: var(--sp-3) var(--sp-5);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+}
+
+.brand {
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* 載入中 */
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--hair-2);
+  border-top-color: var(--ink);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 空狀態 */
+.empty {
+  padding: var(--sp-7) var(--sp-4);
+  text-align: center;
+  color: var(--muted);
+}
+
+.linkish {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------------------
+   錢包選單（取代原本的 /login 整頁）
+   刻意寫在這裡而不是 design.css：design.css 是從原站複製的，我們不往裡面加東西。
+--------------------------------------------------------------------------- */
+
+.wallet-menu {
+  position: relative;
+}
+
+.wallet-menu__panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 80;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 18px;
+  /*
+   * iOS 的選單：白底、細到幾乎看不見的邊、柔和的陰影。
+   * 不用半透明＋模糊：標頭本身是玻璃（有 backdrop-filter），選單在它裡面時模糊不會生效，只剩下透出來的字。
+   */
+  background: var(--white, #fff);
+  border: 0;
+  box-shadow: 0 18px 50px rgba(10, 18, 26, 0.16), 0 0 0 0.5px rgba(10, 18, 26, 0.08);
+  text-align: left;
+}
+
+/*
+ * 底部面板（Account、Add money、下單…）後面的遮罩：跟登入頁同一種，變暗並模糊。
+ * shadcn 的 Sheet 預設是 50% 黑，太重。
+ */
+[data-slot="sheet-overlay"] {
+  background: rgba(10, 18, 26, 0.34) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  [data-slot="sheet-overlay"] { background: rgba(10, 18, 26, 0.55) !important; -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+.wallet-menu--inline > .btn {
+  width: 100%;
+}
+.wallet-menu--inline .wallet-menu__panel {
+  position: static;
+  width: 100%;
+  margin-top: 12px;
+  box-shadow: none;
+}
+
+.wallet-menu__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.wallet-menu__hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted, #5a7286);
+}
+
+.wallet-menu__addr {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.wallet-menu__status {
+  margin: 0;
+  font-size: 12px;
+  color: var(--pos, #1f7a4d);
+}
+
+/*
+ * 選單裡的每一列：iOS 的分組列（淺灰底、沒有框線、44px 高），跟 Account 面板的列（.profile-row）同一種語言。
+ * 按下去變深一階當作回饋，不用框線變色。
+ */
+.wallet-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--app-grouped, #f6f7f8);
+  font: 500 14px/1.3 var(--sans);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color .12s var(--ease, ease);
+}
+
+.wallet-menu__item:hover {
+  background: var(--hair, #e3e9ee);
+}
+
+.wallet-menu__item:active {
+  background: var(--hair-2, #d0d9e0);
+}
+
+.wallet-menu__item img {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+}
+
+/* 次要動作：iOS 的文字按鈕（操作色、沒有底線），按下去變淡。 */
+.wallet-menu__link {
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: 500 14px/1.3 var(--sans);
+  color: var(--deep, #1f3345);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.wallet-menu__link:hover { color: var(--ink); }
+.wallet-menu__link:active { opacity: .6; }
+.wallet-menu__link:disabled { color: var(--slate); cursor: default; }
+
+/* Privy 登入（cre8-app#57）：已綁的登入方式。其餘都用上面既有的 .wallet-menu__* 樣式。 */
+.wallet-menu__methods {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted, #5a7286);
+}
+
+.wallet-menu__methods li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wallet-menu__method-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.wallet-menu .wallet-warning {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* 已登入但主人錢包沒連著（只能看）：就是全站橫幅（.platform-banner），裡面的動作是 .link-button。 */
+.owner-wallet-banner .link-button {
+  font-weight: 600;
+}
+
+/* 頁面上的「Sign in」：長得像連結，但動作是叫出標頭的選單。 */
+.link-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.wallet-menu__walletconnect {
+  min-height: 44px;
+  border-color: transparent;
+  background: var(--app-grouped);
+  color: var(--deep);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.wallet-menu__walletconnect > span { flex: 1; }
+
+.wallet-connect-qr { align-self: stretch; }
+.wallet-connect-qr summary { min-height: 44px; align-content: center; cursor: pointer; font-size: 13px; }
+.wallet-connect-qr img { display: block; max-width: 100%; height: auto; margin: 4px auto; }
+
+@media (max-width: 719px) {
+  .wallet-menu__panel { max-width: calc(100vw - 32px); }
+  .wallet-menu__item { min-height: 44px; }
+}
+
+/*
+ * 還沒開放的功能（cre8-app#58）。開關在 src/lib/feature-flags.ts。
+ *
+ * 樣式沿用既有的三樣東西，不另外發明：
+ *   - 標記：`.badge`（小圓點＋文字）。
+ *   - 可用的列：與 `.wallet-menu__item` 相同的細線框。
+ *   - 不能用的列：與停用的 `.btn` 相同（淺灰底、灰字、沒有邊框）。
+ */
+.feature-badge {
+  flex: none;
+}
+
+.feature-locked__row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-height: 76px;
+  padding: 16px 18px;
+  border: 0;
+  background: var(--app-grouped, #f6f7f8);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+}
+
+/* 還不能用的：同一張卡片，字與圖示變淡，標記保持清楚。 */
+.feature-locked:not([data-state='on']) .feature-locked__row {
+  cursor: not-allowed;
+}
+
+.feature-locked:not([data-state='on']) :is(.feature-locked__title b, .feature-locked__text small, .feature-locked__icon) {
+  opacity: 0.5;
+}
+
+.feature-locked__text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.feature-locked__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.feature-locked__title b {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.feature-locked__text small {
+  font-size: 13px;
+  color: var(--steel, #5a7286);
+}
+
+.feature-locked__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: var(--ink);
+}
+
+/* 列裡的按鈕（例如測試網的 Claim）：靠右、照內容寬。下單面板會把 .btn 撐成整排，這裡要蓋回來。 */
+:is(#root, body) .feature-locked__row > .btn {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 88px;
+  margin: 0;
+}
+
+/* 能點的列（測試網 Test USDT → 基金列表）：同一張卡片，連結不畫底線，滑過時底色深一點。 */
+a.feature-locked__row--link { color: var(--ink); text-decoration: none; cursor: pointer; }
+a.feature-locked__row--link:hover { background: var(--hair, #e6e9ec); }
+
+.feature-locked__note {
+  margin: 8px 4px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted, #5a7286);
+}
+
+.funding-methods {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.funding-methods__title {
+  margin: 0 0 2px;
+  font: 600 13px/1.4 var(--sans);
+  color: var(--ink);
+}
+
+.funding-methods--ticket {
+  margin: 16px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--hair, #d8e3ec);
+}
+
+.funding-methods--sheet {
+  margin: 0;
+}
+
+/*
+ * 登入頁（Privy 模式，components/SignInScreen.tsx）。使用者選的 A：iOS 底部面板。
+ * 手機：從下面滑上來的面板，後面的頁面變暗並模糊。桌機：置中的大圓角卡片。
+ * 按鈕是膠囊（形狀登記在 system.css 的 app-shapes），Google 白底細框、X 黑底、email 與錢包淺灰。
+ */
+.signin-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  font-family: var(--app-native-font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif);
+}
+
+/* 登入頁裡的字一律用系統字體（iOS 上是 SF Pro）；驗證碼除外。 */
+#root .signin-screen :is(h2, p, .btn, .field > span, .field input:not(.signin-screen__code), .signin-screen__text, .signin-last) {
+  font-family: inherit;
+}
+
+.signin-screen__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 18, 26, 0.34);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+  animation: signin-fade 0.24s ease-out;
+}
+
+.signin-screen__card {
+  position: relative;
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 32px 24px 20px;
+  background: var(--white, #fff);
+  box-shadow: 0 30px 80px rgba(10, 18, 26, 0.22), 0 0 0 0.5px rgba(10, 18, 26, 0.06);
+  animation: signin-pop 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes signin-fade { from { opacity: 0; } }
+@keyframes signin-pop { from { opacity: 0; transform: translateY(12px) scale(0.98); } }
+@keyframes signin-rise { from { transform: translateY(100%); } }
+
+.signin-screen__head {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  text-align: left;
+}
+
+.signin-screen__head img {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 10px;
+}
+
+.signin-screen__head h2 {
+  margin: 0;
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.1;
+  letter-spacing: -0.022em;
+  color: var(--ink);
+}
+
+.signin-screen__head p {
+  margin: 0;
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--steel);
+}
+
+.signin-screen__options {
+  display: grid;
+  gap: 10px;
+}
+
+/*
+ * 膠囊按鈕：56px、17px 半粗體（iOS 的按鈕字級）。
+ * 選擇器前面的 `html body` 與重複的 `.btn.btn` 只是為了蓋過 system.css 全站按鈕規則的權重。
+ */
+html body #root .signin-screen .btn.btn {
+  position: relative;
+  min-height: 56px;
+  gap: 10px;
+  padding: 0 22px;
+  border: 0;
+  font-weight: 600;
+  font-size: 17px;
+  line-height: 1;
+  transition: background-color 0.12s ease, transform 0.32s var(--spring);
+}
+
+html body #root .signin-screen .btn.btn:active:not(:disabled) { transform: scale(var(--press-scale)); transition-duration: var(--press-in); }
+
+/* 主要動作（Send code、Sign in）與 X：實心。X 依它的品牌規範用純黑。 */
+html body #root .signin-screen .btn.btn:not(.ghost) { background: var(--ink); color: var(--white); }
+html body #root .signin-screen .btn.btn:not(.ghost):hover:not(:disabled) { background: var(--deep); }
+html body #root .signin-screen .btn.btn[data-method='x'] { background: #000; color: #fff; }
+html body #root .signin-screen .btn.btn[data-method='x']:hover:not(:disabled) { background: #1d1d1f; }
+
+/* Google 依它的品牌規範：白底細框。 */
+html body #root .signin-screen .btn.btn[data-method='google'] {
+  background: var(--white);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px rgba(12, 23, 34, 0.16);
+}
+html body #root .signin-screen .btn.btn[data-method='google']:hover:not(:disabled) { background: var(--app-grouped, #f6f7f8); }
+
+/* email、錢包：淺灰。 */
+html body #root .signin-screen .btn.btn.ghost:not([data-method='google']) { background: #f1f3f5; color: var(--ink); }
+html body #root .signin-screen .btn.btn.ghost:not([data-method='google']):hover:not(:disabled) { background: #e7eaee; }
+
+html body #root .signin-screen .btn.btn:disabled { opacity: 0.5; }
+
+
+/*
+ * 「Last used」：壓在按鈕右上緣的小膠囊標籤（不擠進按鈕裡，窄螢幕上不會跟按鈕的字撞在一起）。
+ * 白底細框，在白、黑、淺灰三種按鈕上都看得清楚。
+ */
+.signin-last {
+  position: absolute;
+  top: -9px;
+  right: 18px;
+  padding: 3px 9px;
+  background: var(--white, #fff);
+  box-shadow: 0 0 0 1px rgba(12, 23, 34, 0.14), 0 2px 6px rgba(12, 23, 34, 0.08);
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 11px;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+}
+
+/* 輸入框：iOS 的分組欄位（淺灰底、沒有框線、17px 一般字體）。 */
+#root .signin-screen .field > span {
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 1.3;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--steel);
+}
+
+#root .signin-screen .field input {
+  height: 56px;
+  padding: 0 18px;
+  border: 0;
+  background: #f1f3f5;
+  font-weight: 400;
+  font-size: 17px;
+  line-height: 1.3;
+  color: var(--ink);
+  box-shadow: none;
+}
+
+#root .signin-screen .field input::placeholder { color: var(--slate); }
+
+#root .signin-screen .field input:focus {
+  outline: 2px solid var(--fog);
+  outline-offset: 0;
+  box-shadow: none;
+}
+
+#root .signin-screen .field input.signin-screen__code {
+  letter-spacing: 0.4em;
+  font: 500 22px/1.3 var(--mono);
+  text-align: center;
+}
+
+/* 次要動作（Not now、Other ways to sign in…）：iOS 的文字按鈕，44px 的可按範圍。 */
+.signin-screen__text {
+  justify-self: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  font-weight: 500;
+  font-size: 16px;
+  line-height: 1.3;
+  color: var(--steel);
+  cursor: pointer;
+}
+
+.signin-screen__text:hover { color: var(--ink); }
+.signin-screen__text:active { opacity: 0.6; }
+.signin-screen__text:disabled { color: var(--slate); cursor: default; }
+
+.signin-mark {
+  flex: none;
+}
+
+.signin-screen__hint {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--steel);
+  text-align: center;
+}
+
+.signin-screen__error {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--neg);
+}
+
+.signin-screen__links {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+@media (max-width: 719px) {
+  .signin-screen {
+    place-items: end stretch;
+  }
+
+  .signin-screen__card {
+    width: 100%;
+    max-height: calc(100dvh - max(24px, env(safe-area-inset-top)));
+    padding: 28px 20px calc(16px + env(safe-area-inset-bottom));
+    gap: 22px;
+    box-shadow: 0 -10px 40px rgba(10, 18, 26, 0.12);
+    animation: signin-rise 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signin-screen__backdrop, .signin-screen__card { animation: none; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .signin-screen__backdrop { background: rgba(10, 18, 26, 0.55); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+/*
+ * Waitlist（features/waitlist/WaitlistScreen.tsx，使用者 2026-11-16）：整站鎖住時唯一的畫面。
+ * 左邊是表單（淺灰底、大標題、膠囊按鈕，沿用登入頁的按鈕樣式），右邊是淺色翻牌看板（FlapBoard）。
+ * 960px 以下改上下排：看板縮成三排放在上面。外層借用 .signin-screen（全螢幕、系統字體、按鈕樣式）。
+ */
+.signin-screen.waitlist {
+  display: grid;
+  grid-template-columns: minmax(380px, 0.9fr) 1.1fr;
+  place-items: stretch;
+  gap: 0;
+  padding: 0;
+  overflow-y: auto;
+  background: #f2f2f7;
+  animation: signin-fade 0.3s ease-out;
+}
+
+.waitlist__panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding: max(28px, env(safe-area-inset-top)) clamp(24px, 5vw, 64px) max(28px, env(safe-area-inset-bottom));
+}
+
+.waitlist__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.waitlist__body {
+  flex: 1;
+  display: grid;
+  align-content: center;
+  gap: 32px;
+  width: min(420px, 100%);
+  padding: 40px 0;
+}
+
+.waitlist__head {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+}
+
+.waitlist__avatar {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 8px;
+  border-radius: 50%;
+  box-shadow: 0 10px 26px rgba(10, 18, 26, 0.16), 0 0 0 0.5px rgba(10, 18, 26, 0.08);
+  animation: signin-pop 0.45s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+#root .signin-screen.waitlist h1 {
+  margin: 0;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: clamp(32px, 3.4vw, 44px);
+  line-height: 1.08;
+  letter-spacing: -0.028em;
+  color: var(--ink);
+}
+
+#root .signin-screen.waitlist .waitlist__head p {
+  margin: 0;
+  max-width: 36ch;
+  font-size: 17px;
+  line-height: 1.42;
+  color: var(--steel);
+}
+
+#root .signin-screen.waitlist .waitlist__head p b { color: var(--ink); font-weight: 600; }
+#root .signin-screen.waitlist .waitlist__head .waitlist__notice { color: var(--ink); font-size: 15px; }
+
+/* Follow 是連結（a.btn.ghost）：在淺灰底上用白色膠囊（iOS 分組背景上的次要按鈕）。 */
+html body #root .signin-screen .btn.btn.ghost[data-method='follow'] { background: var(--white, #fff); color: var(--ink); text-decoration: none; box-shadow: 0 1px 2px rgba(10, 18, 26, 0.06), 0 0 0 0.5px rgba(10, 18, 26, 0.08); }
+html body #root .signin-screen .btn.btn.ghost[data-method='follow']:hover { background: #fafafc; }
+
+.waitlist__actions .signin-screen__text { justify-self: center; }
+
+/* 邀請碼（VITE_INVITES=1 才出現）。 */
+.waitlist__invite { display: grid; gap: 8px; margin-top: 8px; padding-top: 18px; border-top: 0.5px solid rgba(10, 18, 26, 0.12); }
+.waitlist__invite label { font-size: 15px; font-weight: 600; color: var(--ink); }
+.waitlist__invite-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+html body #root .waitlist__invite input {
+  min-height: 48px; padding: 0 16px; border: 0; border-radius: 14px; background: var(--white, #fff);
+  box-shadow: 0 0 0 0.5px rgba(10, 18, 26, 0.14); font: 500 16px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink);
+}
+html body #root .waitlist__invite input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+html body #root .waitlist__invite input[aria-invalid='true'] { box-shadow: 0 0 0 1px var(--neg); }
+html body #root .signin-screen .waitlist__invite .btn { min-height: 48px; padding: 0 18px; border-radius: 14px; }
+.waitlist__arrow { margin-left: 2px; opacity: 0.85; }
+
+/* 右邊：淺色翻牌看板。 */
+.waitlist__board {
+  position: sticky;
+  top: 0;
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: 48px 32px;
+  background:
+    radial-gradient(90% 70% at 70% 20%, rgba(139, 168, 190, 0.22), transparent 60%),
+    linear-gradient(180deg, #e9edf2, #e2e7ee);
+  border-left: 0.5px solid rgba(10, 18, 26, 0.08);
+}
+
+.flap-board {
+  --flap-w: 34px;
+  --flap-h: 48px;
+  --flap-gap: 4px;
+  display: grid;
+  gap: 8px;
+  padding: 22px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 30px 60px rgba(10, 18, 26, 0.10), 0 0 0 0.5px rgba(10, 18, 26, 0.08);
+}
+
+.flap-board__head {
+  display: grid;
+  grid-template-columns: calc(6 * var(--flap-w) + 5 * var(--flap-gap) + 14px) auto;
+  padding: 0 2px 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--steel);
+}
+
+.flap-board__row { display: flex; gap: var(--flap-gap); }
+.flap-board__row .flap:nth-child(6) { margin-right: 14px; }
+
+.flap {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: var(--flap-w);
+  height: var(--flap-h);
+  border-radius: 5px;
+  background: linear-gradient(180deg, #ffffff 0 50%, #f4f6f9 50% 100%);
+  box-shadow: 0 1px 1px rgba(10, 18, 26, 0.08), 0 0 0 0.5px rgba(10, 18, 26, 0.10);
+  perspective: 240px;
+  overflow: hidden;
+  font: 600 calc(var(--flap-h) * 0.54) / 1 var(--mono);
+  color: var(--ink);
+}
+
+/* 全站預設方角（base 的 border-radius: 0 !important）；看板、翻牌、邀請碼欄維持圓角（iOS 風）。 */
+html body #root .flap-board { border-radius: 22px !important; }
+html body #root .flap { border-radius: 5px !important; }
+html body #root .waitlist__invite input, html body #root .signin-screen .waitlist__invite .btn { border-radius: 14px !important; }
+html body #root .waitlist__avatar { border-radius: 50% !important; }
+@media (max-width: 719px) { html body #root .flap-board { border-radius: 18px !important; } }
+
+/* 中間那條對開線。 */
+.flap::after { content: ''; position: absolute; inset: 50% 0 auto; height: 1px; background: rgba(10, 18, 26, 0.12); }
+.flap[data-blank] { background: linear-gradient(180deg, #f9fafb 0 50%, #f1f3f6 50% 100%); }
+
+/* 每翻一張播一次：上半片往下翻過來。 */
+.flap__face { display: block; transform-origin: 50% 50%; animation: flap-drop 0.11s ease-out; }
+@keyframes flap-drop {
+  from { transform: rotateX(80deg); opacity: 0.35; }
+  to { transform: none; opacity: 1; }
+}
+
+/*
+ * 手機與窄螢幕（使用者 2026-11-16：原本上方色塊與下方斷開、中間大片空白）：iOS 歡迎頁的排法——
+ * 同一個底色，看板在上方當主視覺，標題與說明置中，按鈕貼在底部（拇指按得到）、填滿寬度。
+ */
+@media (max-width: 959px) {
+  .signin-screen.waitlist {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+    background:
+      radial-gradient(120% 55% at 50% 0%, rgba(139, 168, 190, 0.26), transparent 70%),
+      #f2f2f7;
+  }
+  /* 多出來的高度上下平分：看板往下靠近標題，標題與按鈕之間不會空一大片。 */
+  .waitlist__board {
+    order: -1;
+    position: static;
+    flex: 1;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    min-height: 0;
+    padding: max(28px, env(safe-area-inset-top)) 16px 0;
+    background: none;
+    border: 0;
+  }
+  .waitlist__panel {
+    flex: 1;
+    min-height: 0;
+    padding: 0 24px max(24px, env(safe-area-inset-bottom));
+  }
+  .waitlist__brand { display: none; }
+  .waitlist__body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 28px;
+    width: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 32px 0 0;
+  }
+  .waitlist__head { justify-items: center; text-align: center; }
+  #root .signin-screen.waitlist .waitlist__head p { margin: 0 auto; }
+  .waitlist__actions { width: 100%; }
+}
+
+@media (max-width: 719px) {
+  /* 一排 11 格：格寬跟著螢幕寬度走（左右各 16px 外距、看板內距 14px、10 個 3px 間隔、欄間 10px），最寬 34px。 */
+  .flap-board {
+    --flap-w: min(34px, calc((100vw - 100px) / 11));
+    --flap-h: calc(var(--flap-w) * 1.42);
+    --flap-gap: 3px;
+    padding: 14px;
+    gap: 6px;
+  }
+  .flap-board__row .flap:nth-child(6) { margin-right: 10px; }
+  .flap-board__head { grid-template-columns: calc(6 * var(--flap-w) + 5 * var(--flap-gap) + 10px) auto; font-size: 10px; }
+  #root .signin-screen.waitlist h1 { font-size: 30px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signin-screen.waitlist, .waitlist__avatar, .flap__face { animation: none; }
+}
+
+/*
+ * 用戶頁（Profile，features/portfolios/ProfileCard.tsx）。
+ * 帳號列與入金方式的卡片同一個樣子（淺灰卡、圖示、名稱與說明），按鈕是既有的 .btn.ghost.sm，標記是 .badge。
+ */
+.profile-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 4px 0 20px;
+}
+
+.profile-avatar {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--app-grouped, #f6f7f8);
+}
+
+.profile-avatar--empty {
+  display: grid;
+  place-items: center;
+  color: var(--deep);
+  font: 600 28px/1 var(--sans);
+}
+
+.profile-head__text {
+  min-width: 0;
+}
+
+.profile-head__text h2 {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 24px/1.2 var(--sans);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.profile-head__text p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--steel);
+}
+
+.profile-head__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-head__name span {
+  min-width: 0;
+  /* 名字最長 24 個字：手機上放不下就折成兩行，不要截掉。 */
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.profile-head__text h2:has(.profile-head__name) {
+  white-space: normal;
+}
+
+/* 名字的輸入框用一般字體（.field input 預設是等寬，那是給數字與地址用的）。 */
+.profile-head__edit .field input {
+  font-family: var(--sans);
+  font-size: 16px;
+}
+
+.profile-head__name svg {
+  flex: none;
+  color: var(--steel);
+}
+
+.profile-head__name:hover svg {
+  color: var(--ink);
+}
+
+.profile-head__edit {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  max-width: 420px;
+}
+
+.profile-head__edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.profile-head__edit small {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--steel);
+}
+
+.profile-signout {
+  width: 100%;
+  margin-top: 16px;
+}
+
+.profile-head__settings {
+  flex: none;
+  margin-left: auto;
+}
+
+@media (max-width: 719px) {
+  .profile-head__settings {
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
+  }
+
+  .profile-head__settings span {
+    display: none;
+  }
+}
+
+.app-portfolio-add {
+  justify-self: start;
+  margin-top: 8px;
+}
+
+@media (max-width: 719px) {
+  .app-portfolio-add {
+    justify-self: center;
+  }
+}
+
+.profile-accounts {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-accounts__title {
+  margin: 0 0 2px;
+  font: 600 13px/1.4 var(--sans);
+  color: var(--ink);
+}
+
+.profile-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 64px;
+  padding: 12px 16px;
+  background: var(--app-grouped, #f6f7f8);
+}
+
+.profile-row__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: var(--ink);
+}
+
+.profile-row__text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.profile-row__text b {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.profile-row__text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--steel);
+}
+
+.profile-row .btn {
+  flex: none;
+}
+
+.profile-accounts__note {
+  margin: 2px 2px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--steel);
+}
+
+/* 加綁 X／Google 沒成功的原因（例如那個帳號已經單獨註冊過）。 */
+.profile-accounts__error {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--neg);
+}
+
+
+/* 用戶頁的兩個面板（Account、Add money）：手機是底部面板；桌機收窄置中，不要橫跨整個視窗。 */
+@media (min-width: 720px) {
+  :is(#profile-account, #profile-funding).app-bottom-sheet {
+    max-width: 520px;
+    margin-inline: auto;
+    border-bottom: 1px solid var(--hair);
+    bottom: 24px;
+  }
+}

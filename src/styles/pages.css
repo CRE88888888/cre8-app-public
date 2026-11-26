@@ -1,0 +1,228 @@
+/*
+ * 其餘頁面的 v2 版面（2026-11-13）：資產頁、Creators、Create、Portfolio、Studio。
+ * 目標是跟 Funds／基金頁同一套語言：紙色底、白色卡片、同一條左緣、同一種圖表與控制項。
+ */
+
+/* ── 資產頁（樣式來自同步的 CSS module，class 名帶雜湊，所以用 [class*=] 對位） ── */
+@media (min-width: 720px) {
+  body.atp-asset-page #root main[class*="_page_"] { max-width: 1344px; padding: 20px 40px 80px; }
+  body.atp-asset-page #root [class*="_layout_"] { grid-template-columns: minmax(0, 1fr) 384px; gap: 24px; align-items: start; }
+  body.atp-asset-page #root [class*="_main_"] { display: grid; gap: 0; }
+  body.atp-asset-page #root [class*="_back_"] { margin-bottom: 14px; color: var(--steel); font: 500 14px/1 var(--sans); }
+  /* 區塊不是卡片：細線＋留白。 */
+  body.atp-asset-page #root [class*="_main_"] > :is(header, section, details) {
+    margin: 0;
+    padding: 32px 0;
+    border: 0;
+    border-top: 1px solid var(--hair);
+    background: transparent;
+  }
+  body.atp-asset-page #root [class*="_main_"] > header { padding-top: 12px; border-top: 0; }
+  body.atp-asset-page #root [class*="_side_"] > section { margin: 0; padding: 20px; border: 1px solid var(--hair); background: var(--white); }
+  body.atp-asset-page #root [class*="_identity_"] { margin: 0; }
+  body.atp-asset-page #root [class*="_identity_"] h1 { font: 600 36px/1.1 var(--sans); letter-spacing: -1px; }
+  body.atp-asset-page #root [class*="_main_"] h2 { font: 600 20px/1.25 var(--sans); letter-spacing: -.3px; }
+  body.atp-asset-page #root [class*="_side_"] { position: sticky; top: calc(var(--masthead-h, 64px) + 24px); display: grid; gap: 16px; }
+  body.atp-asset-page #root [class*="_side_"] > section[class*="_create_"] { display: grid; gap: 14px; background: var(--night); border-color: var(--night); color: var(--night-text); }
+  body.atp-asset-page #root [class*="_side_"] > section[class*="_create_"] h2 { margin: 0; color: var(--white); font: 600 18px/1.25 var(--sans); }
+  html body.atp-asset-page #root [class*="_side_"] > section[class*="_create_"] .btn { width: 100%; border-color: var(--white); background: var(--white); color: var(--ink); }
+  html body.atp-asset-page #root [class*="_side_"] > section[class*="_create_"] .btn:hover { border-color: var(--snow); background: var(--snow); color: var(--ink); }
+  body.atp-asset-page #root [class*="_priceHeader_"] strong { font: 500 40px/1 var(--mono); letter-spacing: -1.4px; }
+  /* 主欄窄時 40px 的價格加「USD」放不下：價格保持一行，右邊的漲跌換到下一行，不再超出欄位。 */
+  body.atp-asset-page #root [class*="_priceHeader_"] { flex-wrap: wrap; }
+  body.atp-asset-page #root [class*="_priceHeader_"] > div { min-width: max-content; }
+  body.atp-asset-page #root [class*="_tags_"] > :is(span, a) { padding: 5px 11px; border: 0; background: var(--snow); color: var(--deep); font: 500 12px/1.2 var(--sans); }
+  body.atp-asset-page #root [class*="_fund_"] { min-height: 52px; }
+}
+body.atp-asset-page #root [class*="_chart_"] svg path { stroke: var(--ink); }
+body.atp-asset-page #root [class*="_positive_"] { color: var(--positive); }
+body.atp-asset-page #root [class*="_negative_"] { color: var(--negative); }
+
+/* ── Creators ─────────────────────────────────────────── */
+@media (min-width: 720px) {
+  #creator-leaderboard .creator-table { border: 0; background: transparent; }
+  #creator-leaderboard .creator-table th { padding: 12px; border-bottom: 1px solid var(--ink); }
+  #creator-leaderboard .creator-table td { padding: 20px 12px; border-bottom: 1px solid var(--hair); }
+  #creator-leaderboard .creator-table :is(th, td):first-child { width: 64px; padding-left: 12px; }
+  #creator-leaderboard .creator-table tbody tr { transition: background-color .12s var(--ease); }
+  #creator-leaderboard .creator-table tbody tr:hover { background: var(--paper); }
+  #creator-leaderboard .creator-return { font: 500 20px/1 var(--mono); letter-spacing: -.3px; }
+}
+
+/* ── Create（未登入）：三步驟說明 + 主要動作是「先設計」 ── */
+#root .create-guest .create-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  margin: 8px 0 4px;
+  padding: 0;
+  list-style: none;
+}
+#root .create-guest .create-steps li {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  padding: 14px;
+  background: var(--paper);
+  color: var(--ink);
+  font: 500 13px/1.3 var(--sans);
+  text-align: left;
+}
+#root .create-guest .create-steps b {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  background: var(--ink);
+  color: var(--white);
+  font: 500 12px/1 var(--mono);
+}
+#root .create-guest > .btn { width: 100%; max-width: 320px; margin-top: 8px; }
+#root .create-guest-alt { color: var(--steel); font: 400 14px/1.5 var(--sans); }
+#root .create-guest-alt :is(a, button) { color: var(--ink); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
+
+/* ── 警示條（Note）：圓角、不再是米色方框 ───────────────── */
+#root .note { border: 1px solid var(--hair); background: var(--white); }
+
+@layer app-shapes {
+  body.atp-asset-page [class*="_side_"] > section { border-radius: var(--r-lg) !important; }
+  body.atp-asset-page [class*="_tags_"] > :is(span, a) { border-radius: var(--r-xs) !important; }
+  .create-guest .create-steps li { border-radius: var(--r-sm) !important; }
+  .create-guest .create-steps b { border-radius: 4px !important; }
+  .note { border-radius: var(--r-sm) !important; }
+  /* 基金設計器（同步來的 CSS module）：面板跟全站卡片同一個圓角。 */
+  body.atp-complete-create main :is(section, aside, div):is([class*="_editor_"], [class*="_panel_"]) { border-radius: var(--r-lg) !important; }
+}
+
+/* ── Create（已登入）：左邊三個步驟，右邊跟著捲動的「Your fund」摘要 ──
+   原本是四張疊起來的框、全大寫標籤、合約地址放最顯眼。現在一個區塊一條線，
+   資產是可點的列（勾了才出現權重），右邊隨時看得到配置、合計與還差什麼。 */
+#root .cf { padding-top: 40px; }
+#root .cf-head { align-items: flex-end; margin-bottom: 28px; }
+#root .cf-head p { max-width: 56ch; margin: 10px 0 0; color: var(--steel); font: 400 16px/1.5 var(--sans); }
+#root .cf-design-link { color: var(--steel); font: 500 14px/1 var(--sans); text-decoration: none; white-space: nowrap; }
+#root .cf-design-link:hover { color: var(--ink); }
+#root .cf-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 56px; align-items: start; }
+#root .cf-form { display: grid; gap: 0; min-width: 0; max-width: 760px; }
+#root .cf-block { display: grid; gap: 16px; padding: 32px 0; border-top: 1px solid var(--hair); }
+#root .cf-block:first-child { padding-top: 0; border-top: 0; }
+#root .cf-block h2 { display: flex; align-items: center; gap: 12px; margin: 0; color: var(--ink); font: 600 20px/1.25 var(--sans); letter-spacing: -.3px; }
+#root .cf-block h2 b { display: grid; place-items: center; width: 26px; height: 26px; background: var(--ink); color: var(--white); font: 500 13px/1 var(--mono); }
+#root .cf-block-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+html body #root .cf-field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; align-items: start; margin: 0; padding: 0; border: 0; }
+html body #root .cf-cadence button { min-width: 0; padding: 0 16px; font: 500 14px/1 var(--sans); letter-spacing: 0; text-transform: none; }
+#root .cf-field > span { color: var(--ink); font: 500 14px/1.2 var(--sans); letter-spacing: 0; text-transform: none; }
+#root .cf-field > span em { margin-left: 6px; color: var(--slate); font-style: normal; font-weight: 400; }
+#root .cf-field input { width: 100%; padding: 0 14px; font: 400 16px/1 var(--sans); }
+#root .cf-help { max-width: 62ch; margin: 0; color: var(--steel); font: 400 14px/1.55 var(--sans); }
+#root .cf-draft p { margin: 0; color: var(--steel); font: 400 14px/1.55 var(--sans); }
+#root .cf-confirm { display: flex; align-items: center; gap: 10px; color: var(--ink); font: 500 14px/1.4 var(--sans); cursor: pointer; }
+#root .cf-confirm input, #root .cf-asset-pick input { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--ink); }
+
+#root .cf-assets { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--hair); }
+#root .cf-asset { display: flex; align-items: center; gap: 16px; min-height: 60px; padding: 0 12px; margin-inline: -12px; border-bottom: 1px solid var(--hair); transition: background-color .12s var(--ease); }
+#root .cf-asset:hover { background: var(--paper); }
+#root .cf-asset.is-on { background: var(--paper); }
+#root .cf-asset.is-blocked { opacity: .55; }
+#root .cf-asset-pick { flex: 1; display: flex; align-items: center; gap: 14px; min-width: 0; min-height: 60px; cursor: pointer; }
+#root .cf-asset.is-blocked .cf-asset-pick { cursor: not-allowed; }
+#root .cf-asset-logo { flex: none; display: grid; place-items: center; width: 32px; height: 32px; overflow: hidden; background: var(--snow); }
+#root .cf-asset-logo img { width: 100%; height: 100%; object-fit: contain; background: var(--white); }
+#root .cf-asset-name { display: grid; gap: 2px; min-width: 0; }
+#root .cf-asset-name strong { color: var(--ink); font: 600 15px/1.2 var(--sans); }
+#root .cf-asset-name small { overflow: hidden; color: var(--steel); font: 400 13px/1.3 var(--sans); text-overflow: ellipsis; white-space: nowrap; }
+#root .cf-weight { flex: none; display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px; border: 1px solid var(--hair-2); background: var(--white); transition: border-color .15s var(--ease), box-shadow .15s var(--ease); }
+#root .cf-weight:focus-within { border-color: var(--signal); box-shadow: 0 0 0 3px var(--signal-soft); }
+#root .cf-weight input { width: 64px; min-height: 0; height: 38px; padding: 0; border: 0; outline: 0; background: transparent; box-shadow: none; color: var(--ink); font: 500 16px/1 var(--mono); text-align: right; -moz-appearance: textfield; appearance: textfield; }
+#root .cf-weight input::-webkit-outer-spin-button, #root .cf-weight input::-webkit-inner-spin-button { margin: 0; -webkit-appearance: none; }
+#root .cf-weight i { color: var(--steel); font: 400 14px/1 var(--mono); font-style: normal; }
+
+#root .cf-total { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; color: var(--steel); font: 400 14px/1 var(--sans); }
+#root .cf-total-bar { display: block; height: 6px; overflow: hidden; background: var(--snow); }
+#root .cf-total-bar i { display: block; height: 100%; background: var(--ink); transition: width .2s var(--ease); }
+#root .cf-total strong { color: var(--ink); font: 500 16px/1 var(--mono); }
+#root .cf-total[data-state="ok"] :is(strong, span) { color: var(--positive); }
+#root .cf-total[data-state="ok"] .cf-total-bar i { background: var(--positive); }
+#root .cf-total[data-state="over"] :is(strong, span) { color: var(--negative); }
+#root .cf-total[data-state="over"] .cf-total-bar i { background: var(--negative); }
+
+#root .cf-side { position: sticky; top: calc(var(--masthead-h, 64px) + 24px); min-width: 0; }
+#root .cf-summary { display: grid; gap: 14px; padding: 22px; border: 1px solid var(--hair); background: var(--white); box-shadow: 0 1px 2px rgba(12, 23, 34, .04), 0 8px 24px rgba(12, 23, 34, .06); }
+#root .cf-summary-label { color: var(--steel); font: 500 13px/1 var(--sans); }
+#root .cf-summary-name { margin-top: -6px; overflow-wrap: anywhere; color: var(--ink); font: 600 22px/1.2 var(--sans); letter-spacing: -.4px; }
+#root .cf-summary-name.is-empty { color: var(--slate); }
+#root .cf-summary-empty { margin: 0; color: var(--steel); font: 400 14px/1.5 var(--sans); }
+#root .cf-summary-list { display: grid; margin: 0; padding: 0; list-style: none; }
+#root .cf-summary-list li { display: flex; justify-content: space-between; gap: 12px; min-height: 32px; align-items: center; color: var(--ink); font: 500 14px/1 var(--sans); }
+#root .cf-summary-list li + li { border-top: 1px solid var(--hair); }
+#root .cf-summary-list b { color: var(--deep); font: 400 13px/1 var(--mono); }
+#root .cf-summary-facts { display: grid; grid-template-columns: auto 1fr; gap: 10px 12px; margin: 0; padding-top: 12px; border-top: 1px solid var(--hair); color: var(--steel); font: 400 14px/1 var(--sans); }
+#root .cf-summary-facts dd { margin: 0; color: var(--ink); font-weight: 500; text-align: right; line-height: 1.3; }
+html body #root .cf-submit { width: 100%; min-height: 54px; font-size: 16px; }
+#root .cf-missing { margin: -4px 0 0; color: var(--steel); font: 400 13px/1.45 var(--sans); text-align: center; }
+
+@media (max-width: 899px) {
+  #root .cf-grid { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  #root .cf-side { position: static; }
+  #root .cf-head { display: grid; gap: 12px; }
+}
+@media (max-width: 719px) {
+  #root .cf { padding-top: 16px; }
+  #root .cf-block { padding: 24px 0; }
+  #root .cf-asset { margin-inline: 0; padding-inline: 0; }
+  #root .cf-asset.is-on, #root .cf-asset:hover { background: transparent; }
+  #root .cf-summary { padding: 18px; box-shadow: none; }
+}
+@layer app-shapes {
+  .cf-block h2 b { border-radius: 6px !important; }
+  .cf-asset { border-radius: 0 !important; }
+  .cf-asset-logo, .cf-asset-logo img { border-radius: 50% !important; }
+  .cf-weight { border-radius: var(--r-ctl) !important; }
+  .cf-weight input { border-radius: 0 !important; }
+  .cf-total-bar, .cf-total-bar i { border-radius: 3px !important; }
+  .cf-summary { border-radius: var(--r-lg) !important; }
+}
+
+/* Studio「需要處理」列裡的行動連結（例如 Renew permission，cre8-app#25）：要看得出來可以按。 */
+#root .app-studio-action { color: var(--ink); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
+#root .app-studio-action:hover { color: var(--signal); }
+
+/* 全站橫幅：平台全域暫停交易（cre8-app#29）。只在鏈上確定暫停時出現，所以不做關閉鈕。 */
+.platform-banner {
+  padding: 10px max(16px, calc((100vw - 1344px) / 2 + 40px));
+  border-bottom: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+  background: color-mix(in srgb, var(--warn) 9%, var(--white, #fff));
+  color: var(--ink);
+  font: 400 14px/1.45 var(--sans);
+}
+.platform-banner strong { font-weight: 600; }
+@media (max-width: 719px) {
+  .platform-banner { padding: 10px 16px; font-size: 13px; }
+}
+
+/* 每一步交易走了哪個交易場所（cre8-app#47）：買入、賣出的結果與 Portfolio 的 Activity 共用。 */
+.trade-routes { margin: 10px 0 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-md, 8px); text-align: left; }
+.trade-routes-title { margin: 0 0 6px; color: var(--steel); font: 500 12px/1.4 var(--sans); }
+.trade-routes ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.trade-routes li { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; color: var(--ink); font: 400 13px/1.45 var(--sans); }
+.trade-routes-pair { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.trade-routes-count { color: var(--steel); }
+.trade-routes-venue { color: var(--ink); font-weight: 500; text-align: right; white-space: nowrap; }
+.trade-routes.is-compact { margin: 0; padding: 0; border: 0; }
+.trade-routes.is-compact li { justify-content: flex-start; gap: 8px; font-size: 12px; }
+.trade-routes.is-compact .trade-routes-venue { font-weight: 400; color: var(--steel); }
+.app-ticket-receipt .trade-routes { width: 100%; margin: 0; }
+/* 手機的 Activity 清單：其他列的值都靠右，這一格也靠右。 */
+.app-ticket-details .trade-routes.is-compact li { justify-content: flex-end; }
+
+/* 上線時能不能投資（cre8-app#51）：Funds 清單說明行最前面的短標示，與基金頁封面下的一句說明。 */
+#fund-explore .mkt-launch[data-status="open"] { color: var(--pos); font-weight: 600; }
+#fund-explore .mkt-deck .mkt-launch[data-status="open"] { color: #7fd6b4; }
+.fund-launch { display: flex; align-items: baseline; gap: 8px; margin: 12px 0 0; color: var(--steel); font: 400 14px/1.45 var(--sans); }
+.fund-launch[data-status="open"] { color: var(--ink); }
+.fund-launch-dot { flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--steel); transform: translateY(-1px); }
+.fund-launch[data-status="open"] .fund-launch-dot { background: var(--pos); }
+@media (max-width: 719px) {
+  .fund-launch { margin: 12px 16px 0; font-size: 13px; }
+}

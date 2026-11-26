@@ -1,0 +1,320 @@
+/*
+ * CRE8 設計系統 v2（2026-11-13，規格見 DESIGN.md「設計系統 v2」）。
+ *
+ * 這支檔案在所有舊樣式之後載入，做三件事：
+ *   1. 重新定義色票（舊規則都用 var()，所以顏色會一起換）。
+ *   2. 統一全站共用控制項：按鈕、輸入框、分段控制、分頁、頁首、面板。
+ *   3. 圓角系統。設計稿有全站 `border-radius: 0 !important`，所以圓角一律寫在
+ *      `@layer app-shapes` 並加 `!important`（同一個 layer 裡後寫的贏）。
+ *
+ * 頁面專屬的版面放在各自的檔案（market.css、fund-page.css…），不要寫在這裡。
+ */
+
+:root {
+  /* 墨色加深、灰階拉開：文字對比更高，面板與底色分得出層次。 */
+  --ink: #0c1722;
+  --deep: #1f3345;
+  --steel: #556b7d;
+  --slate: #8a9aa8;
+  --fog: #6f93ae;
+  --frost: #c2d3e0;
+  /* 淡色塊（控制項底、數字方塊）用接近中性的淺灰，不偏藍。 */
+  --snow: #eef0f2;
+  --paper: #f6f7f8;
+  --white: #ffffff;
+  --hair: rgba(12, 23, 34, .11);
+  --hair-2: rgba(12, 23, 34, .22);
+  /* 報酬是全站唯一的高彩度顏色：綠與紅都比舊版乾淨，數字才跳得出來。 */
+  --positive: #0a8a5b;
+  --negative: #cf3d44;
+  --caution: #9a6412;
+  /* 品牌藍（logo 翻牌的色相、提高彩度）：只用在焦點環、連結、選取狀態。 */
+  --signal: #2b6fa3;
+  --signal-soft: rgba(43, 111, 163, .14);
+  /* 深色區（Funds 主打區、Studio）用的顏色。 */
+  --night: #0b1520;
+  --night-2: #13212e;
+  --night-line: rgba(194, 211, 224, .14);
+  --night-text: #e8eef3;
+  --night-muted: #93a7b7;
+  --night-positive: #3ddc97;
+  --night-negative: #ff8086;
+
+  /* 圓角收得小：標籤 6、按鈕與輸入框 10、卡片 14。圓形只留給人物頭像。
+     （2026-11-13：到處大圓角卡片會膩，也不像交易所看板；見 DESIGN.md。） */
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-ctl: 10px;
+  --r-md: 12px;
+  --r-lg: 14px;
+  --r-pill: 999px;
+  /* 控制項高度：主要 48、一般 40、小 34。觸控裝置的小按鈕不低於 40。 */
+  --h-lg: 48px;
+  --h-md: 40px;
+  --h-sm: 34px;
+  --app-control-radius: 10px;
+  --app-card-radius: 14px;
+  --app-action: var(--ink);
+  --app-action-hover: var(--deep);
+  --app-grouped: var(--paper);
+  --app-segment: var(--snow);
+  --app-card-line: var(--hair);
+  --shadow-pop: 0 12px 32px rgba(12, 23, 34, .12), 0 2px 6px rgba(12, 23, 34, .06);
+  --ease: cubic-bezier(.2, .7, .2, 1);
+  /* 按鈕「先沉、再彈回」：按下 80ms 沉到 95%，放開時用會超過一點的曲線彈回。 */
+  --press-scale: .95;
+  --press-in: 80ms;
+  --spring: cubic-bezier(.34, 1.56, .64, 1);
+}
+/* 手機殼層自己重設了一份舊色票，跟著換。 */
+#root :is(.app-masthead, .app-mobile-nav),
+.app-bottom-sheet {
+  --ink: #0c1722;
+  --deep: #1f3345;
+  --steel: #556b7d;
+  --fog: #6f93ae;
+  --positive: #0a8a5b;
+  --negative: #cf3d44;
+}
+
+html body { color: var(--ink); }
+/* 全站純白底（2026-11-13 使用者決定：底色不要藍灰）。卡片靠細框線與留白區分，不靠底色。 */
+html, html body { background: var(--white) !important; }
+::selection { background: var(--signal-soft); }
+#root :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+
+/* ── 頁首 ─────────────────────────────────────────────── */
+@media (min-width: 720px) {
+  #root .masthead.app-masthead {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    border-bottom: 1px solid var(--hair);
+    background: rgba(255, 255, 255, .88);
+    -webkit-backdrop-filter: saturate(1.6) blur(14px);
+    backdrop-filter: saturate(1.6) blur(14px);
+  }
+  #root .masthead.app-masthead .wrap { min-height: 64px; }
+  #root .masthead.app-masthead .nav { gap: 4px; }
+  /* 導覽：選中的是一顆淡色膠囊，不再是底線。 */
+  #root .masthead.app-masthead .nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    padding: 0 14px;
+    border: 0;
+    color: var(--steel);
+    font: 500 15px/1 var(--sans);
+    letter-spacing: -.1px;
+    text-decoration: none;
+    transition: background-color .15s var(--ease), color .15s var(--ease);
+  }
+  #root .masthead.app-masthead .nav a::after { display: none; }
+  #root .masthead.app-masthead .nav a:hover { background: var(--snow); color: var(--ink); }
+  #root .masthead.app-masthead .nav a.active { background: var(--snow); color: var(--ink); box-shadow: none; }
+  body.studio-mode #root .masthead.app-masthead { border-bottom-color: var(--hair); box-shadow: inset 0 -2px 0 var(--ink); }
+}
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  #root .masthead.app-masthead { background: var(--white); }
+}
+
+/* ── 按鈕 ─────────────────────────────────────────────── */
+html body #root .btn,
+html body .btn {
+  min-height: var(--h-lg);
+  padding: 0 22px;
+  border: 1px solid transparent;
+  font: 600 15px/1 var(--sans);
+  letter-spacing: -.1px;
+  transition: background-color .15s var(--ease), border-color .15s var(--ease), color .15s var(--ease), transform .32s var(--spring);
+}
+html body #root .btn:not(.ghost, .light, .btn--ghost, :disabled),
+html body .btn:not(.ghost, .light, .btn--ghost, :disabled) { border-color: var(--ink); background: var(--ink); color: var(--white); }
+html body #root .btn:not(.ghost, .light, .btn--ghost, :disabled):hover,
+html body .btn:not(.ghost, .light, .btn--ghost, :disabled):hover { border-color: var(--deep); background: var(--deep); color: var(--white); }
+/* 次要按鈕：淡色底、沒有外框。比「透明底＋深色框」安靜，也不會跟主要按鈕搶。 */
+html body #root .btn:is(.ghost, .light, .btn--ghost):not(:disabled),
+html body .btn:is(.ghost, .light, .btn--ghost):not(:disabled) { border-color: transparent; background: var(--snow); color: var(--ink); }
+html body #root .btn:is(.ghost, .light, .btn--ghost):not(:disabled):hover,
+html body .btn:is(.ghost, .light, .btn--ghost):not(:disabled):hover { border-color: transparent; background: #e2e5e9; color: var(--ink); }
+html body #root .btn:is(.sm, .btn--sm),
+html body .btn:is(.sm, .btn--sm) { min-height: var(--h-sm); padding: 0 14px; font-size: 14px; font-weight: 500; }
+html body #root .btn:active:not(:disabled),
+html body .btn:active:not(:disabled) { transform: scale(var(--press-scale)); transition-duration: var(--press-in); }
+html body #root .btn:disabled,
+html body .btn:disabled { border-color: transparent; background: var(--snow); color: var(--slate); }
+@media (pointer: coarse) {
+  html body #root .btn:is(.sm, .btn--sm),
+  html body .btn:is(.sm, .btn--sm) { min-height: 40px; }
+}
+/* 頁首：錢包與模式切換同高。 */
+html body #root .masthead .header-wallet,
+html body #root .app-mode-switch { min-height: var(--h-md); height: var(--h-md); padding: 0 16px; font: 600 14px/1 var(--sans); }
+/* 「Create a fund」是安靜的文字連結：頁首只有 Connect wallet 一顆實心按鈕。 */
+html body #root .masthead .app-mode-switch[data-target="studio"] {
+  padding: 0 12px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 500;
+}
+html body #root .masthead .app-mode-switch[data-target="studio"]:hover { background: var(--snow); }
+html body #root .masthead .header-wallet[data-wallet-state="disconnected"] { border-color: var(--ink); background: var(--ink); color: var(--white); }
+html body #root .masthead .header-wallet[data-wallet-state="disconnected"]:hover { border-color: var(--deep); background: var(--deep); }
+
+/* ── 輸入框、下拉、搜尋 ───────────────────────────────── */
+#root :is(.field input, .field textarea, .field select, .explore-filter-field select, .creator-filter-form select) {
+  min-height: var(--h-lg);
+  border: 1px solid var(--hair-2);
+  background: var(--white);
+  color: var(--ink);
+  transition: border-color .15s var(--ease), box-shadow .15s var(--ease);
+}
+#root :is(.field input, .field textarea, .field select, .explore-filter-field select, .creator-filter-form select):focus {
+  border-color: var(--signal);
+  outline: 0;
+  box-shadow: 0 0 0 3px var(--signal-soft);
+}
+#fund-explore .explore-toolbar .explore-search,
+#root .creator-search { min-height: var(--h-md); border: 1px solid transparent; background: var(--white); box-shadow: inset 0 0 0 1px var(--hair); }
+#fund-explore .explore-toolbar .explore-search:focus-within,
+#root .creator-search:focus-within { border-color: var(--signal); box-shadow: 0 0 0 3px var(--signal-soft); }
+
+/* ── 分段控制（期間切換等）：淡色軌道、白色滑塊 ───────── */
+html body #root :is(.public-periods, .creator-periods, .seg) {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 0;
+  background: var(--snow);
+}
+html body #root :is(.public-periods, .creator-periods, .seg) :is(button, a, label) {
+  min-width: 44px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--steel);
+  font: 500 13px/1 var(--mono);
+  letter-spacing: 0;
+  transition: background-color .15s var(--ease), color .15s var(--ease);
+}
+html body #root :is(.public-periods, .creator-periods, .seg) :is(button, a, label):hover { color: var(--ink); }
+html body #root :is(.public-periods, .creator-periods, .seg) :is([aria-pressed="true"], [aria-current], [aria-selected="true"], .active, .on) {
+  background: var(--white);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(12, 23, 34, .12);
+}
+
+/* ── 頁標題與分頁 ─────────────────────────────────────── */
+@media (min-width: 720px) {
+  #root .explore-heading h1 { font: 600 44px/1.05 var(--sans); letter-spacing: -1.6px; }
+  #root .explore-heading h1 span { color: var(--fog); }
+}
+
+/* ── 面板、卡片 ───────────────────────────────────────── */
+#root :is(.card, .panel) { border: 1px solid var(--hair); background: var(--white); }
+
+/* ── 空狀態（Portfolio、Studio、Create 未連錢包）：置中的一段話＋動作，不加外框 ── */
+@media (min-width: 720px) {
+  #root .app-portfolio-summary.app-portfolio-guest { max-width: 520px; margin-top: 56px; padding: 0; border: 0; background: transparent; }
+  #root .app-portfolio-guest h2 { font: 600 28px/1.15 var(--sans); letter-spacing: -.7px; }
+  #root .app-portfolio-guest p { color: var(--steel); font: 400 15px/1.55 var(--sans); }
+}
+
+/* ── 圓角系統 ─────────────────────────────────────────── */
+@layer app-shapes {
+  /*
+   * 舊的形狀規則（mobile-app.css 的 app-shapes）把所有可按的東西設成膠囊，權重是 (1,2,0)。
+   * 同一個 layer 裡要蓋過它，選擇器得更重：`#root#root`（重複 id）與 `body:not(#_):not(#__)`
+   * 都只是為了加權重，沒有其他意義。
+   */
+  :is(#root#root, body:not(#_):not(#__)) :is(.btn, [data-slot="button"], .header-wallet, .app-mode-switch, .wallet-menu__item,
+      .explore-search, .creator-search, .app-filter-trigger, .creator-filter-trigger, .explore-filter > summary,
+      .public-periods, .creator-periods, .seg, .atp-facts-trigger, .fund-introduction-trigger,
+      .field input, .field textarea, .field select, .explore-filter-field select, .creator-filter-form select, .app-bottom-sheet select) {
+    border-radius: var(--r-ctl) !important;
+  }
+  :is(#root#root, body:not(#_):not(#__)) :is(.masthead .nav a, .explore-filter-option, .app-icon-tile, .activity-filter-select, .app-mode-label,
+      .app-ticket-presets button, [data-slot="sheet-close"]) {
+    border-radius: var(--r-sm) !important;
+  }
+  :is(#root#root, body:not(#_):not(#__)) :is(.public-periods, .creator-periods, .seg) :is(button, a, label) { border-radius: 7px !important; }
+  :is(#root#root, body:not(#_):not(#__)) :is(.card, .panel, .explore-filter-panel, .wallet-menu__panel, [data-sonner-toast], .fund-profile-card, .asset-preview-card, .signin-screen__card,
+      .feature-locked__row, .profile-row) {
+    border-radius: var(--r-lg) !important;
+  }
+  :is(#root#root, body:not(#_):not(#__)) .profile-avatar { border-radius: 50% !important; }
+  /*
+   * 彈窗（使用者選的 A：iOS 底部面板）：登入頁、底部面板（Account、Add money、下單）、錢包選單裡的按鈕都是膠囊；
+   * 登入卡片 28px、錢包選單 18px、選單列與登入輸入框 14px。頁面上的一般按鈕不在這裡，維持原樣。
+   */
+  :is(#root#root, body:not(#_):not(#__)) :is(.signin-screen, .app-bottom-sheet, .wallet-menu__panel) .btn { border-radius: var(--r-pill) !important; }
+  :is(#root#root, body:not(#_):not(#__)) .signin-last { border-radius: var(--r-pill) !important; }
+  /*
+   * Privy 自己的視窗（選錢包、匯出私鑰）也畫在這一頁裡，會被設計稿全站的 0 圓角壓成直角：
+   * 補回跟我們登入面板同一套圓角（視窗 28px、裡面的列與按鈕 14px、錢包圖示 8px）。
+   */
+  :is(#root#root, body:not(#_):not(#__)) #privy-modal-content { border-radius: 28px !important; }
+  :is(#root#root, body:not(#_):not(#__)) #privy-modal-content :is(button, a, input) { border-radius: 14px !important; }
+  :is(#root#root, body:not(#_):not(#__)) #privy-modal-content img { border-radius: 8px !important; }
+  /* Privy 在 440px 以下自己變成底部面板：只有上面兩個角是圓的（跟我們的登入面板一樣）。 */
+  @media (max-width: 440px) {
+    :is(#root#root, body:not(#_):not(#__)) #privy-modal-content { border-radius: 28px 28px 0 0 !important; }
+  }
+  :is(#root#root, body:not(#_):not(#__)) .signin-screen__card { border-radius: 28px !important; }
+  :is(#root#root, body:not(#_):not(#__)) .wallet-menu__panel { border-radius: 18px !important; }
+  :is(#root#root, body:not(#_):not(#__)) :is(.wallet-menu__panel .wallet-menu__item, .signin-screen .field input) { border-radius: 14px !important; }
+  /* 手機：浮在內容上的分頁列、基金頁底部操作列、右上角圓鈕維持膠囊／圓形（它們是浮動的控制層）。 */
+  @media (max-width: 719px) {
+    :is(#root#root, body:not(#_):not(#__)) :is(.app-mobile-nav, .app-mobile-nav a, .public-mobile-cta, .public-mobile-cta .btn,
+        .app-nav-bar .header-wallet, .app-nav-bar .app-mode-switch, .masthead .app-mode-switch,
+        .masthead .header-wallet.app-wallet-toolbar, .app-fund-toolbar > :is(a, button)) { border-radius: var(--r-pill) !important; }
+    /* 登入頁在手機上是從下面滑上來的面板：只有上面兩個角是圓的。 */
+    :is(#root#root, body:not(#_):not(#__)) .signin-screen__card { border-radius: 28px 28px 0 0 !important; }
+  }
+}
+
+
+/* 手機：只有圖示的錢包鈕維持淡色（跟分頁根目錄右上角那顆一致），不要變成一顆黑球。 */
+@media (max-width: 719px) {
+  html body #root .masthead .header-wallet.app-wallet-toolbar[data-wallet-state="disconnected"] {
+    border-color: transparent;
+    background: var(--snow);
+    color: var(--ink);
+  }
+}
+
+/* 換頁：支援 View Transitions 的瀏覽器用很短的淡入淡出，列表與詳情之間不再是硬切。 */
+::view-transition-old(root),
+::view-transition-new(root) { animation-duration: .18s; animation-timing-function: var(--ease); }
+
+@media (prefers-reduced-motion: reduce) {
+  #root :is(.btn, .masthead .nav a, .public-periods *, .creator-periods *, .seg *) { transition: none; }
+  ::view-transition-old(root),
+  ::view-transition-new(root) { animation: none; }
+}
+
+/* ── 主數字的滾動進場（components/RollingNumber.tsx）：沒有外框、沒有底色 ── */
+.roll { display: inline-flex; align-items: baseline; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.roll-digit { display: inline-block; height: 1.1em; overflow: hidden; line-height: 1.1em; vertical-align: bottom; }
+.roll-reel {
+  display: block;
+  transform: translateY(calc(var(--roll-to) * -1.1em));
+  /* 每位數 0.3 秒、彼此錯開 100ms（使用者分享的第二支影片「Roll, don't jump」）：
+     一位一位落定，看得出是在滾，不是整串跳成新值。 */
+  animation: roll-in .3s cubic-bezier(.2, .75, .2, 1) calc(var(--roll-order) * 100ms) both;
+  will-change: transform;
+}
+.roll-reel i { display: block; height: 1.1em; font-style: normal; line-height: 1.1em; text-align: center; }
+.roll-char { display: inline-block; line-height: 1.1em; }
+@keyframes roll-in {
+  from { transform: translateY(0); }
+  to { transform: translateY(calc(var(--roll-to) * -1.1em)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .roll-reel { animation: none; }
+}

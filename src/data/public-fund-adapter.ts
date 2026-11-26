@@ -1,0 +1,37 @@
+import { LISTED_FUNDS } from "../lib/public-funds";
+import type { ReferenceFund } from "../lib/public-funds";
+import type { MockFund, MockHolding } from "./mock-funds";
+import { parseRebalance } from "../lib/fund-execution";
+// 票券的目標配置取自原目標權重；不能把目前漂移後的持倉冒充 mandate。
+export function catalogueTargets(fund: ReferenceFund): MockHolding[] {
+  const rows = fund.backtest.targets
+    .filter((t) => t.weight > 0)
+    .map((t) => ({ symbol: t.symbol, weight: t.weight }));
+  const cash = Math.max(0, 100 - rows.reduce((sum, t) => sum + t.weight, 0));
+  if (cash > 1e-6) rows.push({ symbol: "USDT", weight: cash });
+  const prepared = rows.map((row) => ({
+    ...row,
+    exact: row.weight * 100,
+    weightBps: Math.floor(row.weight * 100),
+  }));
+  const missing = 10000 - prepared.reduce((sum, row) => sum + row.weightBps, 0),
+    order = [...prepared].sort(
+      (a, b) => b.exact - b.weightBps - (a.exact - a.weightBps),
+    );
+  for (let i = 0; i < missing; i++) order[i % order.length].weightBps++;
+  return prepared.map(({ symbol, weightBps }) => ({ symbol, weightBps }));
+}
+// 只有列出的 16 檔（cre8-app#123）：沒列出的基金用網址也打不開、買不到。
+export const PUBLIC_FUNDS: MockFund[] = LISTED_FUNDS.map((f) => ({
+  slug: f.slug,
+  name: f.name,
+  symbol: f.symbol,
+  thesis: f.strategy,
+  subtitle: f.strategy,
+  kind: f.group || "stocks",
+  mark: f.symbol,
+  risk: f.risk,
+  // 不認得的值（例如 "source"）當作沒有固定排程，不會壞。
+  rebalance: parseRebalance(f.backtest.rebalance) ?? "none",
+  holdings: catalogueTargets(f),
+}));

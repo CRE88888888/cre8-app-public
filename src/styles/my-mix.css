@@ -1,0 +1,331 @@
+/*
+ * My mix（cre8-app#132）。照 App 首頁風格：淺色預設、襯線大標、數字用 Geist Mono；
+ * 黃色只給主要按鈕、「選了」與組合卡片的色板。卡片不放小字、區塊不放說明句、少畫線（使用者 2026-11-21）。
+ * 底部固定一條動作列，手機在導覽列上面。
+ */
+
+html body #root main.mx-wrap {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 24px 24px 168px;
+}
+/* 列表和 Funds 一樣寬、一樣起點（complete-ui.css 的 .explore-wrap：1344px、左右 40px）。 */
+html body #root main.mx-wrap--list { max-width: 1344px; padding: 48px 40px 96px; }
+
+#root .mx-back {
+  display: inline-grid; place-items: center; width: 40px; height: 40px; margin-left: -10px;
+  color: var(--bnb-text);
+}
+#root .mx-back:hover { background: var(--bnb-surface-2); }
+
+#root .mx-title {
+  margin: 12px 0 0;
+  font-family: var(--lp-serif);
+  font-weight: 400;
+  font-size: clamp(40px, 6vw, 64px);
+  line-height: 1;
+  letter-spacing: -.03em;
+  color: var(--bnb-text);
+}
+#root .mx-sec { margin-top: 32px; }
+#root .mx-h2 { margin: 0; font-family: var(--lp-serif); font-weight: 400; font-size: 26px; letter-spacing: -.02em; color: var(--bnb-text); }
+#root .mx-note { margin: 10px 0 0; font-size: 14px; color: var(--bnb-text-2); }
+#root .mx-note.mono { font-family: var(--mono); font-size: 13px; word-break: break-all; }
+#root .mx-empty { margin: 32px 0; color: var(--bnb-text-2); font-size: 15px; }
+#root .mx-error { margin: 14px 0 0; color: var(--bnb-down); font-size: 14px; }
+#root .mx-muted { color: var(--bnb-text-2) !important; font-weight: 400 !important; }
+#root .mx-link {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 0;
+  background: none; border: 0; color: var(--bnb-text); font-size: 15px; font-weight: 600; cursor: pointer;
+  text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1px;
+}
+#root .mx-link:disabled { opacity: .4; cursor: not-allowed; }
+#root .mx-danger { color: var(--bnb-down); margin-top: 8px; }
+#root .mx-row-links { display: flex; align-items: center; gap: 22px; margin-top: 14px; }
+#root .mx-row-links .mx-past { margin-left: auto; }
+
+/* ── 挑選：搜尋＋分類，一個清單 ── */
+#root .mx-pickbar { margin-top: 22px; }
+#root .mx-search { width: 100%; max-width: none; }
+#root .mx-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+#root .mx-chip {
+  display: inline-flex; align-items: center; height: 36px; padding: 0 14px;
+  border: 0; background: var(--bnb-surface-2); color: var(--bnb-text);
+  font-size: 14px; font-weight: 500; cursor: pointer;
+}
+#root .mx-chip:hover { background: var(--bnb-secondary-hover, var(--bnb-surface-2)); }
+#root .mx-chip[aria-pressed='true'],
+#root .mx-chip[aria-selected='true'] { background: var(--bnb-text); color: var(--bnb-surface); }
+#root .mx-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px;
+  margin: 20px 0 0; padding: 0; list-style: none;
+}
+#root .mx-card {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between;
+  gap: 18px; width: 100%; aspect-ratio: 5 / 4; padding: 14px;
+  border: 0; background: var(--bnb-surface-2); color: var(--bnb-text); text-align: left; cursor: pointer;
+  transition: background-color .15s;
+}
+#root .mx-card:hover { background: var(--bnb-secondary-hover, var(--bnb-surface-2)); }
+#root .mx-card[aria-pressed='true'] { background: var(--lp-plate); color: var(--lp-on-plate); }
+#root .mx-card > b { font-family: var(--mono); font-size: 17px; font-weight: 600; letter-spacing: .01em; }
+#root .mx-risky { position: absolute; top: 14px; right: 12px; }
+
+/* ── logo ── */
+#root .mx-logo {
+  position: relative; flex: none; display: inline-grid; place-items: center; overflow: hidden;
+  color: var(--bnb-text-2); font-weight: 600;
+}
+#root .mx-logo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* 有圖就只有圖；圖載不到才顯示字母（淡灰圓底）。 */
+#root .mx-logo:has(img) > span { display: none; }
+#root .mx-logo:not(:has(img)) { background: var(--bnb-surface-2); }
+#root .mx-logos { display: inline-flex; align-items: center; }
+#root .mx-logos .mx-logo + .mx-logo { margin-left: 4px; }
+#root .mx-logos-more { margin-left: 6px; font-family: var(--mono); font-size: 12px; }
+
+/* ── 底部動作列 ── */
+#root .mx-dock {
+  position: fixed; z-index: 35; left: 0; right: 0; bottom: 0;
+  background: color-mix(in srgb, var(--bnb-surface) 94%, transparent); backdrop-filter: blur(12px);
+  box-shadow: 0 -1px 0 var(--bnb-line);
+}
+#root .mx-dock-in { display: flex; align-items: center; gap: 16px; max-width: 880px; margin: 0 auto; padding: 14px 24px; }
+#root .mx-dock-in--stack { flex-direction: column; align-items: stretch; gap: 10px; }
+#root .mx-dock-in--stack .mx-cta { width: 100%; }
+#root .mx-dock-info { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+#root .mx-dock-count { font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--bnb-text); }
+#root .mx-dock-note { margin: 0; font-size: 14px; text-align: center; color: var(--bnb-text-2); }
+#root .mx-cta { height: 52px; min-width: 160px; padding: 0 28px; font-size: 16px; font-weight: 600; }
+#root .mx-cta--danger { background: var(--bnb-down) !important; color: #fff !important; }
+
+/* ── Past year：只有數字 ── */
+#root .mx-past { display: flex; align-items: baseline; gap: 10px; margin: 18px 0 0; }
+#root .mx-past span { font-size: 14px; color: var(--bnb-text-2); }
+#root .mx-past b { font-family: var(--mono); font-size: 26px; font-weight: 500; color: var(--bnb-text); }
+#root .mx-past--compact { margin: 0; gap: 8px; white-space: nowrap; }
+#root .mx-past--compact b { font-size: 16px; }
+#root :is(.mx-past, .mx-value, .mx-tile-foot) .pos { color: var(--bnb-up); }
+#root :is(.mx-past, .mx-value, .mx-tile-foot) .neg { color: var(--bnb-down); }
+
+/* ── 名稱：大標題本身就是輸入框 ── */
+#root .mx-name { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; color: var(--bnb-text); }
+#root .mx-name input,
+#root .mx-name button {
+  min-width: 0; flex: 1; padding: 0 0 4px; border: 0; border-bottom: 1px dashed transparent;
+  background: none; outline: none; color: var(--bnb-text); text-align: left; cursor: text;
+  font-family: var(--lp-serif); font-weight: 400; font-size: clamp(38px, 5.6vw, 60px); line-height: 1.05; letter-spacing: -.03em;
+}
+#root .mx-name input::placeholder { color: var(--bnb-text); opacity: 1; }
+#root .mx-name input:hover, #root .mx-name input:focus { border-bottom-color: var(--bnb-text-3); }
+#root .mx-name > svg { flex: none; color: var(--bnb-text-3); }
+#root .mx-name button { display: inline-flex; align-items: center; gap: 12px; flex: initial; cursor: pointer; }
+#root .mx-name button svg { flex: none; color: var(--bnb-text-3); }
+#root .mx-name--edit input { border-bottom-color: var(--bnb-text-3); }
+/* 沒填名字時疊在輸入框上的預設名稱（字型與輸入框相同；數字換等寬，見 MixNameText）。 */
+#root .mx-name { position: relative; }
+#root .mx-name input.is-auto::placeholder { color: transparent; }
+#root .mx-name-auto {
+  position: absolute; left: 0; top: 50%; right: 30px; transform: translateY(calc(-50% - 2px)); pointer-events: none;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--bnb-text);
+  font-family: var(--lp-serif); font-weight: 400; font-size: clamp(38px, 5.6vw, 60px); line-height: 1.05; letter-spacing: -.03em;
+}
+/* 名稱裡的數字：襯線字體的「0」像「O」（0xJoooe），換成金額用的等寬字體。 */
+.mx-digits { font-family: var(--mono); font-size: .86em; letter-spacing: -.04em; }
+
+/* ── 金額 ── */
+#root .mx-amount-field {
+  display: flex; align-items: baseline; gap: 12px; padding-bottom: 8px; border-bottom: 2px solid var(--bnb-text);
+}
+#root .mx-amount-field:focus-within { border-bottom-color: var(--bnb-yellow); }
+#root .mx-amount-field[data-low='true'] { border-bottom-color: var(--bnb-down); }
+#root .mx-amount-field input {
+  flex: 1; min-width: 0; padding: 0; border: 0; background: none; outline: none; box-shadow: none;
+  font-family: var(--mono); font-size: clamp(44px, 8vw, 68px); font-weight: 500; color: var(--bnb-text);
+}
+#root .mx-amount-field span { font-family: var(--mono); font-size: 20px; color: var(--bnb-text-2); }
+
+/* ── 比例：預設只有 % ── */
+#root .mx-weights { margin: 0; padding: 0; list-style: none; }
+#root .mx-weights li { display: flex; align-items: center; gap: 12px; min-height: 56px; }
+#root .mx-weights-ticker { flex: 1; font-family: var(--mono); font-size: 16px; font-weight: 600; color: var(--bnb-text); }
+#root .mx-pct {
+  min-width: 72px; height: 40px; padding: 0 10px; border: 0; background: none;
+  font-family: var(--mono); font-size: 17px; font-weight: 500; color: var(--bnb-text); text-align: right; cursor: pointer;
+}
+#root .mx-pct:hover:not(:disabled) { background: var(--bnb-surface-2); }
+#root .mx-pct:disabled { cursor: default; }
+#root .mx-stepper { display: flex; align-items: center; gap: 4px; }
+#root .mx-stepper button {
+  width: 40px; height: 40px; border: 0; background: var(--bnb-surface-2);
+  color: var(--bnb-text); font-size: 20px; line-height: 1; cursor: pointer;
+}
+#root .mx-stepper button:disabled { opacity: .3; cursor: not-allowed; }
+#root .mx-stepper output { width: 64px; text-align: center; font-family: var(--mono); font-size: 17px; font-weight: 500; }
+
+/* ── Options：一列，點開才有 ── */
+#root .mx-options {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 16px 0; border: 0;
+  border-top: 1px solid var(--bnb-line); border-bottom: 1px solid var(--bnb-line); background: none; cursor: pointer; color: var(--bnb-text);
+}
+#root .mx-options span { font-size: 16px; font-weight: 600; }
+#root .mx-options b { flex: 1; text-align: right; font-size: 15px; font-weight: 400; color: var(--bnb-text-2); }
+#root .mx-options svg { color: var(--bnb-text-2); transition: transform .2s; }
+#root .mx-options[aria-expanded='true'] svg { transform: rotate(180deg); }
+#root .mx-options-body { padding: 4px 0 20px; border-bottom: 1px solid var(--bnb-line); }
+#root .mx-label { display: block; margin: 18px 0 0; font-size: 14px; color: var(--bnb-text-2); }
+#root .mx-label + .mx-chips { margin-top: 10px; }
+#root .mx-date { display: flex; flex-direction: column; gap: 8px; max-width: 240px; }
+#root .mx-input {
+  width: 100%; height: 44px; padding: 0 14px; border: 0;
+  background: var(--bnb-surface-2); color: var(--bnb-text); font-size: 15px;
+}
+#root .mx-exit-own { gap: 2px; font-family: var(--mono); }
+#root .mx-exit-own input { width: 30px; padding: 0; border: 0; background: none; outline: none; text-align: center; font: inherit; color: inherit; }
+
+/* ── 成分條 ── */
+#root .mx-bar-track { display: flex; gap: 2px; height: 12px; overflow: hidden; }
+#root .mx-bar-track span { min-width: 4px; }
+#root .mx-bar-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 12px 0 0; padding: 0; list-style: none; font-size: 14px; }
+#root .mx-bar-legend li { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); color: var(--bnb-text); }
+#root .mx-bar-legend i { width: 10px; height: 10px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+#root .mx-bar-legend b { font-weight: 500; color: var(--bnb-text-2); }
+
+/* ── 列表：照 Funds 的色板卡 ── */
+#root .mx-tiles {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px;
+  margin: 28px 0 0; padding: 0; list-style: none;
+}
+#root .mx-tile {
+  position: relative; display: flex; flex-direction: column; justify-content: space-between; gap: 16px;
+  width: 100%; aspect-ratio: 5 / 4; padding: 18px 20px 16px; border: 0;
+  background: var(--lp-plate); color: var(--lp-on-plate); text-decoration: none; text-align: left;
+}
+#root .mx-tile h3 { margin: 0; font-family: var(--lp-serif); font-weight: 400; font-size: clamp(24px, 2.2vw, 30px); line-height: 1.05; letter-spacing: -.02em; color: inherit; }
+#root .mx-tile-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0; }
+#root .mx-tile-foot b { font-family: var(--mono); font-size: 24px; font-weight: 500; color: inherit; }
+#root .mx-tile-foot span { font-family: var(--mono); font-size: 13px; }
+#root .mx-tile .mx-tile-foot :is(.pos, .neg) { color: inherit; }
+#root .mx-tile[data-status='exited'] { background: var(--bnb-surface-2); color: var(--bnb-text); }
+#root .mx-tile--new {
+  align-items: center; justify-content: center; gap: 10px; cursor: pointer;
+  background: none; color: var(--bnb-text); box-shadow: inset 0 0 0 1px var(--bnb-line-2);
+}
+#root .mx-tile--new span { font-size: 16px; font-weight: 600; }
+#root .mx-tile--new:hover { background: var(--bnb-surface-2); }
+#root .mx-start {
+  position: relative; margin-top: 28px; padding: 40px 32px; min-height: 280px; overflow: hidden;
+  background: var(--lp-plate); color: var(--lp-on-plate);
+  display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; gap: 20px;
+}
+#root .mx-start h2 {
+  position: relative; z-index: 1; max-width: 11em; margin: 0;
+  font-family: var(--lp-serif); font-weight: 400; font-size: clamp(30px, 4vw, 44px); line-height: 1.05; letter-spacing: -.02em; color: inherit;
+}
+#root .mx-start .btn { position: relative; z-index: 1; }
+#root .mx-start--plain { background: var(--bnb-surface-2); color: var(--bnb-text); min-height: 0; }
+#root .mx-start-art {
+  position: absolute; right: -2%; bottom: 0; width: 46%; height: 96%; background: var(--lp-art);
+  -webkit-mask: url(/fund-art/mag7.webp) right bottom / contain no-repeat;
+  mask: url(/fund-art/mag7.webp) right bottom / contain no-repeat;
+}
+:root[data-theme='light'] #root .mx-start .btn { background: var(--bnb-text) !important; color: var(--bnb-yellow) !important; }
+
+/* ── 單一組合 ── */
+#root .mx-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 16px; }
+#root .mx-head .mx-name { flex: 0 1 auto; }
+#root .mx-created { font-size: 14px; color: var(--bnb-text-2); white-space: nowrap; }
+#root .mx-done { display: inline-flex; align-items: center; gap: 8px; margin: 16px 0 0; padding: 8px 14px; background: var(--bnb-yellow-soft); font-size: 14px; color: var(--bnb-text); }
+#root .mx-value { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; margin: 24px 0 0; }
+#root .mx-value b { font-family: var(--mono); font-size: clamp(44px, 7vw, 64px); font-weight: 500; letter-spacing: -.02em; color: var(--bnb-text); }
+#root .mx-value span { font-family: var(--mono); font-size: 18px; color: var(--bnb-text-2); }
+#root .mx-value em { font-style: normal; font-family: var(--mono); font-size: 20px; }
+#root .mx-exited { margin: 20px 0 0; max-width: 24em; font-family: var(--lp-serif); font-size: 26px; line-height: 1.25; color: var(--bnb-text); }
+#root .mx-actions { display: flex; gap: 10px; margin-top: 22px; }
+#root .mx-actions .btn { flex: 1; max-width: 220px; height: 52px; font-size: 16px; }
+#root .mx-actions--stack { flex-direction: column; }
+#root .mx-actions--stack .btn { max-width: none; }
+#root .mx-events { margin: 12px 0 0; padding: 0; list-style: none; }
+#root .mx-events li { display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 8px 0; font-size: 15px; color: var(--bnb-text); }
+#root .mx-events time { font-family: var(--mono); font-size: 13px; color: var(--bnb-text-2); padding-top: 2px; }
+#root .mx-details { margin-top: 32px; }
+#root .mx-details summary { cursor: pointer; font-size: 14px; color: var(--bnb-text-2); }
+#root .mx-wrap--shared .mx-title { margin-top: 18px; }
+#root .mx-wrap--shared > .mx-logos { margin-top: 12px; }
+
+/* ── 底部面板裡 ── */
+.app-bottom-sheet .mx-sheet-text { margin: 0 0 18px; font-size: 16px; line-height: 1.5; color: var(--bnb-text); }
+.app-bottom-sheet .mx-cta { width: 100%; height: 52px; margin-top: 18px; }
+.app-bottom-sheet .mx-error { margin: 12px 0 0; color: var(--bnb-down); font-size: 14px; }
+.app-bottom-sheet .mx-link { display: inline-flex; margin-top: 10px; padding: 0; background: none; border: 0; font-size: 14px; font-weight: 600; text-decoration: underline; text-underline-offset: 4px; color: var(--bnb-text); cursor: pointer; }
+.app-bottom-sheet .mx-amount-field { display: flex; align-items: baseline; gap: 10px; padding-bottom: 8px; border-bottom: 2px solid var(--bnb-text); }
+.app-bottom-sheet .mx-amount-field input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font-family: var(--mono); font-size: 40px; color: var(--bnb-text); }
+.app-bottom-sheet .mx-amount-field span { font-family: var(--mono); color: var(--bnb-text-2); }
+.app-bottom-sheet .mx-actions { display: flex; flex-direction: column; gap: 10px; }
+.app-bottom-sheet .mx-actions .btn { width: 100%; height: 52px; }
+.app-bottom-sheet .mx-sharecard { margin: 0; padding: 22px 22px 18px; background: var(--lp-plate); color: var(--lp-on-plate); }
+.app-bottom-sheet .mx-sharecard-brand { font-family: var(--mono); font-weight: 600; font-size: 14px; letter-spacing: .04em; }
+.app-bottom-sheet .mx-sharecard-name { display: block; margin-top: 18px; font-family: var(--lp-serif); font-weight: 400; font-size: 30px; line-height: 1.05; }
+.app-bottom-sheet .mx-sharecard .mx-bar { margin-top: 14px; }
+.app-bottom-sheet .mx-sharecard .mx-bar-track { display: flex; gap: 2px; height: 12px; overflow: hidden; }
+.app-bottom-sheet .mx-sharecard .mx-bar-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 0 0; padding: 0; list-style: none; font-family: var(--mono); font-size: 13px; }
+.app-bottom-sheet .mx-sharecard .mx-bar-legend li { display: inline-flex; align-items: center; gap: 5px; color: inherit; }
+.app-bottom-sheet .mx-sharecard .mx-bar-legend b { color: inherit; }
+.app-bottom-sheet .mx-sharecard .mx-bar-legend i { width: 9px; height: 9px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.2); }
+.app-bottom-sheet .mx-sharecard-past { display: flex; align-items: baseline; justify-content: space-between; margin: 18px 0 0; }
+.app-bottom-sheet .mx-sharecard-past span { font-size: 14px; }
+.app-bottom-sheet .mx-sharecard-past b { font-family: var(--mono); font-size: 30px; font-weight: 500; }
+.app-bottom-sheet .mx-share-links { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+.app-bottom-sheet .mx-share-links .btn { width: 100%; height: 50px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+
+/* ── 手機 ── */
+@media (max-width: 1000px) {
+  #root .mx-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 719px) {
+  html body #root main.mx-wrap { padding: 4px 16px 196px; }
+  html body #root main.mx-wrap--list { padding: 4px 16px 120px; }
+  #root .mx-title { font-size: 40px; }
+  #root .mx-name input, #root .mx-name button { font-size: 36px; }
+  #root .mx-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  #root .mx-card { padding: 10px; gap: 8px; }
+  #root .mx-card .mx-logo { width: 30px !important; height: 30px !important; }
+  #root .mx-card > b { font-size: 14px; }
+  #root .mx-risky { top: 10px; right: 8px; font-size: 10px; }
+  #root .mx-dock { bottom: calc(70px + env(safe-area-inset-bottom)); background: none; backdrop-filter: none; box-shadow: none; }
+  #root .mx-dock-in {
+    margin: 0 10px; padding: 10px 10px 10px 16px; gap: 10px;
+    background: var(--bnb-surface); box-shadow: 0 6px 28px rgba(20, 21, 26, .16);
+  }
+  #root .mx-dock-in--stack { padding: 10px; }
+  #root .mx-cta { min-width: 0; height: 48px; padding: 0 22px; }
+  #root .mx-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  #root .mx-tile { padding: 14px; }
+  #root .mx-tile h3 { font-size: 21px; }
+  #root .mx-tile-foot { flex-direction: column; align-items: flex-start; gap: 2px; }
+  #root .mx-tile-foot b { font-size: 20px; }
+  #root .mx-tile .mx-logos .mx-logo { width: 24px !important; height: 24px !important; }
+  #root .mx-start { padding: 28px 22px; min-height: 420px; }
+  #root .mx-start-art { right: 0; width: 100%; height: 52%; top: 12px; bottom: auto; -webkit-mask-position: center top; mask-position: center top; }
+  #root .mx-actions .btn { max-width: none; }
+  #root .mx-exited { font-size: 22px; }
+  #root .mx-row-links { flex-wrap: wrap; gap: 6px 20px; }
+}
+
+/* 金額與名稱的輸入框用底線表示焦點，不再套全站的黃色焦點框。 */
+html body #root :is(.mx-amount-field, .mx-name) input:focus-visible { outline: none !important; box-shadow: none !important; }
+
+/*
+ * 圓角一律用 App 既有的 token（與 .btn、.app-ticket-presets、底部面板同一套），放在既有的 @layer app-shapes 裡，
+ * 才蓋得過設計稿的直角 reset（見 mobile-app.css 的 app-shapes）。這裡不自訂任何圓角數值。
+ * 挑選格與組合卡片照 Funds 卡片是直角，不列在這裡。
+ */
+@layer app-shapes {
+  #root :is(.mx-logo, .mx-logo img) { border-radius: 50% !important; }
+  #root :is(.mx-search, .mx-input, .mx-pct, .mx-stepper button, .mx-back, .mx-exit-own) { border-radius: var(--app-control-radius) !important; }
+  #root :is(.mx-done, .mx-start--plain) { border-radius: var(--app-card-radius) !important; }
+  .app-bottom-sheet .mx-sharecard { border-radius: var(--app-card-radius) !important; }
+  @media (max-width: 719px) {
+    #root .mx-dock-in { border-radius: var(--app-card-radius) !important; }
+  }
+}

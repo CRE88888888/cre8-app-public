@@ -1,0 +1,296 @@
+import { useQueries, useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
+import { AppIcon } from '../../components/AppIcon';
+import { Badge, ErrorNote, Spinner } from '../../components/ui';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
+import { WalletMenu } from '../../components/WalletMenu';
+import { FundingMethods } from '../../components/FundingMethods';
+import { LinkedAccounts, ProfileHeader, SignOutButton } from './ProfileCard';
+import { AppBottomSheet } from '../../components/AppBottomSheet';
+import { PRIVY_ENABLED } from '../../lib/privy-config';
+import { MOCK_FUNDS } from '../../data/mock-funds';
+import { TradeRoutes } from '../../components/TradeRoutes';
+import { getAssets, getPortfolioActivity, getPortfolioStatus, getPortfolios } from '../../lib/api';
+import type { PortfolioStatus } from '../../lib/api';
+import { formatUsdE8, shortAddress } from '../../lib/format';
+import { RollingNumber } from '../../components/RollingNumber';
+import { CHAIN_ID, publicClientFor } from '../../lib/kernel';
+import type { RenewalWallet } from '../../lib/kernel';
+import { REFERENCE_METADATA } from '../../lib/public-funds';
+import { queryKeys } from '../../lib/query';
+import { useBodyClass } from '../../lib/use-body-class';
+import { useAccountAddress, useConnectedSessionToken } from '../../lib/use-connected-session';
+import { useMobile } from '../../lib/use-mobile';
+import { useOwnerWallet } from '../../lib/use-owner-wallet';
+import { decodeRebalanceSteps, hasVenue } from '../../lib/venues';
+import { ThemeToggle } from '../../components/ThemeToggle';
+
+function holdingState(status: PortfolioStatus | undefined) {
+  if (status === undefined || !status.complete) return <Badge tone="warn">Value unavailable</Badge>;
+  if (status.totalUsdE8 === '0') return <Badge tone="warn">Needs funding</Badge>;
+  if (status.drift === null) return <Badge tone="warn">Value unavailable</Badge>;
+  if (status.drift.needsRebalance) return <Badge tone="bad">Rebalance due</Badge>;
+  return <Badge tone="ok">Aligned</Badge>;
+}
+
+/**
+ * 交易紀錄裡的一筆：每一步走了哪個交易場所（cre8-app#47）。
+ *
+ * `/activity` 沒有 steps，後端也沒存 venue，所以直接讀鏈上那筆交易、從 calldata 解回來
+ * （`decodeRebalanceSteps`）。交易上鏈後不會變，查到就一直留著（`staleTime: Infinity`）。
+ * 不是再平衡的交易、A11 之前的交易、或讀不到鏈，都顯示「—」。
+ */
+function ActivityVenues({ txHash, account, wallet, symbolOf }: {
+  txHash: string | null;
+  account: string | undefined;
+  wallet: RenewalWallet | null;
+  symbolOf: (asset: string) => string;
+}): ReactNode {
+  const enabled = txHash !== null && account !== undefined && wallet !== null;
+  const steps = useQuery({
+    queryKey: ['tx-venues', CHAIN_ID, txHash, account?.toLowerCase()],
+    queryFn: async () => {
+      const tx = await publicClientFor(wallet as RenewalWallet).getTransaction({ hash: txHash as `0x${string}` });
+      return decodeRebalanceSteps(tx.input, account as string);
+    },
+    enabled,
+    staleTime: Infinity,
+  });
+  if (enabled && steps.isPending) return <span className="muted">…</span>;
+  if (steps.data === null || steps.data === undefined || !hasVenue(steps.data)) return '—';
+  return <TradeRoutes compact steps={steps.data} symbolOf={symbolOf} title="Trading venues" />;
+}
+
+export function PortfoliosPage(): ReactNode {
+  useBodyClass('portfolio-page', 'fund-explore');
+  const mobile = useMobile();
+  const token = useConnectedSessionToken();
+  const address = useAccountAddress();
+  /** 哪一個面板開著：帳號設定（齒輪）或入金方式（Add money）。 */
+  const [panel, setPanel] = useState<'settings' | 'funding' | null>(null);
+  const portfolios = useQuery({
+    queryKey: queryKeys.portfolios(token),
+    queryFn: () => getPortfolios(token as string),
+    enabled: token !== null,
+  });
+  const items = portfolios.data ?? [];
+
+  const statuses = useQueries({
+    queries: items.map(({ id }) => ({
+      queryKey: queryKeys.status(token, id),
+      queryFn: () => getPortfolioStatus(token as string, id),
+      enabled: token !== null,
+    })),
+  });
+  const activities = useQueries({
+    queries: items.map(({ id }) => ({
+      queryKey: ['activity', token, id],
+      queryFn: () => getPortfolioActivity(token as string, id),
+      enabled: token !== null,
+    })),
+  });
+  // 交易紀錄的「Venue」欄要把代幣位址換成代號。與基金頁共用同一份快取（同一個 queryKey）。
+  const ownerWallet = useOwnerWallet();
+  const assets = useQuery({
+    queryKey: ['assets', token],
+    queryFn: () => getAssets(token as string),
+    enabled: token !== null,
+    staleTime: 60_000,
+  });
+  const symbolForAsset = (asset: string): string => {
+    const wanted = asset.toLowerCase();
+    const listed = (assets.data ?? []).find((row) => row.address.toLowerCase() === wanted)?.symbol;
+    if (listed !== undefined) return listed;
+    // `/assets` 還沒回來或沒有這個代幣：退回各投組 status 裡看得到的代號。
+    for (const { data } of statuses) {
+      const known = [...(data?.holdings ?? []), ...(data?.targets ?? [])].find((row) => row.asset.toLowerCase() === wanted);
+      if (known !== undefined) return known.symbol;
+    }
+    return shortAddress(asset);
+  };
+
+  const valueReady = portfolios.data !== undefined &&
+    statuses.every((row) => row.data?.complete && row.data.totalUsdE8 != null);
+  const valueLoading = portfolios.isPending || statuses.some((row) => row.isPending);
+  const totalUsd = valueReady
+    ? formatUsdE8(statuses.reduce((sum, row) => sum + BigInt(row.data!.totalUsdE8), 0n).toString())
+    : '—';
+  const holdings = items.map(({ id, strategyId, strategyName }, index) => {
+    const query = statuses[index];
+    const status = query?.data;
+    const slug = MOCK_FUNDS.find((fund) => fund.name === strategyName)?.slug;
+    // 用策略 id 進基金頁（使用者 2026-11-20）：目錄基金下架後 `/funds/:slug` 顯示已下架，持有的人仍要能看到、賣掉自己的部位。
+    const path = strategyId != null
+      ? `/funds/strategy/${strategyId}?position=1&returnTo=%2Fportfolios`
+      : slug !== undefined ? `/funds/${slug}?position=1&returnTo=%2Fportfolios` : undefined;
+    return {
+      id, status, name: strategyName ?? `Strategy ${id}`,
+      cover: slug ? REFERENCE_METADATA[slug]?.cover : undefined,
+      path,
+      value: status?.complete ? formatUsdE8(status.totalUsdE8) : '—',
+      drift: status?.complete && status.totalUsdE8 !== '0' && status.drift !== null ? `${status.drift.grossDriftBps} bps` : '—',
+      state: query?.isPending ? <span className="muted">Loading…</span> : holdingState(status),
+    };
+  });
+  const activityLoading = activities.some((row) => row.isPending);
+  const activityError = activities.some((row) => row.isError);
+  const activity = activities.flatMap((row, index) => {
+    const portfolio = items[index];
+    if (!portfolio) return [];
+    return (row.data?.activity ?? []).map((entry) => ({ portfolio, entry }));
+  }).sort((left, right) => right.entry.id - left.entry.id).slice(0, 20).map(({ portfolio, entry }) => ({
+    key: `${portfolio.id}-${entry.id}`,
+    name: portfolio.strategyName ?? `Strategy ${portfolio.id}`,
+    date: new Date(entry.createdAt).toLocaleString('en-GB', { hour12: false }),
+    state: <Badge tone={entry.state === 'confirmed' ? 'ok' : entry.state === 'failed' ? 'bad' : 'warn'}>{entry.state}</Badge>,
+    drift: entry.driftBeforeBps === null || entry.driftAfterBps === null ? '—' : `${entry.driftBeforeBps} → ${entry.driftAfterBps} bps`,
+    value: entry.usdBeforeE8 === null || entry.usdAfterE8 === null ? '—' : `${formatUsdE8(entry.usdBeforeE8)} → ${formatUsdE8(entry.usdAfterE8)}`,
+    hash: entry.txHash === null ? '—' : `${entry.txHash.slice(0, 10)}…${entry.txHash.slice(-6)}`,
+    venues: <ActivityVenues txHash={entry.txHash} account={portfolio.smartAccounts[0]?.address} wallet={ownerWallet} symbolOf={symbolForAsset} />,
+  }));
+
+  return (
+    <main className="explore-wrap app-portfolio">
+      <header className="explore-heading">
+        <h1>Profile<span>.</span></h1>
+      </header>
+
+      {token === null ? (
+        <section className="app-portfolio-summary app-portfolio-guest" aria-labelledby="portfolio-guest-title">
+          {/* 未連錢包時只放一顆按鈕，使用者不知道連了之後會看到什麼；先說明這頁的用途再請他連線。 */}
+          <span className="app-icon-tile app-portfolio-hero-icon"><AppIcon name="wallet" size={22} /></span>
+          <h2 id="portfolio-guest-title">Your profile and funds in one place</h2>
+          <p>Sign in to see your linked accounts, each fund account you hold, its current value, and every rebalance.</p>
+          <WalletMenu inline />
+          <Link to="/vaults">Explore funds <AppIcon name="right" size={16} /></Link>
+        </section>
+      ) : (
+        <>
+          {/* 用戶頁只放「我是誰、我有多少錢、我持有什麼」。綁定帳號在齒輪裡，入金方式在 Add money 裡。 */}
+          <ProfileHeader address={address} onSettings={() => setPanel('settings')} />
+          <section className="app-portfolio-summary" aria-label="Portfolio summary">
+            <p className="app-portfolio-kicker">Total portfolio value</p>
+            <strong className="app-portfolio-value"><RollingNumber key={totalUsd} value={totalUsd} /></strong>
+            <div className="app-portfolio-meta">
+              <span>{items.length} {items.length === 1 ? 'fund account' : 'fund accounts'}</span>
+            </div>
+            {!valueReady && <p role="status">{valueLoading ? 'Loading account values…' : 'Total unavailable. Some account values could not be verified.'}</p>}
+            <button type="button" className="btn sm app-portfolio-add" onClick={() => setPanel('funding')}>
+              <AppIcon name="deposit" size={18} /> Add money
+            </button>
+          </section>
+          <ErrorNote error={portfolios.error} />
+          {!portfolios.isError && (
+            <Tabs defaultValue="holdings" className="app-portfolio-tabs">
+              <TabsList aria-label="Portfolio sections">
+                <TabsTrigger value="holdings"><AppIcon name="holdings" size={17} /> Holdings</TabsTrigger>
+                <TabsTrigger value="activity"><AppIcon name="activity" size={17} /> Activity</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="holdings" className="app-portfolio-pane">
+                {portfolios.isPending ? (
+                  <p className="fund-list-loading" role="status"><Spinner /> Loading holdings…</p>
+                ) : !holdings.length ? (
+                  <div className="directory-empty"><strong>No fund accounts yet</strong><Link className="btn ghost" to="/vaults">Explore funds</Link></div>
+                ) : mobile ? (
+                  <ul className="app-portfolio-ledger">
+                    {holdings.map(({ id, status, name, path, value, drift, state, cover }) => (
+                      <li key={id} className={`app-holding-row${path ? ' app-ledger-link' : ''}`}>
+                        {cover ? (
+                          <img className="app-holding-cover" src={cover.thumbnailSrc} alt="" width={46} height={46}
+                            style={{ objectPosition: `50% ${cover.thumbnailPosition}%` }} />
+                        ) : (
+                          <span className="app-icon-tile app-holding-cover"><AppIcon name="holdings" size={21} /></span>
+                        )}
+                        <div className="app-holding-main">
+                          <h3>{path ? <Link to={path}>{name}</Link> : name}</h3>
+                          <div className="app-holding-status">{state}{drift !== '—' && <span>· {drift} drift</span>}</div>
+                          {status && !path && <span className="app-holding-address mono">{shortAddress(status.account)}</span>}
+                        </div>
+                        <strong>{value}</strong>
+                        {path && <AppIcon name="right" size={15} />}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="portfolio-table-scroll">
+                    <table className="table" aria-label="Fund holdings">
+                      <thead><tr><th>Fund</th><th>Account</th><th className="num">Value</th><th className="num">Drift</th><th>State</th></tr></thead>
+                      <tbody>
+                        {holdings.map(({ id, status, name, path, value, drift, state }) => (
+                          <tr key={id}>
+                            <td>{path ? <Link to={path}>{name}</Link> : name}</td>
+                            <td className="mono muted">{status ? shortAddress(status.account) : '—'}</td>
+                            <td className="num">{value}</td><td className="num">{drift}</td><td>{state}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="activity" className="app-portfolio-pane">
+                {(portfolios.isPending || activityLoading) && <p role="status" className="app-portfolio-caption">Loading activity…</p>}
+                {activityError && <p role="status" className="app-portfolio-caption">Some activity could not be loaded.</p>}
+                {!activity.length ? (
+                  !portfolios.isPending && !activityLoading && !activityError && (
+                    <div className="directory-empty"><strong>No activity yet</strong></div>
+                  )
+                ) : mobile ? (
+                  <ul className="app-portfolio-ledger">
+                    {activity.map(({ key, name, date, state, drift, value, hash, venues }) => (
+                      <li key={key}>
+                        <div className="app-ledger-heading">
+                          <div className="app-ledger-title">
+                            <h3>{name}</h3>
+                          </div>
+                          {state}
+                        </div>
+                        <p>{date}</p>
+                        <dl className="app-ticket-details">
+                          <dt>Drift</dt><dd>{drift}</dd>
+                          <dt>Value</dt><dd>{value}</dd>
+                          <dt>Transaction</dt><dd>{hash}</dd>
+                          <dt>Venue</dt><dd>{venues}</dd>
+                        </dl>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="portfolio-table-scroll">
+                    <table className="table" aria-label="Activity history">
+                      <thead><tr><th>Fund</th><th>When</th><th>State</th><th className="num">Drift</th><th className="num">Value</th><th>Transaction</th><th>Venue</th></tr></thead>
+                      <tbody>
+                        {activity.map(({ key, name, date, state, drift, value, hash, venues }) => (
+                          <tr key={key}><td>{name}</td><td>{date}</td><td>{state}</td><td className="num mono">{drift}</td><td className="num mono">{value}</td><td className="mono muted">{hash}</td><td>{venues}</td></tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          )}
+          {/* 入金方式：現在能用的與主網才開放的（灰色）。見 lib/feature-flags.ts。 */}
+          <AppBottomSheet id="profile-funding" open={panel === 'funding'} onOpenChange={(open) => setPanel(open ? 'funding' : null)} title="Add money">
+            <FundingMethods variant="sheet" />
+          </AppBottomSheet>
+          <AppBottomSheet
+            open={panel === 'settings'}
+            onOpenChange={(open) => setPanel(open ? 'settings' : null)}
+            id="profile-account"
+            title="Account"
+            {...(PRIVY_ENABLED ? { description: 'Link more ways to sign in, export your wallet key, or sign out.' } : {})}
+          >
+            <LinkedAccounts address={address} />
+            <ThemeToggle variant="row" />
+            <SignOutButton onDone={() => setPanel(null)} />
+          </AppBottomSheet>
+        </>
+      )}
+    </main>
+  );
+}

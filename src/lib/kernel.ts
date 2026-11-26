@@ -1,0 +1,607 @@
+/**
+ * 續期用的 Kernel/UserOp 組裝。
+ *
+ * 續期這一筆是 **sudo（owner）簽名**的 UserOp：它做的事是「在鏈上安裝一組新的 session key 權限」。
+ * 所以簽名者必須是帳戶的 owner EOA —— 也就是剛登入的那個錢包。
+ *
+ * 兩個刻意的選擇：
+ * 1. **bundler 走後端的 relay**（`${VITE_API_BASE}/bundler`），不是 `params.bundlerUrl`。
+ *    `bundlerUrl` 是後端自己用的 alto 位址（127.0.0.1:3001），瀏覽器直接打會撞 CORS，而且那個位址
+ *    通常不對外。relay 讓前端只認識一個 origin。
+ *    ⚠ relay **要帶使用者的 session token**（`Authorization: Bearer`），而且只放行六個白名單方法
+ *    （`eth_sendUserOperation` / `eth_estimateUserOperationGas` / `eth_getUserOperationReceipt` /
+ *    `eth_getUserOperationByHash` / `eth_supportedEntryPoints` / `eth_chainId`）。
+ *    少了這個標頭就是 401 —— 這是踩過的坑。
+ * 2. **publicClient 優先用錢包自己的 provider**（那條鏈它已經連上了），只有在 dev 私鑰模式才退回
+ *    `VITE_RPC_URL`（dev 由 vite proxy 轉到 anvil）。這樣就不需要在瀏覽器裡散佈一個 RPC 端點。
+ */
+import {
+  createKernelAccount,
+  createKernelAccountClient,
+} from '@zerodev/sdk';
+import { KERNEL_V3_3 } from '@zerodev/sdk/constants';
+import type { GetKernelVersion } from '@zerodev/sdk/types';
+import { signerToEcdsaValidator } from '@zerodev/ecdsa-validator';
+import { createPublicClient, createWalletClient, custom, encodeFunctionData, encodePacked, http, keccak256 } from 'viem';
+import type { Address, Chain, Hex, LocalAccount, PublicClient, WalletClient } from 'viem';
+
+import { getPlatformStatusText, postSponsor } from './api';
+import { assertAddressBook } from './address-book-check';
+import { chainProfile, checkedContract, readChainId, verifyRpcChain, viemBlockTime } from './chain-config';
+import { SponsorshipError, packForSponsorship, retryMixBusy, sponsorshipFromResponse, stubPaymasterData } from './paymaster';
+import { userOpReceiptFrom } from './yield-pending';
+import { broadcastPrepared, sendUserOp } from './userop-send';
+import { formatUserOperationRequest, getUserOperationHash } from 'viem/account-abstraction';
+
+const API_BASE: string = import.meta.env.VITE_API_BASE ?? '/api';
+
+/**
+ * 這個 app 跑的鏈。
+ *
+ * 為什麼預設是 **1337** 而不是 56：chainId 56 是 MetaMask「認識」的鏈，它會把**代幣餘額顯示**
+ * 與**交易模擬**交給自家後端（以 chainId 為主鍵）→ 我們的 fork 被當成 BSC 主網，
+ * 於是錢包永遠顯示 0 USDT、永遠說 "likely to fail"，而 nonce/gas 卻是從我們的 RPC 拿的
+ * （所以看起來像「連對了但餘額不對」）。換成 MetaMask 不認得的 id，它就只能問我們的 RPC。
+ *
+ * 正式部署時把 `VITE_CHAIN_ID=56` 設回去即可，呼叫端的名字不變。
+ */
+export const CHAIN_ID = readChainId(import.meta.env.VITE_CHAIN_ID);
+
+/**
+ * 這條鏈的設定：主網、測試網（97）、本機 fork 各自一份，互不回落（cre8-app#62，`lib/chain-config.ts`）。
+ * 測試網的 RPC、區塊瀏覽器、合約地址、代付都從這裡來。
+ */
+export const CHAIN = chainProfile(CHAIN_ID, import.meta.env.VITE_RPC_URL, import.meta.env.VITE_TESTNET_RPC_URL);
+
+/**
+ * 讀鏈用的 RPC。測試網一律用 `CHAIN.rpcUrl`（測試網自己的節點，不拿主網的 `VITE_RPC_URL`）；
+ * 其他鏈照舊：`VITE_RPC_URL`，dev 沒設時走 vite 的 `/rpc` proxy。
+ */
+export function readRpcUrl(): string | undefined {
+  if (CHAIN.testnet) return CHAIN.rpcUrl;
+  return import.meta.env.VITE_RPC_URL ?? (import.meta.env.DEV ? '/rpc' : undefined);
+}
+
+let rpcChecked: Promise<void> | null = null;
+/**
+ * 送任何交易前呼叫：用獨立的 HTTP 請求確認 RPC 真的是這條鏈（`verifyRpcChain`）。對不上就丟錯，交易不送。
+ * 成功一次就記住；失敗不記，下次再問。
+ */
+export function assertRpcChain(): Promise<void> {
+  if (rpcChecked === null) {
+    rpcChecked = verifyRpcChain(CHAIN).catch((cause: unknown) => {
+      rpcChecked = null;
+      throw cause;
+    });
+  }
+  return rpcChecked;
+}
+
+export const bsc = {
+  id: CHAIN_ID,
+  name: CHAIN.name,
+  nativeCurrency: { name: CHAIN.nativeSymbol, symbol: CHAIN.nativeSymbol, decimals: 18 },
+  rpcUrls: { default: { http: [CHAIN.rpcUrl] } },
+  // 測試網 0.45 秒出塊：讓 viem 每 500ms 問一次收據（沒寫是 4 秒；買入的轉帳、水龍頭、My mix 都在等它）。
+  ...viemBlockTime(CHAIN),
+} as const satisfies Chain;
+
+/**
+ * EntryPoint v0.7 的位址。後端也會帶，但那是**字串**；這裡驗一次相等再交給 SDK，
+ * 免得 SDK 收到一個它認不得的型別卻只回一句看不懂的錯誤。
+ */
+const ENTRY_POINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
+
+/**
+ * SDK 要的是 **物件**（`{ address, version }`），不是位址字串。
+ *
+ * 踩過的坑：把 `params.entryPoint`（字串）直接傳進去，會得到
+ * `Error: Unsupported entry point version` —— 訊息完全沒提「你傳的是字串」。
+ */
+const ENTRY_POINT = { address: ENTRY_POINT_V07, version: '0.7' } as const;
+
+export function assertEntryPoint(value: string): void {
+  if (value.toLowerCase() !== ENTRY_POINT_V07.toLowerCase()) {
+    throw new Error(`The backend returned entryPoint ${value}; this front end only supports v0.7 (${ENTRY_POINT_V07})`);
+  }
+}
+
+export type RenewalWallet =
+  | { kind: 'injected'; address: Address; provider: { request(args: { method: string; params?: unknown[] }): Promise<unknown> } }
+  | { kind: 'dev'; address: Address; account: LocalAccount };
+
+/**
+ * 讀鏈用的 client。錢包模式用錢包自己的 transport；dev 用 `VITE_RPC_URL`（預設 dev 的 `/rpc` proxy）。
+ */
+export function publicClientFor(wallet: RenewalWallet): PublicClient {
+  if (wallet.kind === 'injected') {
+    return createPublicClient({ chain: bsc, transport: custom(wallet.provider as never) });
+  }
+  const rpcUrl = readRpcUrl();
+  if (rpcUrl === undefined || rpcUrl === '') {
+    throw new Error(
+      'Dev private-key mode needs an RPC: set VITE_RPC_URL, or use the vite /rpc proxy in dev (it targets 127.0.0.1:8545)',
+    );
+  }
+  return createPublicClient({ chain: bsc, transport: http(rpcUrl) });
+}
+
+function signerFor(wallet: RenewalWallet): LocalAccount | WalletClient {
+  if (wallet.kind === 'dev') return wallet.account;
+  return createWalletClient({
+    account: wallet.address,
+    chain: bsc,
+    transport: custom(wallet.provider as never),
+  });
+}
+
+export type RenewalReceipt = {
+  userOpHash: Hex;
+  txHash: Hex;
+  success: boolean;
+  gasUsed: string | null;
+};
+
+/**
+ * 送出「安裝新權限」的 UserOp。
+ *
+ * `initConfig` 的每一筆都是**打給帳戶自己**的 calldata（`msg.sender == self` 才會被 Kernel 當成
+ * 自我呼叫），所以 `to` 一定是 `accountAddress`。
+ */
+/**
+ * 用 owner 錢包送一筆 sudo UserOp，`calls` 原樣執行。
+ *
+ * 續期（安裝權限）與 approve 都是「帳戶自己做的事、需要 owner 簽名」，差別只在 calls 的內容 ——
+ * 所以組裝與送出只有這一份。
+ */
+/**
+ * 帳戶的 counterfactual salt —— **必須與後端逐 byte 相同**。
+ *
+ * 後端（`backend/src/kernel.ts` 的 `computeSalt`）用
+ * `keccak256(encodePacked(['string','address','uint256'], [TAG, owner, strategyId]))`
+ * 當 `createKernelAccount` 的 `index`。前端若省略 index（等於 0n），推導出的
+ * counterfactual 地址就**不是**那個帳戶 —— 簽章會綁到錯的設定上，EntryPoint 只會回
+ * 一句看不懂的 `AA24 signature error`。
+ */
+const SALT_DOMAIN_TAG = 'cre8-atp:kernel-v3.3';
+
+export function computeAccountSalt(owner: Address, strategyId: number): bigint {
+  return BigInt(
+    keccak256(encodePacked(['string', 'address', 'uint256'], [SALT_DOMAIN_TAG, owner, BigInt(strategyId)])),
+  );
+}
+
+/** 帳戶還沒部署：不簽、不送（不會帶 initCode）。 */
+export class AccountNotDeployedError extends Error {
+  constructor(readonly account: string) {
+    super('Your fund account is still being set up, so nothing was sent. Please try again in a minute.');
+    this.name = 'AccountNotDeployedError';
+  }
+}
+
+export async function sendSudoCalls(args: {
+  wallet: RenewalWallet;
+  token: string;
+  accountAddress: Address;
+  calls: readonly { to: Address; data: Hex; value: bigint }[];
+  /** 投組對應的策略 id —— 用來算出與後端相同的帳戶 salt（見 `computeAccountSalt`）。 */
+  strategyId: number;
+  timeoutMs?: number;
+  onSubmitted?: (userOpHash: Hex) => void;
+  /** 後端給的完整 nonce（My mix，見下方 `getNonce`）。 */
+  nonce?: bigint;
+}): Promise<RenewalReceipt> {
+  await assertRpcChain(); // RPC 連到的不是這條鏈（例如測試網的 build 讀主網）：不簽、不送（cre8-app#93）。
+  // 內建地址簿（chain 97）要和後端在用的 registry／executor 一樣，不然不簽、不送（審查 #95 第 1 項）。
+  await assertAddressBook(CHAIN.contracts === null ? null : { chainId: CHAIN.id, registry: CHAIN.contracts.registry, executor: CHAIN.contracts.executor }, getPlatformStatusText);
+  const publicClient = publicClientFor(args.wallet);
+  const entryPoint = ENTRY_POINT as never;
+  const kernelVersion: GetKernelVersion<'0.7'> = KERNEL_V3_3;
+
+  // 帳戶一定要已經部署：sudo UserOp 一律不帶 initCode／factory 資料（P11：公開 chain 97 的 MetaFactory 沒有質押，
+  // bundler 會拒絕帶 initCode 的 UserOp；帳戶由後端 operator 先部署）。還沒部署就不簽、不送。
+  const code = await publicClient.getCode({ address: args.accountAddress });
+  if (code === undefined || code === '0x') throw new AccountNotDeployedError(args.accountAddress);
+
+  // 位址**明確傳**：帳戶已經存在，它的位址不該取決於這一次跑出來的 init code。
+  const sudoAccount = await createKernelAccount(publicClient, {
+    address: args.accountAddress,
+    // 與後端同一個 index（salt）；少了它，SDK 會用 0n 推導出不同的帳戶設定。
+    index: computeAccountSalt(args.wallet.address as Address, args.strategyId),
+    plugins: {
+      sudo: await signerToEcdsaValidator(publicClient, {
+        signer: signerFor(args.wallet) as never,
+        entryPoint,
+        kernelVersion,
+      }),
+    },
+    entryPoint,
+    kernelVersion,
+    useMetaFactory: true,
+  });
+  // My mix（cre8-app#132）：後端在意圖裡存了完整 nonce，sponsor 只代付同一個 nonce 的 UserOp；
+  // 帶了就固定用它（SDK 準備 UserOp 時向帳戶要 nonce），沒帶照舊向 EntryPoint 讀。
+  const pinnedNonce = args.nonce;
+  const opAccount = pinnedNonce === undefined ? sudoAccount : { ...sudoAccount, getNonce: async () => pinnedNonce };
+
+  // 「連錯錢包」要講清楚，不要讓它變成 AA24。
+  //
+  // Kernel 的 sudo 驗證是「這個簽名是不是帳戶 owner 簽的」。如果使用者目前連的錢包
+  // 不是當初建立那個帳戶的 owner，EntryPoint 只會回一句 `AA24 signature error` ——
+  // 那句話完全看不出原因是「錢包不對」，而使用者只會以為是我們的程式壞了。
+  //
+  // 這裡用同一個 signer 推導一次 counterfactual 地址來比對：地址不同就代表簽名者不是 owner。
+  if (sudoAccount.address.toLowerCase() !== args.accountAddress.toLowerCase()) {
+    throw new Error(
+      `This wallet does not control the fund's account. ` +
+        `Connected signer derives ${sudoAccount.address}, but the fund lives at ${args.accountAddress}. ` +
+        `Switch MetaMask to the wallet that created this position (the one shown in "My position"), then try again.`,
+    );
+  }
+
+  // 代付（測試網）：帳戶不需要原生代幣，gas 由平台的 paymaster 付。
+  // 被拒時 viem 會把原因包進它自己的錯誤裡（或在估 gas 階段換成別的訊息），所以把真正的原因記在這裡，
+  // 最後丟出去的是白話的 `SponsorshipError`，不是一句讓人以為要自己補 BNB 的 `AA21`。
+  const paymasterAddress = CHAIN.sponsored ? (CHAIN.contracts?.paymaster as Address | undefined) : undefined;
+  let sponsorFailure: SponsorshipError | null = null;
+
+  const accountClient = createKernelAccountClient({
+    account: opAccount,
+    chain: bsc,
+    client: publicClient,
+    ...(paymasterAddress === undefined
+      ? {}
+      : {
+          paymaster: {
+            // 估 gas 用的假資料：不打後端（後端只在拿到完整的 UserOp 時才簽名、記額度）。
+            getPaymasterStubData: async () => stubPaymasterData(paymasterAddress),
+            getPaymasterData: async (operation) => {
+              try {
+                const packed = packForSponsorship(operation);
+                const body = await retryMixBusy(() => postSponsor(args.token, packed));
+                return sponsorshipFromResponse(body, paymasterAddress);
+              } catch (cause) {
+                sponsorFailure = SponsorshipError.from(cause);
+                throw sponsorFailure;
+              }
+            },
+          },
+        }),
+    bundlerTransport: http(`${API_BASE}/bundler`, {
+      // relay 是認證端點：沒有這個標頭會回 401 UNAUTHORIZED。
+      fetchOptions: { headers: { authorization: `Bearer ${args.token}` } },
+      // 估 gas ＋ 送 op ＋ 等 receipt，10 秒（viem 預設）不夠。
+      timeout: 60_000,
+    }),
+    userOperation: {
+      // alto 不提供 ZeroDev 的 zd_getUserOperationGasPrice，用節點 gas price（與 scripts 一致）。
+      estimateFeesPerGas: async () => {
+        const gasPrice = await publicClient.getGasPrice();
+        return { maxFeePerGas: gasPrice, maxPriorityFeePerGas: gasPrice };
+      },
+    },
+  });
+
+  // 生息（帶 onSubmitted）而且是 chain 97：自己 prepare → 簽名 → 算 hash → 交給呼叫端存 → 才廣播（cre8-app#95 第三輪複審 R1）。
+  // 其他呼叫者與 chain 56：原本的 sendUserOperation，不變（總管 2026-11-16：新路徑還沒對真的 bundler 送過）。
+  const userOpHash = await sendUserOp({
+    chainId: CHAIN.id,
+    onSubmitted: args.onSubmitted,
+    legacy: async () => {
+      try {
+        return await accountClient.sendUserOperation({ calls: args.calls });
+      } catch (cause) {
+        throw sponsorFailure ?? cause;
+      }
+    },
+    early: async (onSubmitted) => {
+      // 不用 `sendUserOperation`：它會在內部重新 prepare（paymaster 再簽一次），廣播出去的 hash 就不是事先算的那個。
+      let prepared;
+      try {
+        prepared = await accountClient.prepareUserOperation({ calls: args.calls });
+      } catch (cause) {
+        throw sponsorFailure ?? cause;
+      }
+      const signed = { ...prepared, signature: await sudoAccount.signUserOperation(prepared as never) };
+      const computed = getUserOperationHash({
+        userOperation: signed as never,
+        entryPointAddress: ENTRY_POINT_V07,
+        entryPointVersion: '0.7',
+        chainId: CHAIN.id,
+      });
+      // 回應遺失、逾時、斷線：原錯誤丟出，hash 已經存了（待對帳）；bundler 明確拒絕才丟 BundlerRejected。
+      const returned = await broadcastPrepared({
+        userOpHash: computed,
+        onSubmitted,
+        broadcast: () =>
+          accountClient.request(
+            { method: 'eth_sendUserOperation', params: [formatUserOperationRequest(signed as never), ENTRY_POINT_V07] } as never,
+            { retryCount: 0 },
+          ) as Promise<Hex>,
+      });
+      if (returned.toLowerCase() !== computed.toLowerCase()) onSubmitted(returned);
+      return returned;
+    },
+  });
+  const receipt = await accountClient.waitForUserOperationReceipt({
+    hash: userOpHash,
+    timeout: args.timeoutMs ?? 180_000,
+  });
+
+  return {
+    userOpHash,
+    txHash: receipt.receipt.transactionHash,
+    success: receipt.success,
+    gasUsed: receipt.actualGasUsed?.toString() ?? null,
+  };
+}
+
+/**
+ * 用原 userOpHash 問 bundler（後端 relay）這筆 UserOp 的結果：null = 還沒有 receipt。
+ * 生息簽名等 receipt 逾時後對帳用（cre8-app#95 複審 F5）。
+ */
+export async function lookupUserOperation(token: string, userOpHash: Hex): Promise<{ txHash: string; success: boolean } | null> {
+  const response = await fetch(`${API_BASE}/bundler`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getUserOperationReceipt', params: [userOpHash] }),
+  });
+  if (!response.ok) throw new Error(`Could not check the transaction (HTTP ${response.status}).`);
+  return userOpReceiptFrom(await response.json());
+}
+
+/**
+ * 續期：把 `initConfig` 的每一筆當成一個 call（`to` 是帳戶自己 —— `msg.sender == self`）。
+ *
+ * 包在 `sendSudoCalls` 外面只是為了留住「續期」這個名字，行為完全一樣。
+ */
+export async function sendRenewalUserOp(args: {
+  wallet: RenewalWallet;
+  token: string;
+  accountAddress: Address;
+  entryPoint: string;
+  initConfig: readonly Hex[];
+  /** 投組對應的策略 id（算出帳戶 salt 用）。 */
+  strategyId: number;
+  timeoutMs?: number;
+}): Promise<RenewalReceipt> {
+  assertEntryPoint(args.entryPoint);
+  return sendSudoCalls({
+    wallet: args.wallet,
+    token: args.token,
+    accountAddress: args.accountAddress,
+    strategyId: args.strategyId,
+    calls: args.initConfig.map((data) => ({ to: args.accountAddress, data, value: 0n })),
+    ...(args.timeoutMs === undefined ? {} : { timeoutMs: args.timeoutMs }),
+  });
+}
+
+/** ERC-20 `approve` 的 calldata（`uint256(2**256-1)` = 無限額度）。 */
+
+/** `transfer(to, amount)` 的 calldata —— 提領就是這一筆（帳戶 → 使用者錢包）。 */
+/**
+ * 把帳戶裡多個資產一次掃回錢包（一筆 sudo UserOp、多個 transfer）。
+ *
+ * 為什麼要「一次」：清倉後殘留的是 wei 級塵埃，每一筆各自送一個 UserOp 的話，
+ * 光 gas 就比那些塵埃值錢。合併成一筆只付一次 overhead。
+ *
+ * 只掃**餘額 > 0** 的資產；`0` 的別送（transfer(0) 浪費 gas 又沒有語意）。
+ */
+export async function sendSweep(args: {
+  wallet: RenewalWallet;
+  token: string;
+  accountAddress: Address;
+  recipient: Address;
+  /** 要掃出去的資產與金額（wei）。金額為 0 的會被忽略。 */
+  /** 投組對應的策略 id（算出帳戶 salt 用）。 */
+  strategyId: number;
+  balances: readonly { asset: Address; amountWei: bigint }[];
+  /**
+   * 額外要退回的原生幣（wei），與代幣轉帳放在**同一個** UserOp 裡。
+   *
+   * 為什麼不能事後再送一筆：連續兩筆 UserOp 時，第二筆的 account nonce 可能還沒推進，
+   * 模擬階段就以 `AA25 invalid account nonce` 失敗（實測清倉後掃 BNB 就是這樣掛的）。
+   * 合併成一筆同時也省一次 overhead。
+   *
+   * 代付（`CHAIN.sponsored`）時忽略：paymaster 不代付帶 value 的 call（見 `sweepCalls`）。
+   */
+  nativeWei?: bigint;
+}): Promise<RenewalReceipt | null> {
+  const calls = sweepCalls(args);
+  if (calls.length === 0) return null;
+  return sendSudoCalls({
+    wallet: args.wallet,
+    token: args.token,
+    accountAddress: args.accountAddress,
+    strategyId: args.strategyId,
+    calls,
+  });
+}
+
+/**
+ * 清倉掃回的 calls：每個非零代幣一筆 transfer，原生幣只在**自付 gas** 時才一起退。
+ *
+ * 代付（測試網）時 paymaster 拒絕任何 value != 0 的 call，帶上 BNB 轉帳整筆 sweep 就被拒；
+ * 而代付帳戶裡的 BNB 只是用不到的 gas 渣，所以直接不掃（代幣照常掃回）。
+ */
+export function sweepCalls(
+  args: { recipient: Address; balances: readonly { asset: Address; amountWei: bigint }[]; nativeWei?: bigint },
+  sponsored: boolean = CHAIN.sponsored,
+): { to: Address; data: Hex; value: bigint }[] {
+  const calls = args.balances
+    .filter((row) => row.amountWei > 0n)
+    .map((row) => ({ to: row.asset, data: transferCalldata(args.recipient, row.amountWei), value: 0n }));
+  if (!sponsored && args.nativeWei !== undefined && args.nativeWei > 0n) {
+    calls.push({ to: args.recipient, data: '0x', value: args.nativeWei });
+  }
+  return calls;
+}
+
+export function transferCalldata(to: Address, amount: bigint): Hex {
+  return encodeFunctionData({
+    abi: [
+      {
+        type: 'function',
+        name: 'transfer',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'to', type: 'address' },
+          { name: 'amount', type: 'uint256' },
+        ],
+        outputs: [{ name: '', type: 'bool' }],
+      },
+    ] as const,
+    functionName: 'transfer',
+    args: [to, amount],
+  });
+}
+
+/**
+ * 從 Kernel 帳戶提領一個資產到使用者自己的錢包。
+ *
+ * 為什麼一定要 owner 簽名：session key 的 CallPolicy 只允許 `executeRebalance`，
+ * 所以「把錢轉出去」這件事**只能**由 owner 的 sudo 驗證做（跟 approve 同一條路徑）。
+ * 這也意味著提領需要帳戶裡有 BNB 付 gas —— 沒有就先 top up。
+ */
+export async function sendWithdraw(args: {
+  wallet: RenewalWallet;
+  token: string;
+  accountAddress: Address;
+  asset: Address;
+  recipient: Address;
+  amountWei: bigint;
+  /** 投組對應的策略 id（算出帳戶 salt 用）。 */
+  strategyId: number;
+}): Promise<RenewalReceipt> {
+  if (args.amountWei === 0n) throw new Error('withdraw amount must be greater than zero');
+  return sendSudoCalls({
+    wallet: args.wallet,
+    token: args.token,
+    accountAddress: args.accountAddress,
+    strategyId: args.strategyId,
+    calls: [{ to: args.asset, data: transferCalldata(args.recipient, args.amountWei), value: 0n }],
+  });
+}
+
+export function approveCalldata(spender: Address): Hex {
+  // 這支只用來授權 executor。測試網有地址簿：後端回報的 executor 不是地址簿上的那一個就停下，
+  // 不對一個錯的合約開無限額度（主網與本機 fork 沒有地址簿，照舊）。
+  checkedContract(CHAIN, 'executor', spender);
+  return encodeFunctionData({
+    abi: [
+      {
+        type: 'function',
+        name: 'approve',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'spender', type: 'address' },
+          { name: 'amount', type: 'uint256' },
+        ],
+        outputs: [{ name: '', type: 'bool' }],
+      },
+    ] as const,
+    functionName: 'approve',
+    args: [spender, (1n << 256n) - 1n],
+  });
+}
+
+/** 帳戶對 spender 的 ERC-20 allowance。 */
+/**
+ * 唯讀的 public client —— **不需要錢包**。
+ *
+ * allowance 是純讀取，卻原本綁在「錢包 transport」上，於是沒連錢包時整個 Allowance 區塊只能顯示
+ * 那段長說明（永遠不知道其實已經 approve 了）。把讀取與簽名拆開：讀用 RPC，簽才需要錢包。
+ */
+export function readOnlyClient(): PublicClient {
+  const rpcUrl = readRpcUrl();
+  if (rpcUrl === undefined || rpcUrl === '') {
+    throw new Error(
+      'Reading allowance needs an RPC: set VITE_RPC_URL (in dev the vite /rpc proxy is used automatically)',
+    );
+  }
+  return createPublicClient({ chain: bsc, transport: http(rpcUrl) });
+}
+
+export async function readAllowance(args: {
+  /** 有連錢包就用它的 transport（沿用使用者自己的 RPC）；沒有就退回唯讀 client。 */
+  wallet?: RenewalWallet | null;
+  token: Address;
+  owner: Address;
+  spender: Address;
+}): Promise<bigint> {
+  const client = args.wallet === null || args.wallet === undefined ? readOnlyClient() : publicClientFor(args.wallet);
+  return (await client.readContract({
+    address: args.token,
+    abi: [
+      {
+        type: 'function',
+        name: 'allowance',
+        stateMutability: 'view',
+        inputs: [
+          { name: 'owner', type: 'address' },
+          { name: 'spender', type: 'address' },
+        ],
+        outputs: [{ name: '', type: 'uint256' }],
+      },
+    ] as const,
+    functionName: 'allowance',
+    args: [args.owner, args.spender],
+  })) as bigint;
+}
+
+/**
+ * 從 owner 錢包送 BNB 到某個位址（給新帳戶付 UserOp 的 gas），**並等這筆轉帳上鏈**才回傳。
+ *
+ * 為什麼需要它：新帳戶部署時 operator 付 gas，但**之後**每一筆 UserOp（approve、再平衡）都由帳戶自己付。
+ * 帳戶沒有 BNB 時，approve 這筆 op 會因為付不出 gas 而失敗 —— 而錯誤訊息不會提到「沒錢」。
+ *
+ * 為什麼要等上鏈（cre8-app#22）：呼叫端下一步就是送 UserOp，bundler 估 gas 時讀的是鏈上餘額。
+ * 只拿到 tx hash 就往下走的話，轉帳還在 mempool、帳戶還是 0 BNB，UserOp 會在模擬時
+ * `AA21 didn't pay prefund`。anvil「有交易就出塊」時看不出來，定時出塊（真鏈也是）就會撞到。
+ *
+ * - 轉帳 revert → 丟錯（gas 沒到，後面一定失敗，不如現在講清楚）。
+ * - 等到逾時還沒看到收據 → **不丟錯**，照舊回傳 hash 讓呼叫端繼續：交易已經送出，
+ *   多半只是 RPC 慢；這時中斷流程（例如買入做到一半）比繼續更糟。
+ */
+export async function sendGasTopUp(args: {
+  wallet: RenewalWallet;
+  to: Address;
+  valueWei: bigint;
+  /** 等收據的上限（毫秒）。預設 60 秒。 */
+  timeoutMs?: number;
+  /** 輪詢間隔（毫秒）。BSC 出塊不到 1 秒，預設每秒問一次。 */
+  pollingIntervalMs?: number;
+}): Promise<Hex> {
+  const hash = await submitGasTopUp(args);
+  let status: 'success' | 'reverted';
+  try {
+    const receipt = await publicClientFor(args.wallet).waitForTransactionReceipt({
+      hash,
+      timeout: args.timeoutMs ?? 60_000,
+      pollingInterval: args.pollingIntervalMs ?? 1_000,
+    });
+    status = receipt.status;
+  } catch {
+    return hash;
+  }
+  if (status !== 'success') throw new Error(`The gas top-up transaction reverted: ${hash}`);
+  return hash;
+}
+
+async function submitGasTopUp(args: { wallet: RenewalWallet; to: Address; valueWei: bigint }): Promise<Hex> {
+  await assertRpcChain();
+  if (args.wallet.kind === 'dev') {
+    const rpcUrl = readRpcUrl();
+    if (rpcUrl === undefined || rpcUrl === '') {
+      throw new Error('dev 私鑰模式需要一個 RPC 才能送交易：設 VITE_RPC_URL（dev 預設 /rpc）');
+    }
+    const client = createWalletClient({ account: args.wallet.account, chain: bsc, transport: http(rpcUrl) });
+    return client.sendTransaction({ to: args.to, value: args.valueWei, chain: bsc });
+  }
+  const client = createWalletClient({
+    account: args.wallet.address,
+    chain: bsc,
+    transport: custom(args.wallet.provider as never),
+  });
+  return client.sendTransaction({ to: args.to, value: args.valueWei, chain: bsc });
+}

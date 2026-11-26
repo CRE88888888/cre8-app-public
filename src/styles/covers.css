@@ -1,0 +1,116 @@
+/*
+ * 點畫封面（hedcut）的版式（2026-11-13，規格見 DESIGN.md「封面」）。
+ * 圖是純白底、黑色墨線，所以一律放在淺色面上、用 multiply 疊上去（白色會消失，不用去背）。
+ * 深色面（主打牌）不反白：反白後臉會變成負片，所以只放白底的小頭像。
+ */
+
+/* ── 基金頁上方的封面：左邊名稱，右邊點畫 ─────────────── */
+body.atp-formal-fund #root #atp-fund-cover.is-hedcut { border: 1px solid var(--hair); background: var(--paper); }
+body.atp-formal-fund #root #atp-fund-cover.is-hedcut > img {
+  inset: 0 5% 0 auto;
+  width: auto;
+  height: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  object-position: 50% 16%;
+  mix-blend-mode: multiply;
+}
+body.atp-formal-fund #root #atp-fund-cover.is-hedcut .atp-fund-cover-shade { display: none; }
+body.atp-formal-fund #root #atp-fund-cover.is-hedcut h1 { right: auto; max-width: 54%; color: var(--ink); }
+body.atp-formal-fund #root #atp-fund-cover.is-hedcut h1 :is(a, button, span) { color: inherit; }
+
+@media (min-width: 720px) {
+  body.atp-formal-fund #root #atp-fund-cover.is-hedcut > img { height: 124%; inset: auto 6% -24% auto; object-position: 50% 0; }
+  body.atp-formal-fund #root #atp-fund-cover.is-hedcut h1 { left: 28px; bottom: 76px; }
+  /* Fund facts 與人物介紹移到名稱下方（原本在右下角，會壓到人像）。 */
+  body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-hedcut) .atp-fund-byline { right: auto; left: 28px; bottom: 24px; }
+  body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-hedcut) .atp-fund-byline :is(.btn, .fund-introduction-trigger) { background: var(--white); box-shadow: inset 0 0 0 1px var(--hair); }
+  body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-hedcut) .atp-fund-byline :is(.btn, .fund-introduction-trigger):hover { background: var(--snow); }
+  /* 物件不出血：整個留在框內、上下留白。 */
+  body.atp-formal-fund #root #atp-fund-cover.is-hedcut.is-object > img { height: 100%; inset: 0 7% 0 auto; object-position: 50% 50%; }
+}
+/*
+ * 桌機但主欄窄（約 720–1100px 寬的視窗，右邊還有下單面板）：封面只剩 260–540px 寬，
+ * 名稱放在人像左邊一定會壓到臉，兩顆按鈕折行後也會蓋住名稱（使用者 2026-11-17）。
+ * 這時改成上下排：人像在上、名稱在下，按鈕排在封面下面一行，什麼都不疊。
+ * 主欄夠寬時維持左右排，但名稱只用到人像左緣再進去 30% 的地方（人像左邊是留白），字太長就縮小。
+ */
+@media (min-width: 720px) {
+  body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-hedcut) { container: fund-heading / inline-size; }
+  @container fund-heading (min-width: 560px) {
+    body.atp-formal-fund #root #atp-fund-cover.is-hedcut:not(.is-object) h1 {
+      max-width: calc(94% - 243px);
+      /* --title-word：最長那個字的字元數（FundOverview 設定）；一個字元約 0.55em 寬。 */
+      font-size: clamp(24px, calc((94cqi - 243px) / (var(--title-word, 13) * 0.55)), 40px);
+    }
+  }
+  @container fund-heading (max-width: 559.98px) {
+    body.atp-formal-fund #root #atp-fund-cover.is-hedcut { display: flex; flex-direction: column; height: auto; }
+    body.atp-formal-fund #root #atp-fund-cover.is-hedcut > img { position: relative; inset: auto; align-self: center; width: auto; height: 200px; object-position: 50% 0; }
+    body.atp-formal-fund #root #atp-fund-cover.is-hedcut.is-object > img { inset: auto; height: 200px; }
+    body.atp-formal-fund #root #atp-fund-cover.is-hedcut h1 {
+      position: static;
+      max-width: none;
+      margin: 0;
+      padding: 16px 20px 20px;
+      border-top: 1px solid var(--hair);
+      background: var(--white);
+      font-size: clamp(24px, 8cqi, 32px);
+    }
+    body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-hedcut) .atp-fund-byline { position: static; flex-wrap: wrap; justify-content: flex-start; margin-top: 12px; padding-top: 0; }
+  }
+}
+@media (max-width: 719px) {
+  body.atp-formal-fund #root #atp-fund-cover.is-hedcut { border-inline: 0; }
+  body.atp-formal-fund #root #atp-fund-cover.is-hedcut > img { inset: 0 0 0 auto; }
+  body.atp-formal-fund #root #atp-fund-cover.is-hedcut h1 { max-width: 50%; }
+  /*
+   * 手機封面是 16:9、人像是右邊一個正方形，肩膀在下緣幾乎貼到人像左緣。人像往右推出 8%（切掉一點右肩），
+   * 名稱最多到封面 55% 處；最長的字放不下就縮小字級，不壓到肩膀。
+   */
+  body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-hedcut) { container: fund-heading / inline-size; }
+  body.atp-formal-fund #root #atp-fund-cover.is-hedcut:not(.is-object) > img { inset: 0 -8% 0 auto; }
+  body.atp-formal-fund #root #atp-fund-cover.is-hedcut:not(.is-object) h1 {
+    max-width: calc(55% - 14px);
+    font-size: clamp(20px, calc((55cqi - 14px) / (var(--title-word, 13) * 0.55)), 35px);
+  }
+}
+
+/* ── 縮圖與頭像：白底，加一圈細線才不會跟白色頁面糊在一起 ── */
+#root :is(.mkt-avatar, .app-holding-cover, .fund-thumb, .fund-introduction-identity img, .app-ticket-fund img) {
+  background: var(--white);
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+#root .mkt-avatar img { object-position: 50% 30% !important; transform: scale(1.18); }
+#fund-explore .mkt-deck .mkt-avatar { box-shadow: none; }
+
+/* ── 寫實照封面（2026-11-18）：滿版照片，左邊 40% 本來就是暗的留給名稱，不加漸層 ── */
+body.atp-formal-fund #root #atp-fund-cover.is-photo .atp-fund-cover-shade { display: none; }
+body.atp-formal-fund #root #atp-fund-cover.is-photo h1 { right: auto; max-width: 46%; }
+/*
+ * 桌機：主欄夠寬（封面約 3.2:1）時，名稱與兩顆按鈕都排在左邊暗處，不壓到右邊的人，名稱太長就縮小；
+ * 主欄窄（約 720–1100px 的視窗，右邊還有下單面板）時，按鈕移到封面下面一行，不疊在名稱上。
+ */
+@media (min-width: 720px) {
+  body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-photo) { container: fund-heading / inline-size; }
+  @container fund-heading (min-width: 560px) {
+    body.atp-formal-fund #root #atp-fund-cover.is-photo h1 {
+      left: 28px;
+      bottom: 76px;
+      max-width: 44%;
+      font-size: clamp(24px, calc(44cqi / (var(--title-word, 13) * 0.55)), 40px);
+    }
+    body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-photo) .atp-fund-byline { right: auto; left: 28px; bottom: 24px; }
+  }
+  @container fund-heading (max-width: 559.98px) {
+    body.atp-formal-fund #root #atp-fund-cover.is-photo h1 {
+      left: 20px;
+      bottom: 20px;
+      max-width: calc(100% - 40px);
+      font-size: clamp(22px, calc((100cqi - 40px) / (var(--title-word, 13) * 0.55)), 32px);
+    }
+    body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-photo) .atp-fund-byline { position: static; flex-wrap: wrap; justify-content: flex-start; margin-top: 12px; padding-top: 0; }
+    body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-photo) .atp-fund-byline :is(.btn, .fund-introduction-trigger) { background: var(--white); box-shadow: inset 0 0 0 1px var(--hair); }
+    body.atp-formal-fund #root .vault-heading:has(#atp-fund-cover.is-photo) .atp-fund-byline :is(.btn, .fund-introduction-trigger):hover { background: var(--snow); }
+  }
+}
