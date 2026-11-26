@@ -162,5 +162,5 @@ test("the address book generator renders a manifest deterministically and refuse
   // 現行地址簿就是這支產生器的輸出（標頭寫著來源 commit 與 sha256）。
   const book = fs.readFileSync("src/lib/testnet-97.ts", "utf8");
   expect(book).toContain("**產生的檔案，不要手改。**");
-  expect(book).toContain("commit: 'cbc671d395e89357b7bf3726c37775ba1f42ef35',");
+  expect(book).toContain("commit: '1f536cd3bbeeb67d208361442677d4c237f4c1ed',");
 });
