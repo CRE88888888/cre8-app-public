@@ -69,7 +69,13 @@ function Bridge(): null {
   const { ready, authenticated, user, error: initError, login, logout, connectWallet, exportWallet } = usePrivy();
   // 加綁用 useLinkAccount：才拿得到失敗原因（例如這個 X 已經單獨註冊過另一個帳號，Privy 會拒絕）。
   const { linkEmail, linkGoogle, linkTwitter, linkWallet } = useLinkAccount({
-    onSuccess: () => usePrivyAuth.setState({ linkError: null }),
+    onSuccess: () => {
+      usePrivyAuth.setState({ linkError: null });
+      // 還沒拿到 CRE8 session（例如 X 登入後等放行、再綁 Google）：等 Privy 重發含新帳號的 identity token，再換一次 session。
+      if (!latest.current.privySession) {
+        void refreshUser().catch(() => undefined).finally(() => { refreshedFor.current = null; setFailure(null); setAttempt((count) => count + 1); });
+      }
+    },
     onError: (code, details) => {
       const kind = linkKindOf(details?.linkMethod);
       usePrivyAuth.setState({ linkError: kind === null ? null : explainLinkFailure(code, kind) });
@@ -328,8 +334,9 @@ function Bridge(): null {
         setAttempt((count) => count + 1);
       },
       link: (kind: SignInMethodKind) => {
-        // 首次拿到 CRE8 session 之前不可以加綁：後端要靠「帳號上恰好一個錢包」認定主人（backend#63）。
-        if (!latest.current.privySession) return;
+        // 首次拿到 CRE8 session 之前不可以加綁錢包或 email：後端要靠「帳號上恰好一個錢包」認定主人（backend#63）。
+        // X／Google 不會多出錢包，可以先綁：開放登入時要 X＋Google 都綁才放行（backend#328）。
+        if (!latest.current.privySession && kind !== 'google' && kind !== 'x') return;
         usePrivyAuth.setState({ linkError: null });
         if (kind === 'email') linkEmail();
         else if (kind === 'google') linkGoogle();
