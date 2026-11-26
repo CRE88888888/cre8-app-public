@@ -8,7 +8,7 @@ import { eventText } from "../src/features/mix/mix-copy";
 // 總管 2026-11-21：名稱的「0」在襯線標題裡像「O」（cre8admin 看成 Ocre8admin）；Recent 第一筆不能還沒買就寫 bought。
 
 test("digits in a mix name use the mono font, letters stay in the title font", () => {
-  expect(renderToStaticMarkup(createElement(MixNameText, { name: "cre8admin 3" })))
+  expect(renderToStaticMarkup(createElement(MixNameText, { name: "0xadmin 3" })))
     .toBe('<span class="mx-digits">0</span>xadmin <span class="mx-digits">3</span>');
   expect(renderToStaticMarkup(createElement(MixNameText, { name: "NVDA + BTC" }))).toBe("NVDA + BTC");
   expect(renderToStaticMarkup(createElement(MixNameText, { name: "Top 10" }))).toBe('Top <span class="mx-digits">10</span>');
